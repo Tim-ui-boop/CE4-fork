@@ -32,15 +32,39 @@ jobs:
           cache: gradle
           cache-dependency-path: port/android-decomp/**/*.gradle*
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install pinned Android build tools
+      - name: Use runner Android SDK and install pinned tools
         shell: bash
         run: |
-          sdkmanager --install "ndk;28.2.13676358" "cmake;3.22.1"
-          echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
+          set -euo pipefail
+
+          : "${ANDROID_HOME:?ANDROID_HOME missing on runner}"
+
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          fi
+          if [ ! -x "$SDKMANAGER" ]; then
+            echo "sdkmanager not found under $ANDROID_HOME/cmdline-tools" >&2
+            exit 1
+          fi
+
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
+          # Accept SDK licenses without the broken-pipe issue.
+          set +e
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses
+          sdk_status=${PIPESTATUS[1]}
+          set -o pipefail
+          set -e
+          if [ "$sdk_status" -ne 0 ]; then
+            exit "$sdk_status"
+          fi
+
+          "$SDKMANAGER" --install "ndk;28.2.13676358" "cmake;3.22.1"
+          echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
+
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends patch
 
