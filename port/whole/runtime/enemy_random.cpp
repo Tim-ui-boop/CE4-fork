@@ -59,6 +59,7 @@
 #include "read.h"
 #include "sce_at.h"
 #include "atari.h"
+#include "scroll.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -227,6 +228,7 @@ struct Place {
 };
 
 constexpr int kMaxCopies = 2;
+constexpr int kMaxAdds = 4;  // the added-enemy stage's own cap, above the copies' two (a big scenery room may take more)
 
 // The chance nibble of `ratios` (re4_core_set_enemy_options) as a percent roll: a count of k of the nibble's
 // 15 steps is "one in (16 - k)": k 0 never, 15 every one of them. The PC randomizer's 1:1..1:9 map 15..7.
@@ -267,7 +269,22 @@ struct Plan {
         Place at;
     } copies[kMaxCopies];
     int copyCount, copyNext, copiesMade, copiesFailed;
+    int addPhase;     // 0 copies, 1 adds (extra_made's report names the right one)
     int movers, swapped, nearby, spots, protectedByArea, copyRefused;
+    // 0.99.17, the added enemies (the owner's idea of 17.11.2026, the other way round: rooms whose list
+    // entries the game itself never fills -- r120's farm workers and crows are scenery, not list entries --
+    // get randomizer enemies ADDED at the scenery's places instead of waiting for entries to change; the
+    // crow kind may fly in as itself). `add[k]` the kPoolKinds index of an enemy to add, `at[k]` its place;
+    // the extras ride the copies' machinery (their deaths land on empty entries, the list itself is never
+    // written, the same safe-place check as a copy's place)
+    struct Add {
+        int kind;      // kPoolKinds index, -1 unused
+        int entry;     // the empty list entry its death is kept at (extra_made names it)
+        Place at;
+    } adds[kMaxAdds];
+    u32 addEntryTaken[(256 - 0xF0 + 31) >> 5];  // the entries the adds claimed, so no two share one
+    int addCount, addNext, addsMade, addsFailed;
+    char addRefused[64];
     // 0.99.16, the PC randomizer's kinds: the pool kinds this room rolls, their count bounded by varietyCap();
     // `swapKind[entry]` -1 none, else the kPoolKinds index the entry becomes; `kindSwaps` the ones changed by kind
     int rolledKind[kPoolCount];
@@ -896,6 +913,119 @@ extern "C" void re4_enemy_random_room(void)
         }
     }
     (void) idle;
+    // 0.99.17, the added enemies (the owner's idea of 17.11.2026, the other way round): a room the game
+    // fills with scenery -- r120's farm workers and crows stand there as room objects, not as list entries,
+    // so no entry swap can ever touch them -- gets randomizer enemies ADDED at the scenery's places. The
+    // room script ran already (execInitFunc, sce_sys.cpp: before EmSetFromList), so the objects are there
+    // to anchor at. Each added enemy rides the copies' loop at EmSetFromList's end: a real enemy of a kind
+    // the plan rolled (a sub-boss only at the sub-boss odds, at most one a room), at a safe place within
+    // walking reach of a scenery object, its death kept at an empty list entry; the list itself stays as it
+    // is. Only a room whose plan is fully open (a counting room's script may name what stands around it, a
+    // cautious room's script may count); the kind needs its module loaded or a free slot (kindLoaded, never
+    // evicting one the room still needs); the room's enemy works keep the +4 headroom for what is coming.
+    p.addCount = 0;
+    p.addNext = 0;
+    p.addsMade = 0;
+    p.addsFailed = 0;
+    p.addRefused[0] = 0;
+    if (p.kind == kOpen) {
+        int wanted = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x7A0u) % (u32) (kMaxAdds + 1));
+        if (p.ganados >= 10) {
+            wanted /= 2;  // a room already thick with Ganados takes fewer extra
+        }
+        // the room's scenery objects as anchor candidates (object order, capped)
+        int anchor[16];
+        int na = 0;
+        const int objNum = SmdGetObjNum();
+        for (int o = 0; o < objNum && na < 16; o++) {
+            cObj* obj = SmdGetObjPtr((u32) o);
+            if (obj != 0) {
+                anchor[na++] = o;
+            }
+        }
+        if (na == 0) {
+            snprintf(p.addRefused, sizeof(p.addRefused), "no scenery place to stand at");
+        } else {
+            // the work margin the copies also keep (+4 for what is still coming)
+            int margin = 0;
+            for (u32 k = 0; k < EmMgr.getArrayNum(); k++) {
+                margin += !EmMgr.fastAt(k)->isEmpty();
+            }
+            for (int i = 0; i < 256; i++) {
+                const EM_LIST& e = pG->Em_list[i];
+                if (e.id != 0 && e.room == (u16) p.room && !(e.be_flag & 2) && !deadBit(i)) {
+                    margin++;
+                }
+            }
+            margin = (int) EmMgr.getArrayNum() - margin - 4;
+            const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
+            int subBossAdds = 0;
+            for (int a = 0; a < wanted && p.addCount < kMaxAdds; a++) {
+                if (margin - p.addCount <= 0) {
+                    snprintf(p.addRefused, sizeof(p.addRefused), "the room's enemy works full");
+                    break;
+                }
+                // the kind: one of the room's rolled ones, else a pool kind beside the sub-bosses
+                int kind = -1;
+                if (p.rolledCount > 0) {
+                    kind = p.rolledKind[hashOf(p.seed, (u32) p.list, (u32) p.room, 0x7B0u + (u32) a)
+                                       % (u32) p.rolledCount];
+                } else {
+                    for (int t = 0; t < kPoolCount && kind < 0; t++) {
+                        const int cand = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room,
+                                                      0x7B0u + (u32) a * 16u + (u32) t) % (u32) kPoolCount);
+                        const bool subBoss = cand <= 2 || cand >= 10;
+                        if ((pool >> cand & 1) && !subBoss) {
+                            kind = cand;
+                        }
+                    }
+                }
+                if (kind < 0) {
+                    snprintf(p.addRefused, sizeof(p.addRefused), "no kind of the pool fits here");
+                    break;
+                }
+                // a sub-boss adds only at the sub-boss odds, at most one a room
+                const bool subBoss = kind <= 2 || kind >= 10;
+                if (subBoss && (subBossAdds > 0 || !ratioHit(__atomic_load_n(&gRatios, __ATOMIC_RELAXED), 12,
+                                 hashOf(p.seed, (u32) p.list, (u32) p.room, 0x7C0u + (u32) a)))) {
+                    continue;  // the odds said no: this draw adds nothing
+                }
+                // the module must be loaded or have a free slot (never evict one the room still needs)
+                if (!kindLoaded(kPoolKinds[kind])) {
+                    continue;
+                }
+                // the place: a safe walk-in spot near a scenery object
+                cObj* obj = SmdGetObjPtr((u32) anchor[hashOf(p.seed, (u32) p.list, (u32) p.room, 0x7D0u + (u32) a)
+                                                      % (u32) na]);
+                if (obj == 0) {
+                    continue;
+                }
+                Place anchorPlace;
+                anchorPlace.pos[0] = (s16) lroundf(obj->pos.x / 10.0f);
+                anchorPlace.pos[1] = (s16) lroundf(obj->pos.y / 10.0f);
+                anchorPlace.pos[2] = (s16) lroundf(obj->pos.z / 10.0f);
+                anchorPlace.rot[0] = 0;
+                anchorPlace.rot[1] = 0;
+                anchorPlace.rot[2] = 0;
+                Place at;
+                if (!nearSpot(anchorPlace, hashOf(p.seed, (u32) p.list, (u32) p.room, 0x7E0u + (u32) a), avoid, &at)) {
+                    continue;  // no safe place near this anchor: another draw may find one
+                }
+                avoidAdd(avoid, at.pos);
+                Plan::Add& ad = p.adds[p.addCount++];
+                ad.kind = kind;
+                ad.at = at;
+                if (subBoss) {
+                    subBossAdds++;
+                }
+            }
+        }
+        if (gLines < 300 && (p.addCount > 0 || p.addRefused[0])) {
+            gLines++;
+            re4_log("enemies: random enemies r%03x: %d added from the scenery%s%s", p.room, p.addCount,
+                    p.addRefused[0] ? ", some not: " : "", p.addRefused[0] ? p.addRefused : "");
+        }
+    }
     if (gCheck) {
         memcpy(gBefore, pG->Em_list, sizeof(gBefore));
         gChecking = true;
@@ -1062,9 +1192,10 @@ extern "C" int re4_enemy_random_wave(int no, EM_LIST* out)
     return 1;
 }
 
-// Patch 0231, EmSetFromList's end, again and again until -1: the next copy (a Ganado of the room that came now, at its
-// safe place beside another one) and the empty entry its death is kept at. The patch creates it unless that entry is
-// marked dead or a live enemy carries it already. The first call writes the room's line.
+// Patch 0231, EmSetFromList's end, again and again until -1: first the copies, then the added enemies
+// (the scenery-anchored ones the plan rolled at their own places; 0.99.17) -- each with an empty list
+// entry its death is kept at. The patch creates it unless that entry is marked dead or a live enemy
+// carries it already. The first call writes the room's line.
 extern "C" int re4_enemy_random_extra(EM_LIST* out)
 {
     Plan& p = gPlan;
@@ -1106,12 +1237,56 @@ extern "C" int re4_enemy_random_extra(EM_LIST* out)
                 p.nearby, p.swapped, p.kindSwaps, p.swapRefused, count,
                 p.protectedByArea ? " (some kept: an area waits for them)" : "");
     }
-    if (p.copyNext >= p.copyCount) {
-        // (after the copies: their entries are empty ones, whose be_flag the game may set; the check sees the rest)
+    if (p.copyNext >= p.copyCount && p.addNext >= p.addCount) {
+        // (after the copies and the adds: their entries are empty ones, whose be_flag the game may set; the
+        // check sees the rest)
         checkList();
         p.copyNext = kMaxCopies + 1;  // the line is written once
+        p.addNext = kMaxAdds + 1;
         return -1;
     }
+    // 0.99.17, the added enemies: a kind the plan rolled, at its scenery-anchored safe place, born as its
+    // own enemy (the pool kind's own hp floor and set); its death lands on an empty list entry like a copy's
+    if (p.copyNext >= p.copyCount) {
+        p.addPhase = 1;
+        const Plan::Add& ad = p.adds[p.addNext++];
+        const Kind& to = kPoolKinds[ad.kind];
+        EM_LIST e;
+        memset(&e, 0, sizeof(e));
+        e.id = to.id;
+        e.type = to.type;
+        e.set = to.set;
+        e.flag = 0;
+        e.Character = 0;
+        e.hp = to.minHp ? to.minHp : 1000;
+        e.room = (u16) p.room;
+        memcpy(e.pos, ad.at.pos, sizeof(e.pos));
+        memcpy(e.rot, ad.at.rot, sizeof(e.rot));
+        e.Guard_r = 1000;
+        *out = e;
+        // an empty entry for its death, one never handed to another add (the adds claim 0xF0 down)
+        int empty = -1;
+        for (int i = 255; i >= 0xF0; i--) {
+            if (pG->Em_list[i].id == 0 && !(p.addEntryTaken[i - 0xF0 >> 5] >> (i - 0xF0 & 31) & 1)) {
+                bool fresh = true;
+                for (int c = 0; c < kMaxCopies && fresh; c++) {
+                    fresh &= p.copies[c].entry != i || c >= p.copyCount;
+                }
+                if (fresh) {
+                    empty = i;
+                    break;
+                }
+            }
+        }
+        if (empty < 0) {
+            p.addsFailed++;
+            return -1;  // no empty entry this time: the add skips, the room keeps its plan
+        }
+        p.addEntryTaken[empty - 0xF0 >> 5] |= 1u << (empty - 0xF0 & 31);
+        p.adds[p.addNext - 1].entry = empty;  // (the made-report names it)
+        return empty;
+    }
+    p.addPhase = 0;
     const Plan::Copy& cp = p.copies[p.copyNext++];
     *out = pG->Em_list[cp.from];
     memcpy(out->pos, cp.at.pos, sizeof(out->pos));
@@ -1125,13 +1300,27 @@ extern "C" void re4_enemy_random_extra_made(int ok)
 {
     Plan& p = gPlan;
     if (ok) {
-        p.copiesMade++;
+        // (a copy's or an add's enemy was created: the counts tell the room's line's story)
+        if (p.addPhase) {
+            p.addsMade++;
+        } else {
+            p.copiesMade++;
+        }
+        return;
+    }
+    if (p.addPhase) {
+        p.addsFailed++;
+        if (gLines < 300) {
+            gLines++;
+            re4_log("enemies: random enemies in r%03x: an added enemy did not come (dead before, there already or the room full)",
+                    p.room);
+        }
         return;
     }
     p.copiesFailed++;
     if (gLines < 300) {
         gLines++;
-        re4_log("enemies: random enemies in r%03x: a copy did not come (dead before, there already or the room full)",
+        re4_log("enemies: random enemies in r%03x: an added enemy did not come (dead before, there already or the room full)",
                 p.room);
     }
 }

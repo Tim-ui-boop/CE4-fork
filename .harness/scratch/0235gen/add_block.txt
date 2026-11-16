@@ -1,0 +1,114 @@
+    (void) idle;
+    // 0.99.17, the added enemies (the owner's idea of 17.11.2026, the other way round): a room the game
+    // fills with scenery -- r120's farm workers and crows stand there as room objects, not as list entries,
+    // so no entry swap can ever touch them -- gets randomizer enemies ADDED at the scenery's places. The
+    // room script ran already (execInitFunc, sce_sys.cpp: before EmSetFromList), so the objects are there
+    // to anchor at. Each added enemy rides the copies' loop at EmSetFromList's end: a real enemy of a kind
+    // the plan rolled (a sub-boss only at the sub-boss odds, at most one a room), at a safe place within
+    // walking reach of a scenery object, its death kept at an empty list entry; the list itself stays as it
+    // is. Only a room whose plan is fully open (a counting room's script may name what stands around it, a
+    // cautious room's script may count); the kind needs its module loaded or a free slot (kindLoaded, never
+    // evicting one the room still needs); the room's enemy works keep the +4 headroom for what is coming.
+    p.addCount = 0;
+    p.addNext = 0;
+    p.addsMade = 0;
+    p.addsFailed = 0;
+    p.addRefused[0] = 0;
+    if (p.kind == kOpen) {
+        int wanted = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x7A0u) % (u32) (kMaxAdds + 1));
+        if (p.ganados >= 10) {
+            wanted /= 2;  // a room already thick with Ganados takes fewer extra
+        }
+        // the room's scenery objects as anchor candidates (object order, capped)
+        int anchor[16];
+        int na = 0;
+        const int objNum = SmdGetObjNum();
+        for (int o = 0; o < objNum && na < 16; o++) {
+            cObj* obj = SmdGetObjPtr((u32) o);
+            if (obj != 0) {
+                anchor[na++] = o;
+            }
+        }
+        if (na == 0) {
+            snprintf(p.addRefused, sizeof(p.addRefused), "no scenery place to stand at");
+        } else {
+            // the work margin the copies also keep (+4 for what is still coming)
+            int margin = 0;
+            for (u32 k = 0; k < EmMgr.getArrayNum(); k++) {
+                margin += !EmMgr.fastAt(k)->isEmpty();
+            }
+            for (int i = 0; i < 256; i++) {
+                const EM_LIST& e = pG->Em_list[i];
+                if (e.id != 0 && e.room == (u16) p.room && !(e.be_flag & 2) && !deadBit(i)) {
+                    margin++;
+                }
+            }
+            margin = (int) EmMgr.getArrayNum() - margin - 4;
+            const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
+            int subBossAdds = 0;
+            for (int a = 0; a < wanted && p.addCount < kMaxAdds; a++) {
+                if (margin - p.addCount <= 0) {
+                    snprintf(p.addRefused, sizeof(p.addRefused), "the room's enemy works full");
+                    break;
+                }
+                // the kind: one of the room's rolled ones, else a pool kind beside the sub-bosses
+                int kind = -1;
+                if (p.rolledCount > 0) {
+                    kind = p.rolledKind[hashOf(p.seed, (u32) p.list, (u32) p.room, 0x7B0u + (u32) a)
+                                       % (u32) p.rolledCount];
+                } else {
+                    for (int t = 0; t < kPoolCount && kind < 0; t++) {
+                        const int cand = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room,
+                                                      0x7B0u + (u32) a * 16u + (u32) t) % (u32) kPoolCount);
+                        const bool subBoss = cand <= 2 || cand >= 10;
+                        if ((pool >> cand & 1) && !subBoss) {
+                            kind = cand;
+                        }
+                    }
+                }
+                if (kind < 0) {
+                    snprintf(p.addRefused, sizeof(p.addRefused), "no kind of the pool fits here");
+                    break;
+                }
+                // a sub-boss adds only at the sub-boss odds, at most one a room
+                const bool subBoss = kind <= 2 || kind >= 10;
+                if (subBoss && (subBossAdds > 0 || !ratioHit(__atomic_load_n(&gRatios, __ATOMIC_RELAXED), 12,
+                                 hashOf(p.seed, (u32) p.list, (u32) p.room, 0x7C0u + (u32) a)))) {
+                    continue;  // the odds said no: this draw adds nothing
+                }
+                // the module must be loaded or have a free slot (never evict one the room still needs)
+                if (!kindLoaded(kPoolKinds[kind])) {
+                    continue;
+                }
+                // the place: a safe walk-in spot near a scenery object
+                cObj* obj = SmdGetObjPtr((u32) anchor[hashOf(p.seed, (u32) p.list, (u32) p.room, 0x7D0u + (u32) a)
+                                                      % (u32) na]);
+                if (obj == 0) {
+                    continue;
+                }
+                Place anchorPlace;
+                anchorPlace.pos[0] = (s16) lroundf(obj->pos.x / 10.0f);
+                anchorPlace.pos[1] = (s16) lroundf(obj->pos.y / 10.0f);
+                anchorPlace.pos[2] = (s16) lroundf(obj->pos.z / 10.0f);
+                anchorPlace.rot[0] = 0;
+                anchorPlace.rot[1] = 0;
+                anchorPlace.rot[2] = 0;
+                Place at;
+                if (!nearSpot(anchorPlace, hashOf(p.seed, (u32) p.list, (u32) p.room, 0x7E0u + (u32) a), avoid, &at)) {
+                    continue;  // no safe place near this anchor: another draw may find one
+                }
+                avoidAdd(avoid, at.pos);
+                Plan::Add& ad = p.adds[p.addCount++];
+                ad.kind = kind;
+                ad.at = at;
+                if (subBoss) {
+                    subBossAdds++;
+                }
+            }
+        }
+        if (gLines < 300 && (p.addCount > 0 || p.addRefused[0])) {
+            gLines++;
+            re4_log("enemies: random enemies r%03x: %d added from the scenery%s%s", p.room, p.addCount,
+                    p.addRefused[0] ? ", some not: " : "", p.addRefused[0] ? p.addRefused : "");
+        }
+    }
