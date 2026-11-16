@@ -206,9 +206,11 @@ final class RandomizerConfig {
 
   /**
    * Hands the run to the game core. Called once, when CoreActivity starts the core, and again whenever the settings
-   * change. The three randomizers keep their own core calls (each has its own seed handling in the core); they all
-   * take this run's single seed, so one seed defines the whole run. The cheats bitfield no longer carries "random
-   * items": that randomizer moves out of it with this class (phase 1), its seed in the cheats bits is cleared.
+   * change. The enemy and merchant randomizers keep their own core calls (each has its own seed handling in the
+   * core); they all take this run's single seed, so one seed defines the whole run. The item randomizer stays the
+   * cheat bit it always was (runtime/cheats.cpp: bit 1024, the run's seed in bits 11..30); its switch moved from the
+   * in-game cheat menu to the page, and {@link SeedStore#setCurrent} keeps its bits with the run, so the core hears
+   * it through the cheat bits it reads at its start.
    */
   void applyToCore() {
     if (!anyEnabled()) {

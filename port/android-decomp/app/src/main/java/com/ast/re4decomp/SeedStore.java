@@ -146,6 +146,14 @@ final class SeedStore {
       edit.putInt("seedWeapons_" + f.id, f.weapons);
       any |= f.on;
     }
+    // the item randomizer stays the cheat bit it always was in the core (runtime/cheats.cpp, patch 0218): bit 1024,
+    // the run's seed in bits 11..30. Its switch moved from the in-game cheat menu to the page (phase 2), so the
+    // run keeps that bit with it -- otherwise the switch would say "on" while the core never hears it. The core
+    // reads the bits when it starts (CoreActivity); the cheat menu leaves this randomizer's bits alone.
+    final boolean items = config.feature("items").on && config.seed != 0;
+    final int bits = prefs.getInt(CoreActivity.CHEATS, 0);
+    final int withItems = CoreMenu.withRandomItems(bits, items, config.seed);
+    if (withItems != bits) edit.putInt(CoreActivity.CHEATS, withItems);
     edit.apply();
     // hand it to the running core too; before the core starts this is remembered by CoreActivity
     config.applyToCore();

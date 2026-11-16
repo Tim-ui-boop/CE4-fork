@@ -29,10 +29,14 @@ final class RandomizerDialog extends Dialog {
   private final TextView seedLine, status;
   private final LinearLayout savedList;
   private final EditText nameField;
+  /** Set while the page redraws a switch from the run itself: the echo must not act as a tap. */
+  private boolean silent;
   /** The switch of each randomizer, by feature id. */
   private final java.util.Map<String, CheckBox> boxes = new java.util.HashMap<>();
   /** The chance slider's label, so the row can show its value without a second redraw path. */
   private final java.util.Map<String, TextView> chanceLabels = new java.util.HashMap<>();
+  /** The chance buttons as one group, so they can be switched off with the randomizer itself. */
+  private final java.util.Map<String, View> chanceGroups = new java.util.HashMap<>();
   /** The weapon button of each randomizer that has a pool, to relabel it when the choice changes. */
   private final java.util.Map<String, Button> weaponButtons = new java.util.HashMap<>();
   private final RandomizerConfig run;
@@ -122,6 +126,7 @@ final class RandomizerDialog extends Dialog {
 
     setContentView(page);
     refresh();
+    hintNoneOn();
   }
 
   /** A small button, so a row of them fits beside a label on a phone. */
@@ -150,10 +155,12 @@ final class RandomizerDialog extends Dialog {
     box.setTextSize(14);
     box.setChecked(f.on);
     box.setOnCheckedChangeListener((v, on) -> {
+      if (silent) return;  // the redraw echoes the run's own state; only a tap reaches here
       f.on = on;
       if (on && run.seed == 0) run.seed = RandomizerConfig.freshSeed();
       store.setCurrent(run, activeFile);
       refresh();
+      hintNoneOn();
     });
     boxes.put(f.id, box);
     row.addView(box, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -180,6 +187,7 @@ final class RandomizerDialog extends Dialog {
     group.addView(label);
     group.addView(more);
     group.setTag("chance:" + f.id);
+    chanceGroups.put(f.id, group);
     updateChanceLabel(f);
     return group;
   }
@@ -245,6 +253,7 @@ final class RandomizerDialog extends Dialog {
     activeFile = "";
     store.setCurrent(run, "");
     refresh();
+    hintNoneOn();
   }
 
   /** Redraws the values the page shows. The views themselves stay; only their state is updated. */
@@ -254,11 +263,36 @@ final class RandomizerDialog extends Dialog {
             + (activeFile.isEmpty() ? "" : "  \u00b7  " + activeFile));
     for (RandomizerConfig.Feature f : run.features.values()) {
       CheckBox box = boxes.get(f.id);
-      if (box != null) box.setChecked(f.on);
-      if (f.hasChance()) updateChanceLabel(f);
-      if (f.hasWeapons()) updateWeaponButton(f);
+      if (box != null) {
+        silent = true;
+        box.setChecked(f.on);
+        silent = false;
+      }
+      if (f.hasChance()) {
+        updateChanceLabel(f);
+        setOptionsEnabled(chanceGroups.get(f.id), f.on);
+      }
+      if (f.hasWeapons()) {
+        updateWeaponButton(f);
+        setOptionsEnabled(weaponButtons.get(f.id), f.on);
+      }
     }
     rebuildSavedList();
+  }
+
+  /** Options only work while their randomizer is on: the row greys them out and takes their clicks. */
+  private void setOptionsEnabled(View option, boolean on) {
+    if (option == null) return;
+    option.setEnabled(on);
+    option.setAlpha(on ? 1.0f : 0.45f);
+    if (option instanceof ViewGroup) {
+      ViewGroup group = (ViewGroup) option;
+      for (int i = 0; i < group.getChildCount(); i++) group.getChildAt(i).setEnabled(on);
+    }
+  }
+
+  /** The one thing the status line says while the page is used: that no randomizer is on. */
+  private void hintNoneOn() {
     status.setText(run.anyEnabled() ? "" : getContext().getString(R.string.randomizer_none_on));
   }
 
@@ -301,7 +335,7 @@ final class RandomizerDialog extends Dialog {
   private void saveRun() {
     try {
       String wrote = store.save(nameField.getText().toString(), run);
-      if (activeFile.isEmpty()) activeFile = wrote;
+      activeFile = wrote;  // the run now lives in the file just written (save-as switches to it)
       store.setCurrent(run, activeFile);
       nameField.setText("");
       status.setText(getContext().getString(R.string.randomizer_saved, wrote));
