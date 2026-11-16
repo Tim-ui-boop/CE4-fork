@@ -84,6 +84,7 @@ enum MsgType : uint32_t {
     kZoom = 43,            // a = notches of the mouse wheel, up positive (no reply; re4_core_zoom, 0.99.12)
     kSetEnemyRandom = 44,  // a = the seed of "Random enemies", 0 off (no reply; re4_core_set_enemy_random, 0.99.12)
     kSetGentleQte = 45,    // a = on: Professional's quick-time events as Normal's (no reply; re4_core_set_gentle_qte, 0.99.15)
+    kSetMerchantRandom = 46,  // a = the seed of "Random merchant stock", 0 off (no reply; re4_core_set_merchant_random)
 };
 
 struct MsgHeader {

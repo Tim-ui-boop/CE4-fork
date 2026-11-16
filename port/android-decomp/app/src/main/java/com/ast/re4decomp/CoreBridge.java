@@ -325,6 +325,10 @@ public final class CoreBridge {
   public static native void zoom(int notches);
   /** The cheat "Random enemies" (CoreMenu, 0.99.12): its seed (20 bits), 0 off; from the next room on. */
   public static native void setEnemyRandom(int seed);
+  /** The cheat "Random merchant stock" (CoreMenu): its seed (20 bits), 0 off; from the next room on. The
+   *  merchant then sells from one shared pool (runtime/merchant_random.cpp, patch 0233); cores without it
+   *  leave it out. */
+  public static native void setMerchantRandom(int seed);
   /** "Gentler QTEs" (CoreMenu, comfort controls, 0.99.15): Professional's quick-time events as Normal's
    *  (runtime/qte_touch.cpp re4_qte_level, patch 0232); cores before 0.99.15 leave it out. */
   public static native void setGentleQte(boolean on);

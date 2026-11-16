@@ -134,6 +134,9 @@ final class CoreMenu extends Dialog {
     /** The cheat "Random enemies" (0.99.12): a new seed each time it goes on, 0 off (CoreActivity.ENEMY_SEED holds
      *  it). */
     void enemyRandomChanged(int seed);
+    /** The cheat "Random merchant stock": a new seed each time it goes on, 0 off (CoreActivity.MERCHANT_SEED
+     *  holds it). */
+    void merchantRandomChanged(int seed);
     /** A cheat button (1 Killer7, 2 attache case L, 3 money, 4 extra games, 5..9 weapons), off the main thread:
      *  CoreBridge.cheatAction's answer. */
     int cheatAction(int what);
@@ -1877,12 +1880,20 @@ final class CoreMenu extends Dialog {
       game.edit().putInt(CoreActivity.ENEMY_SEED, seed).apply();
       host.enemyRandomChanged(seed);
     });
+    // "Random merchant stock": a seed of its own, a new one each time it goes on (runtime/merchant_random.cpp,
+    // patch 0233)
+    toggle(items, R.string.ingame_cheat_random_merchant, game.getInt(CoreActivity.MERCHANT_SEED, 0) != 0, on -> {
+      int seed = on ? 1 + new java.util.Random().nextInt((1 << 20) - 1) : 0;
+      game.edit().putInt(CoreActivity.MERCHANT_SEED, seed).apply();
+      host.merchantRandomChanged(seed);
+    });
     cheatStatus = text("", 15, false); cheatStatus.setPadding(dp(MenuLayout.GAP), dp(6), dp(MenuLayout.GAP), dp(2));
     cheatStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); cheatStatus.setVisibility(View.GONE);
     body.addView(cheatStatus);
     help(R.string.ingame_cheats_help);
     help(R.string.ingame_cheat_random_items_help);
     help(R.string.ingame_cheat_random_enemies_help);
+    help(R.string.ingame_cheat_random_merchant_help);
     playerCharacter();
     mods();
   }

@@ -155,6 +155,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   static final String CHEATS = "cheats";
   /** The cheat "Random enemies" (0.99.12): its seed, 0 off (CoreBridge.setEnemyRandom). */
   static final String ENEMY_SEED = "enemySeed";
+  /** The cheat "Random merchant stock": its seed, 0 off (CoreBridge.setMerchantRandom). */
+  static final String MERCHANT_SEED = "merchantSeed";
   private static final int REQUEST_EXPORT_ALL = 2, REQUEST_IMPORT = 3, REQUEST_REPORT = 4, REQUEST_TEXTURES = 5,
       REQUEST_EXPORT_ZIP = 6;
   // "Import texture pack" (Cheats & Mods, TexturePacks): who hears the import, its cancel switch
@@ -493,6 +495,9 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       int enemySeed = getSharedPreferences(GAME_PREFS, MODE_PRIVATE).getInt(ENEMY_SEED, 0);
       if (enemySeed != 0) Log.i(TAG, "cheats: random enemies with seed " + enemySeed);
       CoreBridge.setEnemyRandom(enemySeed);
+      int merchantSeed = getSharedPreferences(GAME_PREFS, MODE_PRIVATE).getInt(MERCHANT_SEED, 0);
+      if (merchantSeed != 0) Log.i(TAG, "cheats: random merchant stock with seed " + merchantSeed);
+      CoreBridge.setMerchantRandom(merchantSeed);
     }
     setContentView(root);
     // Android Automotive: the bars the car keeps stay off the picture (CarDisplay; nothing elsewhere)
@@ -1138,6 +1143,12 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       getSharedPreferences(GAME_PREFS, MODE_PRIVATE).edit().putInt(ENEMY_SEED, seed).apply();
       Log.i(TAG, "cheats: random enemies " + (seed != 0 ? "on with seed " + seed : "off"));
       CoreBridge.setEnemyRandom(seed);
+    }
+
+    @Override public void merchantRandomChanged(int seed) {
+      getSharedPreferences(GAME_PREFS, MODE_PRIVATE).edit().putInt(MERCHANT_SEED, seed).apply();
+      Log.i(TAG, "cheats: random merchant stock " + (seed != 0 ? "on with seed " + seed : "off"));
+      CoreBridge.setMerchantRandom(seed);
     }
 
     @Override public void restartGame() {
