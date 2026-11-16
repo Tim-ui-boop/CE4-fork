@@ -98,8 +98,19 @@ public final class StartupActivity extends Activity {
     if(flow.phase==StartupFlow.Phase.OPTIONS){StartupOptions.Page old=options.page;boolean close=options.confirm();saveOptions();NativeBridge.startupCue(0,close?0x39:old==StartupOptions.Page.TOP?0x36:options.page==StartupOptions.Page.TOP?0x39:0x3a);if(close)flow.back();return;}
     if(flow.phase==StartupFlow.Phase.LOAD){confirmLoad();return;}
     if(flow.phase==StartupFlow.Phase.MENU){int chosen=flow.cursor;error="";flow.confirm();if(chosen==2)readOptions();if(chosen==1)openLoad();selectedSave=null;NativeBridge.startupCue(chosen==0?6:0,chosen==0?2:chosen==2?0x33:4);if(chosen==0)GameAudio.awaitStartupVoice();}else flow.skip();}
-  private void openLoad() {
-    loadFlow.open(saveHeaders,saveStore.initialSelection(saveHeaders),art.cardDuration(10),Math.max(art.cardDuration(8),art.cardDuration(9)));
+  /** The randomizer page (phase 2): a modal page over the title screen, drawn while the menu stands. */
+  private RandomizerDialog randomizerPage;
+  private void openRandomizer() {
+    if(randomizerPage!=null||art==null||flow.phase!=StartupFlow.Phase.MENU)return;
+    NativeBridge.startupCue(0,10);
+    randomizerPage=new RandomizerDialog(this,new SeedStore(getFilesDir(),
+        getSharedPreferences(CoreActivity.GAME_PREFS,MODE_PRIVATE)));
+    randomizerPage.setOnDismissListener(d->{randomizerPage=null;screen.invalidate();});
+    randomizerPage.show();
+  }
+  private boolean randomizerOpen(){return randomizerPage!=null;}
+
+  private void openLoad() {    loadFlow.open(saveHeaders,saveStore.initialSelection(saveHeaders),art.cardDuration(10),Math.max(art.cardDuration(8),art.cardDuration(9)));
     loadStickDirection=loadStickTicks=0;error="";
   }
   private void confirmLoad() {
@@ -144,7 +155,7 @@ public final class StartupActivity extends Activity {
     // Consume the triggering key without confirming LOAD or START GAME in
     // the same event. Android's repeat events cannot restart the entry fade.
     if(startup&&(key==KeyEvent.KEYCODE_BUTTON_START||key==KeyEvent.KEYCODE_BUTTON_A||key==KeyEvent.KEYCODE_BUTTON_X||key==KeyEvent.KEYCODE_DPAD_CENTER||key==KeyEvent.KEYCODE_ENTER)){if(e.getAction()==KeyEvent.ACTION_DOWN&&e.getRepeatCount()==0){flow.skip();screen.invalidate();}return true;}
-    if(!relevant)return super.dispatchKeyEvent(e);if(e.getAction()==KeyEvent.ACTION_DOWN){if(key==KeyEvent.KEYCODE_BUTTON_SELECT){finish();return true;}if(key==KeyEvent.KEYCODE_BUTTON_B){if(flow.phase==StartupFlow.Phase.OPTIONS||flow.phase==StartupFlow.Phase.LOAD||!currentMovie.isEmpty())onBackPressed();}else if(key==KeyEvent.KEYCODE_DPAD_UP){if(!loadHorizontalChoices())move(-1);}else if(key==KeyEvent.KEYCODE_DPAD_DOWN){if(!loadHorizontalChoices())move(1);}else if(key==KeyEvent.KEYCODE_DPAD_LEFT){if(flow.phase==StartupFlow.Phase.OPTIONS)changeOption(-1);else if(loadHorizontalChoices())move(-1);}else if(key==KeyEvent.KEYCODE_DPAD_RIGHT){if(flow.phase==StartupFlow.Phase.OPTIONS)changeOption(1);else if(loadHorizontalChoices())move(1);}else if(e.getRepeatCount()==0){if(key==KeyEvent.KEYCODE_BUTTON_START){if(flow.phase==StartupFlow.Phase.LOAD){if(loadFlow.phase==CardFlow.Phase.ERROR||loadFlow.phase==CardFlow.Phase.DONE)confirmLoad();}else if(flow.phase==StartupFlow.Phase.OPTIONS)flow.back();else if(!currentMovie.isEmpty())movieFinished(true);else flow.skip();}else if(flow.phase!=StartupFlow.Phase.NINTENDO&&flow.phase!=StartupFlow.Phase.TIMELINE)confirm();}}return true;}
+    if(!relevant)return super.dispatchKeyEvent(e);if(randomizerOpen())return true;if(e.getAction()==KeyEvent.ACTION_DOWN){if(key==KeyEvent.KEYCODE_BUTTON_SELECT){finish();return true;}if(key==KeyEvent.KEYCODE_BUTTON_B){if(flow.phase==StartupFlow.Phase.OPTIONS||flow.phase==StartupFlow.Phase.LOAD||!currentMovie.isEmpty())onBackPressed();}else if(key==KeyEvent.KEYCODE_DPAD_UP){if(!loadHorizontalChoices())move(-1);}else if(key==KeyEvent.KEYCODE_DPAD_DOWN){if(!loadHorizontalChoices())move(1);}else if(key==KeyEvent.KEYCODE_DPAD_LEFT){if(flow.phase==StartupFlow.Phase.OPTIONS)changeOption(-1);else if(loadHorizontalChoices())move(-1);}else if(key==KeyEvent.KEYCODE_DPAD_RIGHT){if(flow.phase==StartupFlow.Phase.OPTIONS)changeOption(1);else if(loadHorizontalChoices())move(1);}else if(e.getRepeatCount()==0){if(key==KeyEvent.KEYCODE_BUTTON_START){if(flow.phase==StartupFlow.Phase.LOAD){if(loadFlow.phase==CardFlow.Phase.ERROR||loadFlow.phase==CardFlow.Phase.DONE)confirmLoad();}else if(flow.phase==StartupFlow.Phase.OPTIONS)flow.back();else if(!currentMovie.isEmpty())movieFinished(true);else flow.skip();}else if(flow.phase!=StartupFlow.Phase.NINTENDO&&flow.phase!=StartupFlow.Phase.TIMELINE)confirm();}}return true;}
   @Override protected void onResume(){super.onResume();resumed=true;lastTime=0;fullscreen();if(video!=null)video.resumeMovie();else if(art!=null&&!preparing&&flow.phase!=StartupFlow.Phase.OPENING&&flow.phase!=StartupFlow.Phase.DEMO&&(flow.phase!=StartupFlow.Phase.LAUNCH || (selectedSave!=null&&!GameAudio.startupVoiceDrained())))titleAudio(true);main.post(tick);}
   @Override protected void onPause(){resumed=false;main.removeCallbacks(tick);titleAudio(false);if(video!=null){moviePosition=video.position();video.pauseMovie();}super.onPause();}
   @Override protected void onSaveInstanceState(Bundle state){state.putString("phase",flow.phase.name());state.putInt("frame",flow.frame);state.putInt("cursor",flow.cursor);state.putInt("idle",flow.idle);state.putInt("demo",flow.demoNumber);state.putInt("menuFrame",flow.menuFrame);state.putInt("menuFadeFrame",flow.menuFadeFrame);state.putInt("cursorFrame",flow.cursorFrame);state.putInt("titleTicks",flow.titleTicks);state.putBoolean("logoSound",flow.logoSound);state.putBoolean("menuFadeIn",flow.menuFadeIn);state.putBoolean("titleCue",titleCue);state.putBoolean("openingCanceled",openingCanceled);state.putInt("moviePosition",video==null?moviePosition:video.position());state.putString("optionPage",options.page.name());state.putInt("optionTop",options.top);state.putInt("optionRow",options.row);state.putBoolean("pendingReverse",options.pendingReverse);state.putBoolean("pendingVibration",options.pendingVibration);state.putBoolean("pendingKnife",options.pendingKnife);state.putInt("loadCursor",loadFlow.cursor);state.putInt("loadChoice",loadFlow.choice);state.putString("cardPhase",loadFlow.phase.name());state.putInt("cardMessage",loadFlow.message);state.putInt("cardExitFrame",loadFlow.exitFrame);state.putByteArray("selectedSave",selectedSave);state.putInt("cardPresentationFrame",loadFlow.presentationFrame);state.putInt("cardOperationFrame",loadFlow.operationFrame);super.onSaveInstanceState(state);}
@@ -182,6 +193,17 @@ public final class StartupActivity extends Activity {
         else if(flow.phase==StartupFlow.Phase.OPTIONS){art.draw(c,paint,13,0,0,1);art.draw(c,paint,1009,90,0,1);art.draw(c,paint,options.group(),flow.frame,0,1,options);art.help(c,paint,options.message());}
         else if(flow.phase==StartupFlow.Phase.NINTENDO)art.draw(c,paint,11,flow.frame,0,flow.fade());
         else{art.draw(c,paint,6,flow.titleFrame(),0,flow.fade());if(flow.phase==StartupFlow.Phase.MENU)art.menu(c,paint,flow.menuFrame,flow.cursorFrame,flow.cursor);}
+        // The randomizer page (port/docs randomizer plan, phase 2): the original menu's three entries are the game's
+        // own artwork and have no fourth slot, so the way in is a small native button drawn over the picture, only
+        // while the menu stands and the art is ready. It changes nothing of the scene underneath.
+        if(flow.phase==StartupFlow.Phase.MENU&&art!=null){
+          float fl=flow.menuEntryFade();
+          paint.setColorFilter(null);paint.setXfermode(null);paint.setStyle(Paint.Style.FILL);
+          paint.setColor(Color.argb(Math.round(150*fl),0,0,0));
+          c.drawRoundRect(new android.graphics.RectF(452,432,624,466),10,10,paint);
+          paint.setColor(Color.argb(Math.round(255*fl),255,255,255));paint.setTextSize(15);paint.setTextAlign(Paint.Align.CENTER);
+          c.drawText(getString(R.string.randomizer_title),538,455,paint);
+        }
         if(flow.menuEntryFade()<1){paint.setColorFilter(null);paint.setXfermode(null);paint.setStyle(Paint.Style.FILL);paint.setColor(Color.BLACK);paint.setAlpha(Math.round(255*(1-flow.menuEntryFade())));c.drawRect(0,0,640,480,paint);paint.setAlpha(255);}
         if(!error.isEmpty())text(c,error,320,400,13);
       }
@@ -192,6 +214,8 @@ public final class StartupActivity extends Activity {
     }
     private void text(Canvas c,String s,float x,float y,int size){paint.setColor(Color.WHITE);paint.setTextSize(size);paint.setTextAlign(Paint.Align.CENTER);c.drawText(s,x,y,paint);}
     @Override public boolean onTouchEvent(MotionEvent e){if(e.getAction()!=MotionEvent.ACTION_UP)return true;if(viewport==null)return true;float x=viewport.sourceX(e.getX()),y=viewport.sourceY(e.getY());
+      // the randomizer page's button (phase 2): only while the title menu stands (see the drawing above)
+      if(flow.phase==StartupFlow.Phase.MENU&&art!=null&&x>=452&&x<=624&&y>=432&&y<=466){openRandomizer();return true;}
       if(flow.phase==StartupFlow.Phase.MENU&&y>=310&&y<=365){flow.cursor=Math.max(0,Math.min(2,Math.round((y-318)/20)));confirm();}
       else if(flow.phase==StartupFlow.Phase.OPTIONS){if(options.page==StartupOptions.Page.TOP&&y>=145&&y<=295){options.top=Math.max(1,Math.min(4,Math.round((y-160)/30)));confirm();}
         else if(options.page==StartupOptions.Page.CONTROLLER&&y>=145&&y<=295){options.row=y>250?3:y>214?2:y>180?1:0;if(options.row<3)changeOption(x<410?-1:1);confirm();}

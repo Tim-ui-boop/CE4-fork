@@ -32,8 +32,11 @@ RES = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "app/src/main/res"
 NAME = "strings_ingame.xml"
 JAVA = [ROOT / "app/src/main/java/com/ast/re4decomp" / f for f in ("CoreMenu.java", "CoreActivity.java", "CoreBridge.java",
                                                                   "AppUpdate.java", "BenchmarkFlow.java",
-                                                                  "PerfProfile.java", "TextureImportActivity.java")]
+                                                                  "PerfProfile.java", "TextureImportActivity.java",
+                                                                  "RandomizerDialog.java")]
 PREFIX = "ingame_"
+# the randomizer page's own names (RandomizerDialog): the same check, its own prefix
+PREFIXES = (PREFIX, "randomizer_")
 PLACEHOLDER = re.compile(r"%(?:\d+\$)?[-#+ 0,(]*\d*(?:\.\d+)?[a-zA-Z]")
 LOCALES = "xml/locales_config.xml"
 # folders whose code Android writes differently in locales_config (Indonesian: values-in, the old code all
@@ -118,7 +121,7 @@ def main():
     # the names the app uses
     used = set()
     for java in JAVA:
-        used |= set(re.findall(r"R\.(?:string|plurals)\.(" + PREFIX + r"\w+)", java.read_text(encoding="utf-8")))
+        used |= set(re.findall(r"R\.(?:string|plurals)\.((?:" + "|".join(PREFIXES) + r")\w+)", java.read_text(encoding="utf-8")))
     for name in sorted(used - set(en_strings) - set(en_plurals)):
         errors.append(f"values/{NAME}: {name} is used by the app but missing")
     unused = sorted((set(en_strings) | set(en_plurals)) - used)

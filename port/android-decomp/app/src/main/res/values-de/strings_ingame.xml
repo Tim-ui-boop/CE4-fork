@@ -479,4 +479,21 @@
     <string name="ingame_hd_import_from">Texturpaket „%1$s“ (%2$s) importieren?</string>
     <string name="ingame_hd_import_busy">Es wird schon ein Texturpaket importiert. Versuch es noch einmal, wenn es fertig ist.</string>
     <string name="ingame_hd_import_on">HD-Texturen sind an. Ausschalten oder das Paket löschen kannst du im App-Menü (SELECT) unter Cheats &amp; Mods.</string>
+    <string name="randomizer_title">Randomizer</string>
+    <string name="randomizer_intro">Ein Seed legt diesen Durchlauf fest: gleicher Seed und gleiche Schalter ergeben immer dasselbe Spiel. Schalte ein, was zufällig sein soll, und starte dann das Spiel. Das Menü im Spiel zeigt den Seed, den du spielst.</string>
+    <string name="randomizer_new_seed">Neuer Seed</string>
+    <string name="randomizer_seed">Seed %1$d</string>
+    <string name="randomizer_no_seed">Noch kein Seed</string>
+    <string name="randomizer_features">Randomizer</string>
+    <string name="randomizer_saved_seeds">Gespeicherte Seeds</string>
+    <string name="randomizer_no_files">Noch keine gespeicherten Seeds.</string>
+    <string name="randomizer_name_hint">Name für diesen Seed</string>
+    <string name="randomizer_save">Speichern</string>
+    <string name="randomizer_load">Laden</string>
+    <string name="randomizer_delete">Löschen</string>
+    <string name="randomizer_close">Schließen</string>
+    <string name="randomizer_saved">Gespeichert als %1$s</string>
+    <string name="randomizer_loaded">Geladen: %1$s</string>
+    <string name="randomizer_deleted">Gelöscht: %1$s</string>
+    <string name="randomizer_none_on">Kein Randomizer ist an. Schalte einen ein, um einen zufälligen Durchlauf zu starten.</string>
 </resources>

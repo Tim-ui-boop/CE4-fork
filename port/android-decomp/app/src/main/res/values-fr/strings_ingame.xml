@@ -484,4 +484,21 @@
     <string name="ingame_hd_import_from">Importer le pack de textures « %1$s » (%2$s) ?</string>
     <string name="ingame_hd_import_busy">Un pack de textures est déjà en cours d’importation. Réessayez quand il sera terminé.</string>
     <string name="ingame_hd_import_on">Les textures HD sont activées. Vous pouvez les désactiver ou supprimer le pack dans le menu de l’app (SELECT), sous Triches et mods.</string>
+    <string name="randomizer_title">Aléatoire</string>
+    <string name="randomizer_intro">Une graine définit cette partie\u00A0: la même graine et les mêmes réglages donnent toujours le même jeu. Activez ce que vous voulez rendre aléatoire, puis lancez le jeu. Le menu en jeu affiche la graine utilisée.</string>
+    <string name="randomizer_new_seed">Nouvelle graine</string>
+    <string name="randomizer_seed">Graine %1$d</string>
+    <string name="randomizer_no_seed">Pas encore de graine</string>
+    <string name="randomizer_features">Options aléatoires</string>
+    <string name="randomizer_saved_seeds">Graines enregistrées</string>
+    <string name="randomizer_no_files">Aucune graine enregistrée.</string>
+    <string name="randomizer_name_hint">Nom de cette graine</string>
+    <string name="randomizer_save">Enregistrer</string>
+    <string name="randomizer_load">Charger</string>
+    <string name="randomizer_delete">Supprimer</string>
+    <string name="randomizer_close">Fermer</string>
+    <string name="randomizer_saved">Enregistrée sous %1$s</string>
+    <string name="randomizer_loaded">Chargée\u00A0: %1$s</string>
+    <string name="randomizer_deleted">Supprimée\u00A0: %1$s</string>
+    <string name="randomizer_none_on">Aucun mode aléatoire n’est actif. Activez-en un pour lancer une partie aléatoire.</string>
 </resources>

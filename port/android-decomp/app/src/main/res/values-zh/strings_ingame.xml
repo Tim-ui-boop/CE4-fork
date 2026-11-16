@@ -477,4 +477,21 @@
     <string name="ingame_hd_import_from">导入纹理包“%1$s”（%2$s）？</string>
     <string name="ingame_hd_import_busy">已有纹理包正在导入。请在完成后再试。</string>
     <string name="ingame_hd_import_on">高清纹理已开启。可在应用菜单（SELECT）的“作弊与模组”中关闭或删除纹理包。</string>
+    <string name="randomizer_title">随机化</string>
+    <string name="randomizer_intro">一个种子决定这一轮：相同的种子和相同的开关总会得到相同的游戏。打开你想随机的内容，然后开始游戏。游戏内菜单会显示当前使用的种子。</string>
+    <string name="randomizer_new_seed">新种子</string>
+    <string name="randomizer_seed">种子 %1$d</string>
+    <string name="randomizer_no_seed">尚无种子</string>
+    <string name="randomizer_features">随机项</string>
+    <string name="randomizer_saved_seeds">已保存的种子</string>
+    <string name="randomizer_no_files">尚无已保存的种子。</string>
+    <string name="randomizer_name_hint">此种子的名称</string>
+    <string name="randomizer_save">保存</string>
+    <string name="randomizer_load">加载</string>
+    <string name="randomizer_delete">删除</string>
+    <string name="randomizer_close">关闭</string>
+    <string name="randomizer_saved">已保存为 %1$s</string>
+    <string name="randomizer_loaded">已加载 %1$s</string>
+    <string name="randomizer_deleted">已删除 %1$s</string>
+    <string name="randomizer_none_on">没有开启任何随机项。打开一项以开始随机游戏。</string>
 </resources>

@@ -482,4 +482,21 @@
     <string name="ingame_hd_import_from">Importare il pacchetto texture «%1$s» (%2$s)?</string>
     <string name="ingame_hd_import_busy">È già in corso l’importazione di un pacchetto texture. Riprova quando è terminata.</string>
     <string name="ingame_hd_import_on">Le texture HD sono attive. Puoi disattivarle o eliminare il pacchetto nel menu dell’app (SELECT), in Trucchi e mod.</string>
+    <string name="randomizer_title">Casuale</string>
+    <string name="randomizer_intro">Un seme definisce questa partita: stesso seme e stessi interruttori danno sempre lo stesso gioco. Attiva ciò che vuoi rendere casuale, poi avvia. Il menu in gioco mostra il seme che stai giocando.</string>
+    <string name="randomizer_new_seed">Nuovo seme</string>
+    <string name="randomizer_seed">Seme %1$d</string>
+    <string name="randomizer_no_seed">Nessun seme</string>
+    <string name="randomizer_features">Casualizzatori</string>
+    <string name="randomizer_saved_seeds">Semi salvati</string>
+    <string name="randomizer_no_files">Nessun seme salvato.</string>
+    <string name="randomizer_name_hint">Nome di questo seme</string>
+    <string name="randomizer_save">Salva</string>
+    <string name="randomizer_load">Carica</string>
+    <string name="randomizer_delete">Elimina</string>
+    <string name="randomizer_close">Chiudi</string>
+    <string name="randomizer_saved">Salvato come %1$s</string>
+    <string name="randomizer_loaded">Caricato %1$s</string>
+    <string name="randomizer_deleted">Eliminato %1$s</string>
+    <string name="randomizer_none_on">Nessun casualizzatore è attivo. Attivane uno per iniziare una partita casuale.</string>
 </resources>

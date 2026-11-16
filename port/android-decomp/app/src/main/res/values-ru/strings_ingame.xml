@@ -485,4 +485,21 @@
     <string name="ingame_hd_import_from">Импортировать пакет текстур «%1$s» (%2$s)?</string>
     <string name="ingame_hd_import_busy">Пакет текстур уже импортируется. Попробуйте снова, когда импорт закончится.</string>
     <string name="ingame_hd_import_on">HD-текстуры включены. Выключить их или удалить пакет можно в меню приложения (SELECT), в разделе Читы и моды.</string>
+    <string name="randomizer_title">Рандомайзер</string>
+    <string name="randomizer_intro">Один seed определяет это прохождение: тот же seed и те же переключатели всегда дают ту же игру. Включите, что хотите случайным, и начните игру. Меню в игре показывает текущий seed.</string>
+    <string name="randomizer_new_seed">Новый seed</string>
+    <string name="randomizer_seed">Seed %1$d</string>
+    <string name="randomizer_no_seed">Пока нет seed</string>
+    <string name="randomizer_features">Рандомайзеры</string>
+    <string name="randomizer_saved_seeds">Сохранённые seed</string>
+    <string name="randomizer_no_files">Сохранённых seed пока нет.</string>
+    <string name="randomizer_name_hint">Имя этого seed</string>
+    <string name="randomizer_save">Сохранить</string>
+    <string name="randomizer_load">Загрузить</string>
+    <string name="randomizer_delete">Удалить</string>
+    <string name="randomizer_close">Закрыть</string>
+    <string name="randomizer_saved">Сохранено как %1$s</string>
+    <string name="randomizer_loaded">Загружено %1$s</string>
+    <string name="randomizer_deleted">Удалено %1$s</string>
+    <string name="randomizer_none_on">Ни один рандомайзер не включён. Включите один, чтобы начать случайное прохождение.</string>
 </resources>

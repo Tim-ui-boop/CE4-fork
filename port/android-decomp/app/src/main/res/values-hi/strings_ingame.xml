@@ -479,4 +479,21 @@
     <string name="ingame_hd_import_from">टेक्सचर पैक “%1$s” (%2$s) इम्पोर्ट करें?</string>
     <string name="ingame_hd_import_busy">एक टेक्सचर पैक पहले से इम्पोर्ट हो रहा है। पूरा होने पर फिर कोशिश करें।</string>
     <string name="ingame_hd_import_on">HD टेक्सचर चालू हैं। इन्हें बंद करने या पैक हटाने के लिए ऐप मेन्यू (SELECT) में चीट्स और मॉड्स पर जाएँ।</string>
+    <string name="randomizer_title">रैंडमाइज़र</string>
+    <string name="randomizer_intro">एक सीड इस खेल को तय करता है: वही सीड और वही स्विच हमेशा वही खेल देते हैं। जो यादृच्छिक चाहिए वह चालू करें, फिर खेल शुरू करें। खेल का मेनू वर्तमान सीड दिखाता है।</string>
+    <string name="randomizer_new_seed">नया सीड</string>
+    <string name="randomizer_seed">सीड %1$d</string>
+    <string name="randomizer_no_seed">अभी कोई सीड नहीं</string>
+    <string name="randomizer_features">रैंडमाइज़र</string>
+    <string name="randomizer_saved_seeds">सहेजे गए सीड</string>
+    <string name="randomizer_no_files">अभी कोई सहेजी सीड नहीं।</string>
+    <string name="randomizer_name_hint">इस सीड का नाम</string>
+    <string name="randomizer_save">सहेजें</string>
+    <string name="randomizer_load">लोड</string>
+    <string name="randomizer_delete">हटाएं</string>
+    <string name="randomizer_close">बंद करें</string>
+    <string name="randomizer_saved">%1$s के रूप में सहेजा</string>
+    <string name="randomizer_loaded">%1$s लोड हुआ</string>
+    <string name="randomizer_deleted">%1$s हटाया गया</string>
+    <string name="randomizer_none_on">कोई रैंडमाइज़र चालू नहीं है। रैंडम खेल शुरू करने के लिए एक चालू करें।</string>
 </resources>

@@ -496,4 +496,21 @@
     <string name="ingame_hd_import_from">استيراد حزمة الأنسجة «%1$s» (%2$s)؟</string>
     <string name="ingame_hd_import_busy">يجري استيراد حزمة أنسجة بالفعل. حاول مجددًا عند انتهائه.</string>
     <string name="ingame_hd_import_on">الأنسجة عالية الدقة مفعّلة. يمكنك إيقافها أو حذف الحزمة من قائمة التطبيق (SELECT) ضمن الغش والتعديلات.</string>
+    <string name="randomizer_title">العشوائية</string>
+    <string name="randomizer_intro">بذرة واحدة تحدد هذه الجولة: نفس البذرة ونفس المفاتيح تعطيان دائماً نفس اللعبة. فعّل ما تريده عشوائياً ثم ابدأ اللعبة. قائمة اللعبة تعرض البذرة الحالية.</string>
+    <string name="randomizer_new_seed">بذرة جديدة</string>
+    <string name="randomizer_seed">البذرة %1$d</string>
+    <string name="randomizer_no_seed">لا توجد بذرة بعد</string>
+    <string name="randomizer_features">العناصر العشوائية</string>
+    <string name="randomizer_saved_seeds">البذور المحفوظة</string>
+    <string name="randomizer_no_files">لا توجد بذور محفوظة بعد.</string>
+    <string name="randomizer_name_hint">اسم هذه البذرة</string>
+    <string name="randomizer_save">حفظ</string>
+    <string name="randomizer_load">تحميل</string>
+    <string name="randomizer_delete">حذف</string>
+    <string name="randomizer_close">إغلاق</string>
+    <string name="randomizer_saved">حفظت كـ %1$s</string>
+    <string name="randomizer_loaded">تم تحميل %1$s</string>
+    <string name="randomizer_deleted">تم حذف %1$s</string>
+    <string name="randomizer_none_on">لا يوجد عنصر عشوائي مفعّل. فعّل واحداً لبدء جولة عشوائية.</string>
 </resources>

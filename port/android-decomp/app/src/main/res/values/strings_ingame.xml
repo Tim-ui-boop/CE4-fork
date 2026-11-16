@@ -494,4 +494,21 @@
     <string name="ingame_hd_import_from">Import the texture pack “%1$s” (%2$s)?</string>
     <string name="ingame_hd_import_busy">A texture pack is being imported already. Try again when it is done.</string>
     <string name="ingame_hd_import_on">HD textures are on. You can switch them off or delete the pack in the app menu (SELECT) under Cheats &amp; Mods.</string>
+    <string name="randomizer_title">Randomizer</string>
+    <string name="randomizer_intro">One seed defines this run: the same seed and the same switches always give the same game. Switch what you want randomized, then start the game. The in-game menu shows the seed you are playing.</string>
+    <string name="randomizer_new_seed">New seed</string>
+    <string name="randomizer_seed">Seed %1$d</string>
+    <string name="randomizer_no_seed">No seed yet</string>
+    <string name="randomizer_features">Randomizers</string>
+    <string name="randomizer_saved_seeds">Saved seeds</string>
+    <string name="randomizer_no_files">No saved seeds yet.</string>
+    <string name="randomizer_name_hint">Name for this seed</string>
+    <string name="randomizer_save">Save</string>
+    <string name="randomizer_load">Load</string>
+    <string name="randomizer_delete">Delete</string>
+    <string name="randomizer_close">Close</string>
+    <string name="randomizer_saved">Saved as %1$s</string>
+    <string name="randomizer_loaded">Loaded %1$s</string>
+    <string name="randomizer_deleted">Deleted %1$s</string>
+    <string name="randomizer_none_on">No randomizer is on. Switch one on to start a randomized run.</string>
 </resources>

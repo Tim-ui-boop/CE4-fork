@@ -475,4 +475,21 @@
     <string name="ingame_hd_import_from">Impor paket tekstur “%1$s” (%2$s)?</string>
     <string name="ingame_hd_import_busy">Paket tekstur sedang diimpor. Coba lagi setelah selesai.</string>
     <string name="ingame_hd_import_on">Tekstur HD menyala. Kamu bisa mematikannya atau menghapus paketnya di menu aplikasi (SELECT), bagian Cheat &amp; Mod.</string>
+    <string name="randomizer_title">Acak</string>
+    <string name="randomizer_intro">Satu benih menentukan permainan ini: benih dan sakelar yang sama selalu memberi permainan yang sama. Nyalakan apa yang ingin diacak, lalu mulai. Menu dalam permainan menunjukkan benih yang sedang dimainkan.</string>
+    <string name="randomizer_new_seed">Benih baru</string>
+    <string name="randomizer_seed">Benih %1$d</string>
+    <string name="randomizer_no_seed">Belum ada benih</string>
+    <string name="randomizer_features">Pengacak</string>
+    <string name="randomizer_saved_seeds">Benih tersimpan</string>
+    <string name="randomizer_no_files">Belum ada benih tersimpan.</string>
+    <string name="randomizer_name_hint">Nama benih ini</string>
+    <string name="randomizer_save">Simpan</string>
+    <string name="randomizer_load">Muat</string>
+    <string name="randomizer_delete">Hapus</string>
+    <string name="randomizer_close">Tutup</string>
+    <string name="randomizer_saved">Disimpan sebagai %1$s</string>
+    <string name="randomizer_loaded">Dimuat %1$s</string>
+    <string name="randomizer_deleted">Dihapus %1$s</string>
+    <string name="randomizer_none_on">Tiada pengacak yang dihidupkan. Hidupkan satu untuk memulakan permainan acak.</string>
 </resources>

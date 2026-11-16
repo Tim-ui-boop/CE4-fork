@@ -483,4 +483,21 @@
     <string name="ingame_hd_import_from">Importar o pacote de texturas “%1$s” (%2$s)?</string>
     <string name="ingame_hd_import_busy">Já há um pacote de texturas sendo importado. Tente de novo quando terminar.</string>
     <string name="ingame_hd_import_on">As texturas HD estão ativadas. Você pode desativá-las ou excluir o pacote no menu do app (SELECT), em Trapaças e mods.</string>
+    <string name="randomizer_title">Aleatório</string>
+    <string name="randomizer_intro">Uma semente define esta partida: a mesma semente e os mesmos interruptores dão sempre o mesmo jogo. Ativa o que quiseres aleatorizar e começa. O menu do jogo mostra a semente que estás a jogar.</string>
+    <string name="randomizer_new_seed">Nova semente</string>
+    <string name="randomizer_seed">Semente %1$d</string>
+    <string name="randomizer_no_seed">Ainda sem semente</string>
+    <string name="randomizer_features">Aleatorizadores</string>
+    <string name="randomizer_saved_seeds">Sementes guardadas</string>
+    <string name="randomizer_no_files">Ainda não há sementes guardadas.</string>
+    <string name="randomizer_name_hint">Nome desta semente</string>
+    <string name="randomizer_save">Guardar</string>
+    <string name="randomizer_load">Carregar</string>
+    <string name="randomizer_delete">Eliminar</string>
+    <string name="randomizer_close">Fechar</string>
+    <string name="randomizer_saved">Guardada como %1$s</string>
+    <string name="randomizer_loaded">Carregada %1$s</string>
+    <string name="randomizer_deleted">Eliminada %1$s</string>
+    <string name="randomizer_none_on">Nenhum aleatorizador está ligado. Liga um para começar uma partida aleatória.</string>
 </resources>
