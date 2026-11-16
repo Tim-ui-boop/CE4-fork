@@ -96,7 +96,7 @@ final class SeedStore {
     File target = file(name);
     File pending = new File(directory, target.getName() + ".pending");
     try {
-      try (OutputStream out = new FileOutputStream(pending)) {
+      try (FileOutputStream out = new FileOutputStream(pending)) {
         out.write(config.toText().getBytes(StandardCharsets.UTF_8));
         out.getFD().sync();
       }

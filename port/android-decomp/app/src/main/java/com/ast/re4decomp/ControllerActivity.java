@@ -819,7 +819,7 @@ public final class ControllerActivity
                 try{if(image==null || transaction==0)throw new IOException("Could not create save file");store.write(slot,image);
                   // which seed made this save, so the load screen can offer it (a small sidecar; the save itself
                   // stays exactly the game's own data)
-                  SeedStore.stamp(new File(getFilesDir(),"saves"),slot,CoreActivity.currentSeed(this));}
+                  SeedStore.stamp(new File(getFilesDir(),"saves"),slot,CoreActivity.currentSeed(ControllerActivity.this));}
                 catch(IOException e){failure=e;}
                 final IOException writeFailure=failure;final OriginalSaveHeader[] rows=store.headers();
                 surface.queueEvent(()->{
