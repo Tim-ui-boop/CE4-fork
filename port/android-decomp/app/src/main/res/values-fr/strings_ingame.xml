@@ -501,4 +501,16 @@
     <string name="randomizer_loaded">Chargée\u00A0: %1$s</string>
     <string name="randomizer_deleted">Supprimée\u00A0: %1$s</string>
     <string name="randomizer_none_on">Aucun mode aléatoire n’est actif. Activez-en un pour lancer une partie aléatoire.</string>
+    <string name="randomizer_chance">Marchands avec de la nouveauté\u00A0: %1$d%%</string>
+    <string name="randomizer_weapons">Armes\u00A0: %1$d choisies</string>
+    <string name="randomizer_weapons_title">Armes que le marchand peut vendre</string>
+    <string name="randomizer_ok">OK</string>
+    <string name="randomizer_cancel">Annuler</string>
+    <string name="randomizer_load_title">Graine de cette sauvegarde</string>
+    <string name="randomizer_load_question">Cette sauvegarde a été créée avec la graine %1$d. Passer à cette graine pour rejouer la même partie\u00A0?</string>
+    <string name="randomizer_load_switch">Changer</string>
+    <string name="randomizer_load_keep">Garder l’actuelle</string>
+    <string name="ingame_seed_active">Graine %1$d \u00b7 %2$d actifs</string>
+    <string name="ingame_seed_none">Pas de graine\u00A0: partie normale.</string>
+    <string name="ingame_seed_help">Les modes aléatoires se règlent sur la page Aléatoire de l’écran titre, avant de commencer\u00A0: une graine par partie, et la même graine donne toujours le même jeu. Ce menu indique seulement la graine utilisée\u00A0; activez-les là-bas.</string>
 </resources>

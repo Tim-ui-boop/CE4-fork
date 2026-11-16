@@ -128,7 +128,8 @@ final class SeedStore {
     config.seed = prefs.getInt(PREF_CURRENT, 0);
     for (RandomizerConfig.Feature f : config.features.values()) {
       f.on = prefs.getBoolean("seedOn_" + f.id, false);
-      f.chance = prefs.getInt("seedChance_" + f.id, 0);
+      f.chance = prefs.getInt("seedChance_" + f.id, 100);
+      f.weapons = prefs.getInt("seedWeapons_" + f.id, 0);
     }
     return config;
   }
@@ -142,11 +143,12 @@ final class SeedStore {
     for (RandomizerConfig.Feature f : config.features.values()) {
       edit.putBoolean("seedOn_" + f.id, f.on);
       edit.putInt("seedChance_" + f.id, f.chance);
+      edit.putInt("seedWeapons_" + f.id, f.weapons);
       any |= f.on;
     }
     edit.apply();
     // hand it to the running core too; before the core starts this is remembered by CoreActivity
-    if (any) config.applyToCore();
+    config.applyToCore();
   }
 
   // ---- the stamp beside a save -----------------------------------------------------------------------------------

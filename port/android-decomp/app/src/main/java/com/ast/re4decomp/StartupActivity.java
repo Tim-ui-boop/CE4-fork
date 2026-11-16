@@ -98,6 +98,18 @@ public final class StartupActivity extends Activity {
     if(flow.phase==StartupFlow.Phase.OPTIONS){StartupOptions.Page old=options.page;boolean close=options.confirm();saveOptions();NativeBridge.startupCue(0,close?0x39:old==StartupOptions.Page.TOP?0x36:options.page==StartupOptions.Page.TOP?0x39:0x3a);if(close)flow.back();return;}
     if(flow.phase==StartupFlow.Phase.LOAD){confirmLoad();return;}
     if(flow.phase==StartupFlow.Phase.MENU){int chosen=flow.cursor;error="";flow.confirm();if(chosen==2)readOptions();if(chosen==1)openLoad();selectedSave=null;NativeBridge.startupCue(chosen==0?6:0,chosen==0?2:chosen==2?0x33:4);if(chosen==0)GameAudio.awaitStartupVoice();}else flow.skip();}
+  private SeedStore seedCache;
+  /** The seed files and the run in use, for the load prompt and the page (phase 2/4). */
+  SeedStore seedStore() {
+    if(seedCache==null)seedCache=new SeedStore(getFilesDir(),
+        getSharedPreferences(CoreActivity.GAME_PREFS,MODE_PRIVATE));
+    return seedCache;
+  }
+  /** The seed file the current run came from, "" when it has none. */
+  String activeSeedFile() {
+    return getSharedPreferences(CoreActivity.GAME_PREFS,MODE_PRIVATE).getString(SeedStore.PREF_ACTIVE,"");
+  }
+
   /** The randomizer page (phase 2): a modal page over the title screen, drawn while the menu stands. */
   private RandomizerDialog randomizerPage;
   private void openRandomizer() {
@@ -119,6 +131,27 @@ public final class StartupActivity extends Activity {
     if(operation==CardFlow.Operation.NONE){if(before!=loadFlow.phase)NativeBridge.startupCue(0,loadFlow.selecting()?5:4);screen.invalidate();return;}
     final int slot=loadFlow.cursor;saveStore.rememberSelection(slot);NativeBridge.startupCue(0,operation==CardFlow.Operation.LOAD?0x38:4);
     if(operation==CardFlow.Operation.LOAD)GameAudio.awaitStartupVoice();
+    // Phase 4: a save made under a seed carries that seed in a sidecar. Loading it offers to switch the run over, so
+    // a save always plays with the randomizers it was made with (the numbers it rolled depend on the seed).
+    if(operation==CardFlow.Operation.LOAD){
+      final int stamped=SeedStore.stampedSeed(new File(getFilesDir(),"saves"),slot);
+      final SeedStore store=seedStore();
+      final RandomizerConfig now=store.current();
+      if(stamped!=0&&stamped!=now.seed){
+        new android.app.AlertDialog.Builder(this).setTitle(R.string.randomizer_load_title)
+          .setMessage(getString(R.string.randomizer_load_question,stamped))
+          .setPositiveButton(R.string.randomizer_load_switch,(d,w)->{
+            RandomizerConfig adopted=store.current();adopted.seed=stamped;store.setCurrent(adopted,activeSeedFile());
+            performCardOperation(slot,CardFlow.Operation.LOAD);})
+          .setNegativeButton(R.string.randomizer_load_keep,(d,w)->performCardOperation(slot,CardFlow.Operation.LOAD))
+          .setCancelable(false).show();
+        return;
+      }
+    }
+    performCardOperation(slot,operation);
+  }
+  /** The card's work for `operation` on `slot`, off the UI thread (load, delete or export of a save). */
+  private void performCardOperation(final int slot,final CardFlow.Operation operation){
     worker.execute(()->{
       byte[] image=null;String failure="";boolean unsupported=false;
       try {

@@ -502,4 +502,16 @@
     <string name="randomizer_loaded">Загружено %1$s</string>
     <string name="randomizer_deleted">Удалено %1$s</string>
     <string name="randomizer_none_on">Ни один рандомайзер не включён. Включите один, чтобы начать случайное прохождение.</string>
+    <string name="randomizer_chance">Торговцев с новым товаром: %1$d%%</string>
+    <string name="randomizer_weapons">Оружие: выбрано %1$d</string>
+    <string name="randomizer_weapons_title">Оружие, которое может продавать торговец</string>
+    <string name="randomizer_ok">OK</string>
+    <string name="randomizer_cancel">Отмена</string>
+    <string name="randomizer_load_title">Seed этого сохранения</string>
+    <string name="randomizer_load_question">Это сохранение создано с seed %1$d. Переключиться на этот seed, чтобы играть то же прохождение?</string>
+    <string name="randomizer_load_switch">Переключить</string>
+    <string name="randomizer_load_keep">Оставить текущий</string>
+    <string name="ingame_seed_active">Seed %1$d \u00b7 %2$d вкл.</string>
+    <string name="ingame_seed_none">Нет seed: обычная игра.</string>
+    <string name="ingame_seed_help">Рандомайзеры настраиваются на странице Рандомайзер экрана заголовка, до начала игры: один seed на прохождение, и тот же seed всегда даёт ту же игру. Здесь виден только текущий seed; включают их там.</string>
 </resources>

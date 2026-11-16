@@ -496,4 +496,16 @@
     <string name="randomizer_loaded">Geladen: %1$s</string>
     <string name="randomizer_deleted">Gelöscht: %1$s</string>
     <string name="randomizer_none_on">Kein Randomizer ist an. Schalte einen ein, um einen zufälligen Durchlauf zu starten.</string>
+    <string name="randomizer_chance">Händler mit neuer Ware: %1$d%%</string>
+    <string name="randomizer_weapons">Waffen: %1$d gewählt</string>
+    <string name="randomizer_weapons_title">Waffen, die der Händler verkaufen darf</string>
+    <string name="randomizer_ok">OK</string>
+    <string name="randomizer_cancel">Abbrechen</string>
+    <string name="randomizer_load_title">Seed dieses Spielstands</string>
+    <string name="randomizer_load_question">Dieser Spielstand wurde mit Seed %1$d erstellt. Auf diesen Seed wechseln, damit du denselben Durchlauf spielst?</string>
+    <string name="randomizer_load_switch">Wechseln</string>
+    <string name="randomizer_load_keep">Aktuellen behalten</string>
+    <string name="ingame_seed_active">Seed %1$d \u00b7 %2$d an</string>
+    <string name="ingame_seed_none">Kein Seed: ein normales Spiel.</string>
+    <string name="ingame_seed_help">Die Randomizer stellst du auf der Randomizer-Seite des Titelbildschirms ein, bevor das Spiel startet: ein Seed pro Durchlauf, und derselbe Seed ergibt immer dasselbe Spiel. Dieses Menü zeigt nur, welchen Seed du spielst; ein- und ausschalten tust du sie dort.</string>
 </resources>

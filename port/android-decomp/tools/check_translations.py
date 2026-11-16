@@ -33,7 +33,7 @@ NAME = "strings_ingame.xml"
 JAVA = [ROOT / "app/src/main/java/com/ast/re4decomp" / f for f in ("CoreMenu.java", "CoreActivity.java", "CoreBridge.java",
                                                                   "AppUpdate.java", "BenchmarkFlow.java",
                                                                   "PerfProfile.java", "TextureImportActivity.java",
-                                                                  "RandomizerDialog.java")]
+                                                                  "RandomizerDialog.java", "StartupActivity.java")]
 PREFIX = "ingame_"
 # the randomizer page's own names (RandomizerDialog): the same check, its own prefix
 PREFIXES = (PREFIX, "randomizer_")

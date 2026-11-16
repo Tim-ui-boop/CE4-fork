@@ -511,4 +511,16 @@
     <string name="randomizer_loaded">Loaded %1$s</string>
     <string name="randomizer_deleted">Deleted %1$s</string>
     <string name="randomizer_none_on">No randomizer is on. Switch one on to start a randomized run.</string>
+    <string name="randomizer_chance">Merchants with new goods: %1$d%%</string>
+    <string name="randomizer_weapons">Weapons: %1$d chosen</string>
+    <string name="randomizer_weapons_title">Weapons the merchant may sell</string>
+    <string name="randomizer_ok">OK</string>
+    <string name="randomizer_cancel">Cancel</string>
+    <string name="randomizer_load_title">Seed of this save</string>
+    <string name="randomizer_load_question">This save was made with seed %1$d. Switch to that seed so you play the same run again?</string>
+    <string name="randomizer_load_switch">Switch</string>
+    <string name="randomizer_load_keep">Keep current</string>
+    <string name="ingame_seed_active">Seed %1$d \u00b7 %2$d on</string>
+    <string name="ingame_seed_none">No seed: this is a plain game.</string>
+    <string name="ingame_seed_help">The randomizers are set on the Randomizer page of the title screen, before the game starts: one seed per run, and the same seed always gives the same game. This menu shows only which seed you are playing; turn the randomizers on or off there.</string>
 </resources>

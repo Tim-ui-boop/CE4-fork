@@ -513,4 +513,16 @@
     <string name="randomizer_loaded">تم تحميل %1$s</string>
     <string name="randomizer_deleted">تم حذف %1$s</string>
     <string name="randomizer_none_on">لا يوجد عنصر عشوائي مفعّل. فعّل واحداً لبدء جولة عشوائية.</string>
+    <string name="randomizer_chance">التجار ذوو البضاعة الجديدة: %1$d%%</string>
+    <string name="randomizer_weapons">الأسلحة: %1$d مختارة</string>
+    <string name="randomizer_weapons_title">الأسلحة التي يمكن للتاجر بيعها</string>
+    <string name="randomizer_ok">موافق</string>
+    <string name="randomizer_cancel">إلغاء</string>
+    <string name="randomizer_load_title">بذرة هذا الحفظ</string>
+    <string name="randomizer_load_question">حُفظت هذه اللعبة بالبذرة %1$d. التبديل إلى تلك البذرة للعب نفس الجولة؟</string>
+    <string name="randomizer_load_switch">تبديل</string>
+    <string name="randomizer_load_keep">الإبقاء على الحالي</string>
+    <string name="ingame_seed_active">البذرة %1$d \u00b7 %2$d مفعّل</string>
+    <string name="ingame_seed_none">لا بذرة: لعبة عادية.</string>
+    <string name="ingame_seed_help">تُضبط العناصر العشوائية في صفحة العشوائية بشاشة العنوان، قبل بدء اللعبة: بذرة واحدة لكل جولة، ونفس البذرة تعطي دائماً نفس اللعبة. هذه القائمة تعرض البذرة الحالية فقط؛ فعّلها هناك.</string>
 </resources>

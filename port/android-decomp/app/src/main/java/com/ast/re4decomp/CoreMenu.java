@@ -1869,31 +1869,21 @@ final class CoreMenu extends Dialog {
       v.setSelected(true); main.postDelayed(() -> v.setSelected(false), CHEAT_FLASH_MS);
       cheatAction(4, R.string.ingame_cheat_extras);
     });
-    // "Random items" (wish of the project owner, 07.11.2026, GitHub issue #161): a new seed each time it goes on
-    MenuLayout.Buttons items = cheatRow(2);
-    toggle(items, R.string.ingame_cheat_random_items, (cheatBits & RANDOM_ITEMS_BIT) != 0, on -> {
-      cheatBits = withRandomItems(cheatBits, on, new java.util.Random().nextInt(1 << 20));
-      host.cheatsChanged(cheatBits);
-    });
-    // (phase 1: the randomizers move to the seed page before the game starts; until then this menu changes the
-    //  same run through the host, so both places act on one RandomizerConfig)
-    // the run in use: the toggles here show and change the same seed the future page will set
+    // Phase 3: the randomizers now live on the page before the game starts (RandomizerDialog). This menu keeps a
+    // status line instead of switches, so there is exactly one place to change them; what the line says comes from
+    // the same run the page edits.
     final RandomizerConfig run = host.currentRun();
-    toggle(items, R.string.ingame_cheat_random_enemies, run.feature("enemies").on, on -> {
-      host.enemyRandomChanged(on ? (run.seed != 0 ? run.seed : RandomizerConfig.freshSeed()) : 0);
-    });
-    // "Random merchant stock": a seed of its own, a new one each time it goes on (runtime/merchant_random.cpp,
-    // patch 0233)
-    toggle(items, R.string.ingame_cheat_random_merchant, run.feature("merchant").on, on -> {
-      host.merchantRandomChanged(on ? (run.seed != 0 ? run.seed : RandomizerConfig.freshSeed()) : 0);
-    });
+    TextView seedLine = text("", 15, false);
+    seedLine.setPadding(dp(MenuLayout.GAP), dp(6), dp(MenuLayout.GAP), dp(8));
+    seedLine.setText(run.anyEnabled()
+        ? getString(R.string.ingame_seed_active, run.seed, run.enabledCount())
+        : getString(R.string.ingame_seed_none));
+    body.addView(seedLine);
     cheatStatus = text("", 15, false); cheatStatus.setPadding(dp(MenuLayout.GAP), dp(6), dp(MenuLayout.GAP), dp(2));
     cheatStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); cheatStatus.setVisibility(View.GONE);
     body.addView(cheatStatus);
     help(R.string.ingame_cheats_help);
-    help(R.string.ingame_cheat_random_items_help);
-    help(R.string.ingame_cheat_random_enemies_help);
-    help(R.string.ingame_cheat_random_merchant_help);
+    help(R.string.ingame_seed_help);
     playerCharacter();
     mods();
   }

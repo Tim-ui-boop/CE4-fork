@@ -329,6 +329,9 @@ public final class CoreBridge {
    *  merchant then sells from one shared pool (runtime/merchant_random.cpp, patch 0233); cores without it
    *  leave it out. */
   public static native void setMerchantRandom(int seed);
+  /** The merchant randomizer's options: `chance` the percent of merchants that offer new goods (0..100),
+   *  `weapons` a bit per weapon in the core's list (0: its default set). Cores without it ignore it. */
+  public static native void setMerchantOptions(int chance, int weapons);
   /** "Gentler QTEs" (CoreMenu, comfort controls, 0.99.15): Professional's quick-time events as Normal's
    *  (runtime/qte_touch.cpp re4_qte_level, patch 0232); cores before 0.99.15 leave it out. */
   public static native void setGentleQte(boolean on);

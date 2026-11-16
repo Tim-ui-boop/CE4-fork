@@ -129,6 +129,40 @@ int seedNow()
     return test;
 }
 
+// ---- options (phase 5) -----------------------------------------------------------------------------------------
+
+volatile int gChance = 100;  // percent of merchants that offer new goods (100 = every one, the earlier behaviour)
+u32 gWeapons;                // bit i = weapon i of kWeapons may be drawn; 0 = the default set
+
+// The weapons the pool may hand out. The PC randomizer lets the player choose from a fixed list; the same idea,
+// with the ids this build uses (item.h itemInfo: type 1). `bit` in gWeapons enables one.
+struct Weapon {
+    u16 id;
+    const char* name;
+};
+const Weapon kWeapons[] = {
+    {0x23, "Handgun"},        {0x21, "Punisher"},     {0x25, "Red9"},         {0x27, "Blacktail"},
+    {0x03, "Matilda"},        {0x2C, "Shotgun"},      {0x94, "Riot Gun"},     {0x2D, "Striker"},
+    {0x2E, "Rifle"},          {0x2F, "Rifle (semi)"}, {0x30, "TMP"},          {0x34, "Chicago Typewriter"},
+    {0x36, "Mine Thrower"},   {0x29, "Broken Butterfly"},{0x2A, "Killer7"},    {0x37, "Handcannon"},
+    {0x33, "Rocket Launcher"},
+};
+const int kWeaponNum = (int) (sizeof(kWeapons) / sizeof(kWeapons[0]));
+// the default set: everything but the cleared-game guns, which a new run has no business selling at once
+const u32 kWeaponsDefault = ~((1u << 11) | (1u << 15) | (1u << 16));
+
+bool weaponAllowed(u16 id)
+{
+    const u32 mask = __atomic_load_n(&gWeapons, __ATOMIC_RELAXED);
+    const u32 use = mask ? mask : kWeaponsDefault;
+    for (int i = 0; i < kWeaponNum; i++) {
+        if (kWeapons[i].id == id) {
+            return (use >> i & 1) != 0;
+        }
+    }
+    return true;  // ammunition, recovery, treasures and parts are always allowed
+}
+
 }  // namespace
 
 extern "C" {
@@ -142,6 +176,30 @@ void re4_core_set_merchant_random(int seed)
         if (seed) {
             re4_log("core: random merchant stock seed %d", seed);
         }
+    }
+}
+
+// The app (CoreBridge.setMerchantOptions, phase 5): `chance` the percent of merchants that offer new goods
+// (0..100), `weapons` a bit per weapon of the list above (0: the default set). Any thread.
+void re4_core_set_merchant_options(int chance, unsigned weapons)
+{
+    if (chance < 0) {
+        chance = 0;
+    }
+    if (chance > 100) {
+        chance = 100;
+    }
+    const int before = __atomic_exchange_n(&gChance, chance, __ATOMIC_RELAXED);
+    const unsigned mask = weapons & ((1u << kWeaponNum) - 1);
+    const unsigned maskBefore = __atomic_exchange_n(&gWeapons, mask, __ATOMIC_RELAXED);
+    if (before != chance || maskBefore != mask) {
+        int n = 0;
+        for (int i = 0; i < kWeaponNum; i++) {
+            if ((mask ? mask : kWeaponsDefault) >> i & 1) {
+                n++;
+            }
+        }
+        re4_log("core: random merchant stock options: %d%% of merchants, %d weapons", chance, n);
     }
 }
 
@@ -188,11 +246,30 @@ void re4_merchant_random_stock(StockEntry* e, int max)
     gVisits++;
     u32 h = mix((u32) seed * 0x9E3779B1u ^ mix(room << 8));
 
+    // The chance option (phase 5): a merchant decides once, from the same seed and room, whether he offers new goods
+    // at all; the rest keep the game's own stock. That keeps the draw as fixed as everything else here.
+    const int chance = __atomic_load_n(&gChance, __ATOMIC_RELAXED);
+    if (chance < 100 && (int) (mix(h ^ 0x5bd1e995u) % 100u) >= chance) {
+        return;
+    }
+
+    // The pool with the weapon choice applied (phase 5): a shuffle over what may be drawn, so a weapon the player
+    // switched off never appears while the shop keeps its length.
+    static u16 pool[512];
+    int m = 0;
+    for (int i = 0; i < gPoolNum; i++) {
+        if (weaponAllowed(gPool[i])) {
+            pool[m++] = gPool[i];
+        }
+    }
+    if (m <= 0) {
+        return;
+    }
+
     // A shuffle of the pool (Fisher-Yates from the seed): distinct ids, so the shop keeps its length
     static u16 order[512];
-    const int m = gPoolNum;
     for (int i = 0; i < m; i++) {
-        order[i] = gPool[i];
+        order[i] = pool[i];
     }
     for (int i = m - 1; i > 0; i--) {
         h = mix(h + (u32) i);

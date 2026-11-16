@@ -155,6 +155,143 @@ T = {
   "Tiada pengacak yang dihidupkan. Hidupkan satu untuk memulakan permainan acak.",
   "\u6ca1\u6709\u5f00\u542f\u4efb\u4f55\u968f\u673a\u9879\u3002\u6253\u5f00\u4e00\u9879\u4ee5\u5f00\u59cb"
   "\u968f\u673a\u6e38\u620f\u3002"),
+ "randomizer_chance": (
+  "Merchants with new goods: %1$d%%", "H\u00e4ndler mit neuer Ware: %1$d%%",
+  "Mercaderes con mercanc\u00eda nueva: %1$d%%", "Marchands avec de la nouveaut\u00e9\u00a0: %1$d%%",
+  "Mercanti con merce nuova: %1$d%%", "Mercadores com mercadoria nova: %1$d%%",
+  "\u0422\u043e\u0440\u0433\u043e\u0432\u0446\u0435\u0432 \u0441 \u043d\u043e\u0432\u044b\u043c \u0442\u043e\u0432\u0430\u0440\u043e\u043c: %1$d%%",
+  "\u0627\u0644\u062a\u062c\u0627\u0631 \u0630\u0648\u0648 \u0627\u0644\u0628\u0636\u0627\u0639\u0629 \u0627\u0644\u062c\u062f\u064a\u062f\u0629: %1$d%%",
+  "\u0928\u0908 \u0935\u0938\u094d\u0924\u0941 \u0935\u093e\u0932\u0947 \u0935\u094d\u092f\u093e\u092a\u093e\u0930\u0940: %1$d%%",
+  "Pedagang dengan barang baharu: %1$d%%", "\u6709\u65b0\u8d27\u7684\u5546\u4eba\uff1a%1$d%%"),
+ "randomizer_weapons": (
+  "Weapons: %1$d chosen", "Waffen: %1$d gew\u00e4hlt", "Armas: %1$d elegidas", "Armes\u00a0: %1$d choisies",
+  "Armi: %1$d scelte", "Armas: %1$d escolhidas",
+  "\u041e\u0440\u0443\u0436\u0438\u0435: \u0432\u044b\u0431\u0440\u0430\u043d\u043e %1$d",
+  "\u0627\u0644\u0623\u0633\u0644\u062d\u0629: %1$d \u0645\u062e\u062a\u0627\u0631\u0629",
+  "\u0939\u0925\u093f\u092f\u093e\u0930: %1$d \u091a\u0941\u0928\u0947 \u0917\u090f",
+  "Senjata: %1$d dipilih", "\u6b66\u5668\uff1a\u5df2\u9009 %1$d"),
+ "randomizer_weapons_title": (
+  "Weapons the merchant may sell", "Waffen, die der H\u00e4ndler verkaufen darf",
+  "Armas que el mercader puede vender", "Armes que le marchand peut vendre",
+  "Armi che il mercante pu\u00f2 vendere", "Armas que o mercador pode vender",
+  "\u041e\u0440\u0443\u0436\u0438\u0435, \u043a\u043e\u0442\u043e\u0440\u043e\u0435 \u043c\u043e\u0436\u0435\u0442 "
+  "\u043f\u0440\u043e\u0434\u0430\u0432\u0430\u0442\u044c \u0442\u043e\u0440\u0433\u043e\u0432\u0435\u0446",
+  "\u0627\u0644\u0623\u0633\u0644\u062d\u0629 \u0627\u0644\u062a\u064a \u064a\u0645\u0643\u0646 "
+  "\u0644\u0644\u062a\u0627\u062c\u0631 \u0628\u064a\u0639\u0647\u0627",
+  "\u0935\u094d\u092f\u093e\u092a\u093e\u0930\u0940 \u0915\u094c\u0928 \u0938\u0947 \u0939\u0925\u093f\u092f\u093e\u0930 "
+  "\u092c\u0947\u091a \u0938\u0915\u0924\u093e \u0939\u0948",
+  "Senjata yang boleh dijual pedagang", "\u5546\u4eba\u53ef\u4ee5\u51fa\u552e\u7684\u6b66\u5668"),
+ "randomizer_ok": (
+  "OK", "OK", "Aceptar", "OK", "OK", "OK", "OK", "\u0645\u0648\u0627\u0641\u0642",
+  "\u0920\u0940\u0915 \u0939\u0948", "OK", "\u786e\u5b9a"),
+ "randomizer_cancel": (
+  "Cancel", "Abbrechen", "Cancelar", "Annuler", "Annulla", "Cancelar",
+  "\u041e\u0442\u043c\u0435\u043d\u0430", "\u0625\u0644\u063a\u0627\u0621", "\u0930\u0926\u094d\u0926 \u0915\u0930\u0947\u0902",
+  "Batal", "\u53d6\u6d88"),
+ "randomizer_load_title": (
+  "Seed of this save", "Seed dieses Spielstands", "Semilla de esta partida",
+  "Graine de cette sauvegarde", "Seme di questo salvataggio", "Semente deste jogo guardado",
+  "Seed \u044d\u0442\u043e\u0433\u043e \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u044f",
+  "\u0628\u0630\u0631\u0629 \u0647\u0630\u0627 \u0627\u0644\u062d\u0641\u0638",
+  "\u0907\u0938 \u0938\u0947\u0935 \u0915\u093e \u0938\u0940\u0921",
+  "Benih simpanan ini", "\u6b64\u5b58\u6863\u7684\u79cd\u5b50"),
+ "randomizer_load_question": (
+  "This save was made with seed %1$d. Switch to that seed so you play the same run again?",
+  "Dieser Spielstand wurde mit Seed %1$d erstellt. Auf diesen Seed wechseln, damit du denselben Durchlauf "
+  "spielst?",
+  "\u00bfEsta partida se cre\u00f3 con la semilla %1$d. Cambiar a esa semilla para jugar la misma partida?",
+  "Cette sauvegarde a \u00e9t\u00e9 cr\u00e9\u00e9e avec la graine %1$d. Passer \u00e0 cette graine pour "
+  "rejouer la m\u00eame partie\u00a0?",
+  "Questo salvataggio \u00e8 stato creato con il seme %1$d. Passare a quel seme per rigiocare la stessa partita?",
+  "Este jogo foi criado com a semente %1$d. Mudar para essa semente para jogar a mesma partida?",
+  "\u042d\u0442\u043e \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u0435 \u0441\u043e\u0437\u0434\u0430\u043d\u043e "
+  "\u0441 seed %1$d. \u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0438\u0442\u044c\u0441\u044f \u043d\u0430 "
+  "\u044d\u0442\u043e\u0442 seed, \u0447\u0442\u043e\u0431\u044b \u0438\u0433\u0440\u0430\u0442\u044c \u0442\u043e "
+  "\u0436\u0435 \u043f\u0440\u043e\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u0435?",
+  "\u062d\u064f\u0641\u0638\u062a \u0647\u0630\u0647 \u0627\u0644\u0644\u0639\u0628\u0629 "
+  "\u0628\u0627\u0644\u0628\u0630\u0631\u0629 %1$d. \u0627\u0644\u062a\u0628\u062f\u064a\u0644 "
+  "\u0625\u0644\u0649 \u062a\u0644\u0643 \u0627\u0644\u0628\u0630\u0631\u0629 \u0644\u0644\u0639\u0628 "
+  "\u0646\u0641\u0633 \u0627\u0644\u062c\u0648\u0644\u0629\u061f",
+  "\u092f\u0939 \u0938\u0947\u0935 \u0938\u0940\u0921 %1$d \u0938\u0947 \u092c\u0928\u093e\u092f\u093e "
+  "\u0917\u092f\u093e \u0925\u093e\u0964 \u0935\u0939\u0940 \u0916\u0947\u0932 \u0926\u094b\u092c\u093e\u0930\u093e "
+  "\u0916\u0947\u0932\u0928\u0947 \u0915\u0947 \u0932\u093f\u090f \u0909\u0938 \u0938\u0940\u0921 "
+  "\u092a\u0930 \u0938\u094d\u0935\u093f\u091a \u0915\u0930\u0947\u0902?",
+  "Simpanan ini dibuat dengan benih %1$d. Tukar kepada benih itu untuk memainkan permainan yang sama?",
+  "\u6b64\u5b58\u6863\u4f7f\u7528\u79cd\u5b50 %1$d \u521b\u5efa\u3002\u662f\u5426\u5207\u6362\u5230"
+  "\u8be5\u79cd\u5b50\u4ee5\u91cd\u73a9\u540c\u4e00\u8f6e\uff1f"),
+ "randomizer_load_switch": (
+  "Switch", "Wechseln", "Cambiar", "Changer", "Passa", "Mudar",
+  "\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0438\u0442\u044c", "\u062a\u0628\u062f\u064a\u0644",
+  "\u0938\u094d\u0935\u093f\u091a \u0915\u0930\u0947\u0902", "Tukar", "\u5207\u6362"),
+ "randomizer_load_keep": (
+  "Keep current", "Aktuellen behalten", "Mantener actual", "Garder l\u2019actuelle", "Tieni attuale",
+  "Manter atual", "\u041e\u0441\u0442\u0430\u0432\u0438\u0442\u044c \u0442\u0435\u043a\u0443\u0449\u0438\u0439",
+  "\u0627\u0644\u0625\u0628\u0642\u0627\u0621 \u0639\u0644\u0649 \u0627\u0644\u062d\u0627\u0644\u064a",
+  "\u0935\u0930\u094d\u0924\u092e\u093e\u0928 \u0930\u0916\u0947\u0902", "Kekalkan semasa", "\u4fdd\u6301\u5f53\u524d"),
+ "ingame_seed_active": (
+  "Seed %1$d \\u00b7 %2$d on", "Seed %1$d \\u00b7 %2$d an", "Semilla %1$d \\u00b7 %2$d act.", "Graine %1$d \\u00b7 %2$d actifs",
+  "Seme %1$d \\u00b7 %2$d att.", "Semente %1$d \\u00b7 %2$d lig.", "Seed %1$d \\u00b7 %2$d \u0432\u043a\u043b.",
+  "\u0627\u0644\u0628\u0630\u0631\u0629 %1$d \\u00b7 %2$d \u0645\u0641\u0639\u0651\u0644",
+  "\u0938\u0940\u0921 %1$d \\u00b7 %2$d \u091a\u093e\u0932\u0942", "Benih %1$d \\u00b7 %2$d hidup",
+  "\u79cd\u5b50 %1$d \\u00b7 %2$d \u5f00\u542f"),
+ "ingame_seed_none": (
+  "No seed: this is a plain game.", "Kein Seed: ein normales Spiel.",
+  "Sin semilla: partida normal.", "Pas de graine\u00a0: partie normale.",
+  "Nessun seme: partita normale.", "Sem semente: jogo normal.",
+  "\u041d\u0435\u0442 seed: \u043e\u0431\u044b\u0447\u043d\u0430\u044f \u0438\u0433\u0440\u0430.",
+  "\u0644\u0627 \u0628\u0630\u0631\u0629: \u0644\u0639\u0628\u0629 \u0639\u0627\u062f\u064a\u0629.",
+  "\u0915\u094b\u0908 \u0938\u0940\u0921 \u0928\u0939\u0940\u0902: \u0938\u093e\u0927\u093e\u0930\u0923 \u0916\u0947\u0932\u0964",
+  "Tiada benih: permainan biasa.", "\u65e0\u79cd\u5b50\uff1a\u666e\u901a\u6e38\u620f\u3002"),
+ "ingame_seed_help": (
+  "The randomizers are set on the Randomizer page of the title screen, before the game starts: one seed per run, "
+  "and the same seed always gives the same game. This menu shows only which seed you are playing; turn the "
+  "randomizers on or off there.",
+  "Die Randomizer stellst du auf der Randomizer-Seite des Titelbildschirms ein, bevor das Spiel startet: ein Seed "
+  "pro Durchlauf, und derselbe Seed ergibt immer dasselbe Spiel. Dieses Men\u00fc zeigt nur, welchen Seed du "
+  "spielst; ein- und ausschalten tust du sie dort.",
+  "Los aleatorizadores se configuran en la p\u00e1gina Aleatorio de la pantalla de t\u00edtulo, antes de empezar: "
+  "una semilla por partida, y la misma semilla da siempre el mismo juego. Este men\u00fa solo muestra qu\u00e9 "
+  "semilla juegas; act\u00edvalos all\u00ed.",
+  "Les modes al\u00e9atoires se r\u00e8glent sur la page Al\u00e9atoire de l\u2019\u00e9cran titre, avant de "
+  "commencer\u00a0: une graine par partie, et la m\u00eame graine donne toujours le m\u00eame jeu. Ce menu indique "
+  "seulement la graine utilis\u00e9e\u00a0; activez-les l\u00e0-bas.",
+  "I casualizzatori si impostano nella pagina Casuale della schermata del titolo, prima di iniziare: un seme per "
+  "partita, e lo stesso seme d\u00e0 sempre lo stesso gioco. Questo menu mostra solo il seme in uso; attivali l\u00ec.",
+  "Os aleatorizadores configuram-se na p\u00e1gina Aleat\u00f3rio do ecr\u00e3 de t\u00edtulo, antes de come\u00e7ar: "
+  "uma semente por partida, e a mesma semente d\u00e1 sempre o mesmo jogo. Este menu mostra apenas a semente em uso; "
+  "liga-os l\u00e1.",
+  "\u0420\u0430\u043d\u0434\u043e\u043c\u0430\u0439\u0437\u0435\u0440\u044b \u043d\u0430\u0441\u0442\u0440\u0430\u0438\u0432\u0430\u044e\u0442\u0441\u044f "
+  "\u043d\u0430 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435 \u0420\u0430\u043d\u0434\u043e\u043c\u0430\u0439\u0437\u0435\u0440 "
+  "\u044d\u043a\u0440\u0430\u043d\u0430 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043a\u0430, \u0434\u043e "
+  "\u043d\u0430\u0447\u0430\u043b\u0430 \u0438\u0433\u0440\u044b: \u043e\u0434\u0438\u043d seed \u043d\u0430 "
+  "\u043f\u0440\u043e\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u0435, \u0438 \u0442\u043e\u0442 \u0436\u0435 "
+  "seed \u0432\u0441\u0435\u0433\u0434\u0430 \u0434\u0430\u0451\u0442 \u0442\u0443 \u0436\u0435 \u0438\u0433\u0440\u0443. "
+  "\u0417\u0434\u0435\u0441\u044c \u0432\u0438\u0434\u0435\u043d \u0442\u043e\u043b\u044c\u043a\u043e "
+  "\u0442\u0435\u043a\u0443\u0449\u0438\u0439 seed; \u0432\u043a\u043b\u044e\u0447\u0430\u044e\u0442 \u0438\u0445 \u0442\u0430\u043c.",
+  "\u062a\u064f\u0636\u0628\u0637 \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u0639\u0634\u0648\u0627\u0626\u064a\u0629 "
+  "\u0641\u064a \u0635\u0641\u062d\u0629 \u0627\u0644\u0639\u0634\u0648\u0627\u0626\u064a\u0629 "
+  "\u0628\u0634\u0627\u0634\u0629 \u0627\u0644\u0639\u0646\u0648\u0627\u0646\u060c \u0642\u0628\u0644 "
+  "\u0628\u062f\u0621 \u0627\u0644\u0644\u0639\u0628\u0629: \u0628\u0630\u0631\u0629 \u0648\u0627\u062d\u062f\u0629 "
+  "\u0644\u0643\u0644 \u062c\u0648\u0644\u0629\u060c \u0648\u0646\u0641\u0633 \u0627\u0644\u0628\u0630\u0631\u0629 "
+  "\u062a\u0639\u0637\u064a \u062f\u0627\u0626\u0645\u0627\u064b \u0646\u0641\u0633 \u0627\u0644\u0644\u0639\u0628\u0629. "
+  "\u0647\u0630\u0647 \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u062a\u0639\u0631\u0636 \u0627\u0644\u0628\u0630\u0631\u0629 "
+  "\u0627\u0644\u062d\u0627\u0644\u064a\u0629 \u0641\u0642\u0637\u061b \u0641\u0639\u0651\u0644\u0647\u0627 \u0647\u0646\u0627\u0643.",
+  "\u0930\u0948\u0902\u0921\u092e\u093e\u0907\u091c\u093c\u0930 \u091f\u093e\u0907\u091f\u0932 "
+  "\u0938\u094d\u0915\u094d\u0930\u0940\u0928 \u0915\u0947 \u0930\u0948\u0902\u0921\u092e\u093e\u0907\u091c\u093c\u0930 "
+  "\u092a\u0947\u091c \u092a\u0930 \u0938\u0947\u091f \u0939\u094b\u0924\u0947 \u0939\u0948\u0902, \u0916\u0947\u0932 "
+  "\u0936\u0941\u0930\u0942 \u0939\u094b\u0928\u0947 \u0938\u0947 \u092a\u0939\u0932\u0947: \u0939\u0930 \u0916\u0947\u0932 "
+  "\u0915\u0947 \u0932\u093f\u090f \u090f\u0915 \u0938\u0940\u0921, \u0914\u0930 \u0935\u0939\u0940 \u0938\u0940\u0921 "
+  "\u0939\u092e\u0947\u0936\u093e \u0935\u0939\u0940 \u0916\u0947\u0932 \u0926\u0947\u0924\u093e \u0939\u0948\u0964 "
+  "\u092f\u0939 \u092e\u0947\u0928\u0942 \u0915\u0947\u0935\u0932 \u0926\u093f\u0916\u093e\u0924\u093e \u0939\u0948 "
+  "\u0915\u093f \u0915\u094c\u0928 \u0938\u093e \u0938\u0940\u0921 \u0916\u0947\u0932 \u0930\u0939\u0947 \u0939\u0948\u0902; "
+  "\u091a\u093e\u0932\u0942 \u0935\u0939\u093e\u0902 \u0915\u0930\u0947\u0902\u0964",
+  "Pengacak ditetapkan pada halaman Pengacak di skrin tajuk, sebelum permainan bermula: satu benih setiap "
+  "permainan, dan benih yang sama selalu memberi permainan yang sama. Menu ini hanya menunjukkan benih yang sedang "
+  "dimainkan; hidupkan di sana.",
+  "\u968f\u673a\u9879\u5728\u6807\u9898\u5c4f\u5e55\u7684\u968f\u673a\u9875\u9762\u4e0a\u8bbe\u7f6e\uff0c"
+  "\u5728\u6e38\u620f\u5f00\u59cb\u4e4b\u524d\uff1a\u6bcf\u4e00\u8f6e\u4e00\u4e2a\u79cd\u5b50\uff0c\u76f8"
+  "\u540c\u7684\u79cd\u5b50\u603b\u4f1a\u5f97\u5230\u76f8\u540c\u7684\u6e38\u620f\u3002\u672c\u83dc\u5355"
+  "\u53ea\u663e\u793a\u5f53\u524d\u4f7f\u7528\u7684\u79cd\u5b50\uff1b\u8bf7\u5728\u90a3\u91cc\u5f00\u5173\u3002"),
 }
 
 LANGS = ["values", "values-de", "values-es", "values-fr", "values-it", "values-pt",

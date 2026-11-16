@@ -80,6 +80,7 @@ void re4ipc_zoom(int notches);
 void re4ipc_set_enemy_random(int seed);
 void re4ipc_set_gentle_qte(int on);
 void re4ipc_set_merchant_random(int seed);
+void re4ipc_set_merchant_options(int chance, unsigned weapons);
 void re4ipc_swipe(int dir);
 void re4ipc_slash(float tilt);
 void re4ipc_set_fast_cores(int on);

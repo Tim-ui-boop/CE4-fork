@@ -496,4 +496,16 @@
     <string name="randomizer_loaded">%1$s लोड हुआ</string>
     <string name="randomizer_deleted">%1$s हटाया गया</string>
     <string name="randomizer_none_on">कोई रैंडमाइज़र चालू नहीं है। रैंडम खेल शुरू करने के लिए एक चालू करें।</string>
+    <string name="randomizer_chance">नई वस्तु वाले व्यापारी: %1$d%%</string>
+    <string name="randomizer_weapons">हथियार: %1$d चुने गए</string>
+    <string name="randomizer_weapons_title">व्यापारी कौन से हथियार बेच सकता है</string>
+    <string name="randomizer_ok">ठीक है</string>
+    <string name="randomizer_cancel">रद्द करें</string>
+    <string name="randomizer_load_title">इस सेव का सीड</string>
+    <string name="randomizer_load_question">यह सेव सीड %1$d से बनाया गया था। वही खेल दोबारा खेलने के लिए उस सीड पर स्विच करें?</string>
+    <string name="randomizer_load_switch">स्विच करें</string>
+    <string name="randomizer_load_keep">वर्तमान रखें</string>
+    <string name="ingame_seed_active">सीड %1$d \u00b7 %2$d चालू</string>
+    <string name="ingame_seed_none">कोई सीड नहीं: साधारण खेल।</string>
+    <string name="ingame_seed_help">रैंडमाइज़र टाइटल स्क्रीन के रैंडमाइज़र पेज पर सेट होते हैं, खेल शुरू होने से पहले: हर खेल के लिए एक सीड, और वही सीड हमेशा वही खेल देता है। यह मेनू केवल दिखाता है कि कौन सा सीड खेल रहे हैं; चालू वहां करें।</string>
 </resources>

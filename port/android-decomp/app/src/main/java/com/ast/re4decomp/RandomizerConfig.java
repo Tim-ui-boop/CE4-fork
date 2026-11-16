@@ -36,16 +36,39 @@ final class RandomizerConfig {
     final String id;
     final String label;
     boolean on;
-    /** Merchant only for now: the percent of merchants that offer new goods (see port/docs, phase 4). 0 = always. */
+    /** Merchant only for now: the percent of merchants that offer new goods. 100 = every one. */
     int chance;
+    /** Merchant only: a bit per weapon of the core's list, 0 = its default set (RandomizerConfig.WEAPONS). */
+    int weapons;
 
     Feature(String id, String label, boolean on, int chance) {
       this.id = id;
       this.label = label;
       this.on = on;
       this.chance = chance;
+      this.weapons = 0;
+    }
+
+    boolean hasChance() {
+      return id.equals("merchant");
+    }
+
+    boolean hasWeapons() {
+      return id.equals("merchant");
     }
   }
+
+  /**
+   * The weapons the merchant randomizer may hand out, in the core's order (runtime/merchant_random.cpp kWeapons).
+   * The bit of an entry is its weapon bit; the names are the app's own.
+   */
+  static final String[] WEAPONS = {
+      "Handgun", "Punisher", "Red9", "Blacktail", "Matilda", "Shotgun", "Riot Gun", "Striker", "Rifle",
+      "Rifle (semi-auto)", "TMP", "Chicago Typewriter", "Mine Thrower", "Broken Butterfly", "Killer7",
+      "Handcannon", "Rocket Launcher",
+  };
+  /** The core's default set: everything but Chicago Typewriter, Handcannon and the Rocket Launcher. */
+  static final int WEAPONS_DEFAULT = ~((1 << 11) | (1 << 15) | (1 << 16)) & ((1 << 17) - 1);
 
   int seed;
   String name = "";
@@ -57,7 +80,7 @@ final class RandomizerConfig {
    */
   final Map<String, Feature> features = new LinkedHashMap<>();
   {
-    features.put("merchant", new Feature("merchant", "Random merchant stock", false, 0));
+    features.put("merchant", new Feature("merchant", "Random merchant stock", false, 100));
     features.put("items", new Feature("items", "Random items", false, 0));
     features.put("enemies", new Feature("enemies", "Random enemies", false, 0));
   }
@@ -106,7 +129,8 @@ final class RandomizerConfig {
     if (!name.isEmpty()) out.append("name ").append(name).append('\n');
     for (Feature f : features.values()) {
       out.append(f.id).append(' ').append(f.on ? "on" : "off");
-      if (f.chance != 0) out.append(' ').append(f.chance);
+      if (f.hasChance() && f.chance != 100) out.append(' ').append(f.chance);
+      if (f.hasWeapons() && f.weapons != 0) out.append(" w").append(f.weapons);
       out.append('\n');
     }
     return out.toString();
@@ -131,7 +155,12 @@ final class RandomizerConfig {
         Feature f = c.features.get(key);
         if (f == null) continue;  // a setting of a newer version: keep it out of the way rather than fail
         if (part.length > 1) f.on = part[1].equalsIgnoreCase("on") || part[1].equals("1");
-        if (part.length > 2) f.chance = Math.max(0, Math.min(100, parse(part, 2, 0)));
+        if (part.length > 2) {
+          String third = part[2];
+          if (third.startsWith("w")) f.weapons = parse(third.substring(1));
+          else f.chance = Math.max(1, Math.min(100, parse(third)));
+        }
+        if (part.length > 3 && part[3].startsWith("w")) f.weapons = parse(part[3].substring(1));
       }
     }
     if (format > FORMAT) throw new IOException("This seed comes from a newer version (" + format + ")");
@@ -141,8 +170,16 @@ final class RandomizerConfig {
 
   private static int parse(String[] part, int at, int fallback) {
     if (at >= part.length) return fallback;
+    return parse(part[at], fallback);
+  }
+
+  private static int parse(String value) {
+    return parse(value, 0);
+  }
+
+  private static int parse(String value, int fallback) {
     try {
-      return Integer.parseInt(part[at]);
+      return Integer.parseInt(value.trim());
     } catch (NumberFormatException e) {
       return fallback;
     }
@@ -164,6 +201,9 @@ final class RandomizerConfig {
     }
     final int s = seed == 0 ? 0 : seed;
     CoreBridge.setEnemyRandom(feature("enemies").on ? s : 0);
-    CoreBridge.setMerchantRandom(feature("merchant").on ? s : 0);
+    final Feature merchant = feature("merchant");
+    CoreBridge.setMerchantRandom(merchant.on ? s : 0);
+    // phase 5: how often a merchant deals anew, and which weapons he may hand out
+    if (merchant.on) CoreBridge.setMerchantOptions(merchant.chance <= 0 ? 100 : merchant.chance, merchant.weapons);
   }
 }

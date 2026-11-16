@@ -492,4 +492,16 @@
     <string name="randomizer_loaded">Dimuat %1$s</string>
     <string name="randomizer_deleted">Dihapus %1$s</string>
     <string name="randomizer_none_on">Tiada pengacak yang dihidupkan. Hidupkan satu untuk memulakan permainan acak.</string>
+    <string name="randomizer_chance">Pedagang dengan barang baharu: %1$d%%</string>
+    <string name="randomizer_weapons">Senjata: %1$d dipilih</string>
+    <string name="randomizer_weapons_title">Senjata yang boleh dijual pedagang</string>
+    <string name="randomizer_ok">OK</string>
+    <string name="randomizer_cancel">Batal</string>
+    <string name="randomizer_load_title">Benih simpanan ini</string>
+    <string name="randomizer_load_question">Simpanan ini dibuat dengan benih %1$d. Tukar kepada benih itu untuk memainkan permainan yang sama?</string>
+    <string name="randomizer_load_switch">Tukar</string>
+    <string name="randomizer_load_keep">Kekalkan semasa</string>
+    <string name="ingame_seed_active">Benih %1$d \u00b7 %2$d hidup</string>
+    <string name="ingame_seed_none">Tiada benih: permainan biasa.</string>
+    <string name="ingame_seed_help">Pengacak ditetapkan pada halaman Pengacak di skrin tajuk, sebelum permainan bermula: satu benih setiap permainan, dan benih yang sama selalu memberi permainan yang sama. Menu ini hanya menunjukkan benih yang sedang dimainkan; hidupkan di sana.</string>
 </resources>

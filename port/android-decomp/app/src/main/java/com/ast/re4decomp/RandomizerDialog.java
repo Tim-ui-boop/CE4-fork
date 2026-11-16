@@ -103,6 +103,9 @@ final class RandomizerDialog extends Dialog {
         refresh();
       });
       features.addView(box);
+      // phase 5: the merchant's options, shown under its switch while it is on
+      if (f.hasChance()) features.addView(chanceRow(f));
+      if (f.hasWeapons()) features.addView(weaponButton(f));
     }
     body.addView(features);
 
@@ -155,6 +158,68 @@ final class RandomizerDialog extends Dialog {
     b.setTextSize(14);
     b.setOnClickListener(click);
     return b;
+  }
+
+  /** The chance option (phase 5): how often a merchant offers new goods. A slider, 10..100 in steps of 10. */
+  private View chanceRow(final RandomizerConfig.Feature f) {
+    LinearLayout row = new LinearLayout(getContext());
+    row.setOrientation(LinearLayout.VERTICAL);
+    row.setPadding(dp(28), 0, 0, dp(4));
+    final TextView label = new TextView(getContext());
+    label.setTextSize(13);
+    label.setText(getContext().getString(R.string.randomizer_chance,
+        f.chance <= 0 ? 100 : f.chance));
+    final SeekBar bar = new SeekBar(getContext());
+    bar.setMax(9);
+    bar.setProgress(Math.max(0, Math.min(9, (f.chance <= 0 ? 100 : f.chance) / 10 - 1)));
+    bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+      @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+        f.chance = (progress + 1) * 10;
+        label.setText(getContext().getString(R.string.randomizer_chance, f.chance));
+        if (fromUser) store.setCurrent(run, activeFile);
+      }
+      @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+      @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+    });
+    row.addView(label);
+    row.addView(bar);
+    row.setTag("chance:" + f.id);
+    return row;
+  }
+
+  /** The weapon pool (phase 5): which weapons the merchant may hand out. A dialog with one switch per weapon. */
+  private View weaponButton(final RandomizerConfig.Feature f) {
+    Button b = new Button(getContext());
+    b.setTextSize(13);
+    b.setText(getContext().getString(R.string.randomizer_weapons, weaponCount(f)));
+    b.setPadding(dp(28), 0, 0, dp(4));
+    b.setOnClickListener(v -> {
+      final boolean[] chosen = new boolean[RandomizerConfig.WEAPONS.length];
+      final int mask = f.weapons == 0 ? RandomizerConfig.WEAPONS_DEFAULT : f.weapons;
+      for (int i = 0; i < chosen.length; i++) chosen[i] = (mask >> i & 1) != 0;
+      new android.app.AlertDialog.Builder(getContext())
+          .setTitle(R.string.randomizer_weapons_title)
+          .setMultiChoiceItems(RandomizerConfig.WEAPONS, chosen,
+              (d, which, checked) -> chosen[which] = checked)
+          .setPositiveButton(R.string.randomizer_ok, (d, w) -> {
+            int result = 0;
+            for (int i = 0; i < chosen.length; i++) if (chosen[i]) result |= 1 << i;
+            f.weapons = result;
+            store.setCurrent(run, activeFile);
+            b.setText(getContext().getString(R.string.randomizer_weapons, weaponCount(f)));
+            status.setText("");
+          })
+          .setNegativeButton(R.string.randomizer_cancel, null)
+          .show();
+    });
+    return b;
+  }
+
+  private static int weaponCount(RandomizerConfig.Feature f) {
+    int mask = f.weapons == 0 ? RandomizerConfig.WEAPONS_DEFAULT : f.weapons;
+    int n = 0;
+    for (int i = 0; i < RandomizerConfig.WEAPONS.length; i++) if ((mask >> i & 1) != 0) n++;
+    return n;
   }
 
   /** Redraws everything from the current run and the seed files. */

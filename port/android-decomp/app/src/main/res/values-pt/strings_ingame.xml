@@ -500,4 +500,16 @@
     <string name="randomizer_loaded">Carregada %1$s</string>
     <string name="randomizer_deleted">Eliminada %1$s</string>
     <string name="randomizer_none_on">Nenhum aleatorizador está ligado. Liga um para começar uma partida aleatória.</string>
+    <string name="randomizer_chance">Mercadores com mercadoria nova: %1$d%%</string>
+    <string name="randomizer_weapons">Armas: %1$d escolhidas</string>
+    <string name="randomizer_weapons_title">Armas que o mercador pode vender</string>
+    <string name="randomizer_ok">OK</string>
+    <string name="randomizer_cancel">Cancelar</string>
+    <string name="randomizer_load_title">Semente deste jogo guardado</string>
+    <string name="randomizer_load_question">Este jogo foi criado com a semente %1$d. Mudar para essa semente para jogar a mesma partida?</string>
+    <string name="randomizer_load_switch">Mudar</string>
+    <string name="randomizer_load_keep">Manter atual</string>
+    <string name="ingame_seed_active">Semente %1$d \u00b7 %2$d lig.</string>
+    <string name="ingame_seed_none">Sem semente: jogo normal.</string>
+    <string name="ingame_seed_help">Os aleatorizadores configuram-se na página Aleatório do ecrã de título, antes de começar: uma semente por partida, e a mesma semente dá sempre o mesmo jogo. Este menu mostra apenas a semente em uso; liga-os lá.</string>
 </resources>

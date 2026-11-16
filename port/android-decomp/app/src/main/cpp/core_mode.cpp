@@ -120,6 +120,7 @@ struct CoreApi {
   void (*zoom)(int){};            // optional (cores since 12.11.2026, 0.99.12): the mouse wheel zooms
   void (*setEnemyRandom)(int){};  // optional (cores since 12.11.2026, 0.99.12): the cheat "Random enemies"
   void (*setMerchantRandom)(int){};  // optional (cores since this build): the cheat "Random merchant stock"
+  void (*setMerchantOptions)(int, unsigned){};  // optional: its chance and weapon pool
   void (*setGentleQte)(int){};    // optional (cores since 14.11.2026, 0.99.15): "Gentler QTEs"
   void (*swipe)(int){};           // optional (cores since 22.10.2026): a swipe across it
   void (*slash)(float){};         // optional (cores since 22.10.2026): the knife by a swipe
@@ -473,6 +474,7 @@ void loadCore(JNIEnv *env) {
   api.zoom = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_zoom"));
   api.setEnemyRandom = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_set_enemy_random"));
   api.setMerchantRandom = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_set_merchant_random"));
+  api.setMerchantOptions = reinterpret_cast<void (*)(int, unsigned)>(dlsym(api.main, "re4_core_set_merchant_options"));
   api.setGentleQte = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_set_gentle_qte"));
   api.swipe = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_swipe"));
   api.slash = reinterpret_cast<void (*)(float)>(dlsym(api.main, "re4_core_slash"));
@@ -3104,6 +3106,7 @@ void useCoreProcess(const std::string &why) {
   api.setEnemyRandom = re4ipc_set_enemy_random;
   api.setGentleQte = re4ipc_set_gentle_qte;
   api.setMerchantRandom = re4ipc_set_merchant_random;
+  api.setMerchantOptions = re4ipc_set_merchant_options;
   api.swipe = re4ipc_swipe;
   api.slash = re4ipc_slash;
   api.instant = re4ipc_instant;
@@ -3853,6 +3856,10 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setEnemyRand
 
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setMerchantRandom(JNIEnv *, jclass, jint seed) {
   if (api.setMerchantRandom) api.setMerchantRandom(seed);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setMerchantOptions(JNIEnv *, jclass, jint chance, jint weapons) {
+  if (api.setMerchantOptions) api.setMerchantOptions(chance, (unsigned) weapons);
 }
 
 // Gyro aiming (GyroAim.java): the turn rates to the core (cores since 19.10.2026; older ones: none).

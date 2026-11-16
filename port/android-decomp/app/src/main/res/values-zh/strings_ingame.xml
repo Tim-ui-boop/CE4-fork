@@ -494,4 +494,16 @@
     <string name="randomizer_loaded">已加载 %1$s</string>
     <string name="randomizer_deleted">已删除 %1$s</string>
     <string name="randomizer_none_on">没有开启任何随机项。打开一项以开始随机游戏。</string>
+    <string name="randomizer_chance">有新货的商人：%1$d%%</string>
+    <string name="randomizer_weapons">武器：已选 %1$d</string>
+    <string name="randomizer_weapons_title">商人可以出售的武器</string>
+    <string name="randomizer_ok">确定</string>
+    <string name="randomizer_cancel">取消</string>
+    <string name="randomizer_load_title">此存档的种子</string>
+    <string name="randomizer_load_question">此存档使用种子 %1$d 创建。是否切换到该种子以重玩同一轮？</string>
+    <string name="randomizer_load_switch">切换</string>
+    <string name="randomizer_load_keep">保持当前</string>
+    <string name="ingame_seed_active">种子 %1$d \u00b7 %2$d 开启</string>
+    <string name="ingame_seed_none">无种子：普通游戏。</string>
+    <string name="ingame_seed_help">随机项在标题屏幕的随机页面上设置，在游戏开始之前：每一轮一个种子，相同的种子总会得到相同的游戏。本菜单只显示当前使用的种子；请在那里开关。</string>
 </resources>
