@@ -875,6 +875,7 @@ extern "C" int re4_enemy_random_extra(EM_LIST* out)
                 "%d at a new place nearby, %d on another's spot%s%s",
                 p.room, p.list, p.seed, p.kind == kCountsNarrow ? ", counts only" :
                     p.kind == kCountsFamily ? ", counts family-wide" : p.kind == kOpenCautioned ? ", unsafe mode" : "",
+                p.ganados, p.movers, p.spots,
                 p.nearby, p.swapped, count, p.protectedByArea ? " (some kept: an area waits for them)" : "");
     }
     if (p.copyNext >= p.copyCount) {
