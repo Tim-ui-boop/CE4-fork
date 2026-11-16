@@ -516,4 +516,8 @@
     <string name="ingame_seed_help">Рандомайзеры настраиваются на странице Рандомайзер экрана заголовка, до начала игры: один seed на прохождение, и тот же seed всегда даёт ту же игру. Здесь виден только текущий seed; включают их там.</string>
     <string name="randomizer_open_page">Настройки рандомайзера</string>
     <string name="randomizer_start">Начать игру</string>
+    <string name="randomizer_chance_short">%1$d%%</string>
+    <string name="randomizer_weapons_short">Оружие %1$d</string>
+    <string name="randomizer_minus">−</string>
+    <string name="randomizer_plus">+</string>
 </resources>

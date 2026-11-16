@@ -527,4 +527,8 @@
     <string name="ingame_seed_help">تُضبط العناصر العشوائية في صفحة العشوائية بشاشة العنوان، قبل بدء اللعبة: بذرة واحدة لكل جولة، ونفس البذرة تعطي دائماً نفس اللعبة. هذه القائمة تعرض البذرة الحالية فقط؛ فعّلها هناك.</string>
     <string name="randomizer_open_page">إعدادات العشوائية</string>
     <string name="randomizer_start">بدء اللعبة</string>
+    <string name="randomizer_chance_short">%1$d%%</string>
+    <string name="randomizer_weapons_short">أسلحة %1$d</string>
+    <string name="randomizer_minus">−</string>
+    <string name="randomizer_plus">+</string>
 </resources>

@@ -515,4 +515,8 @@
     <string name="ingame_seed_help">Les modes aléatoires se règlent sur la page Aléatoire de l’écran titre, avant de commencer\u00A0: une graine par partie, et la même graine donne toujours le même jeu. Ce menu indique seulement la graine utilisée\u00A0; activez-les là-bas.</string>
     <string name="randomizer_open_page">Réglages aléatoires</string>
     <string name="randomizer_start">Lancer le jeu</string>
+    <string name="randomizer_chance_short">%1$d%%</string>
+    <string name="randomizer_weapons_short">Armes %1$d</string>
+    <string name="randomizer_minus">−</string>
+    <string name="randomizer_plus">+</string>
 </resources>

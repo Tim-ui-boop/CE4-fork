@@ -506,4 +506,8 @@
     <string name="ingame_seed_help">Pengacak ditetapkan pada halaman Pengacak di skrin tajuk, sebelum permainan bermula: satu benih setiap permainan, dan benih yang sama selalu memberi permainan yang sama. Menu ini hanya menunjukkan benih yang sedang dimainkan; hidupkan di sana.</string>
     <string name="randomizer_open_page">Tetapan pengacak</string>
     <string name="randomizer_start">Mula permainan</string>
+    <string name="randomizer_chance_short">%1$d%%</string>
+    <string name="randomizer_weapons_short">Senjata %1$d</string>
+    <string name="randomizer_minus">−</string>
+    <string name="randomizer_plus">+</string>
 </resources>

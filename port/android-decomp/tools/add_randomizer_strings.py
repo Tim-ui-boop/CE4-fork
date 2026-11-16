@@ -249,8 +249,18 @@ T = {
   "\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0639\u0634\u0648\u0627\u0626\u064a\u0629",
   "\u0930\u0948\u0902\u0921\u092e\u093e\u0907\u091c\u093c\u0930 \u0938\u0947\u091f\u093f\u0902\u0917",
   "Tetapan pengacak", "\u968f\u673a\u8bbe\u7f6e"),
- "randomizer_start": (
-  "Start game", "Spiel starten", "Empezar partida", "Lancer le jeu", "Avvia il gioco", "Iniciar jogo",
+ "randomizer_chance_short": (
+  "%1$d%%", "%1$d%%", "%1$d%%", "%1$d%%", "%1$d%%", "%1$d%%",
+  "%1$d%%", "%1$d%%", "%1$d%%", "%1$d%%", "%1$d%%"),
+ "randomizer_weapons_short": (
+  "Weapons %1$d", "Waffen %1$d", "Armas %1$d", "Armes %1$d", "Armi %1$d", "Armas %1$d",
+  "\u041e\u0440\u0443\u0436\u0438\u0435 %1$d", "\u0623\u0633\u0644\u062d\u0629 %1$d",
+  "\u0939\u0925\u093f\u092f\u093e\u0930 %1$d", "Senjata %1$d", "\u6b66\u5668 %1$d"),
+ "randomizer_minus": (
+  "\u2212", "\u2212", "\u2212", "\u2212", "\u2212", "\u2212", "\u2212", "\u2212", "\u2212", "\u2212", "\u2212"),
+ "randomizer_plus": (
+  "+", "+", "+", "+", "+", "+", "+", "+", "+", "+", "+"),
+ "randomizer_start": (  "Start game", "Spiel starten", "Empezar partida", "Lancer le jeu", "Avvia il gioco", "Iniciar jogo",
   "\u041d\u0430\u0447\u0430\u0442\u044c \u0438\u0433\u0440\u0443", "\u0628\u062f\u0621 \u0627\u0644\u0644\u0639\u0628\u0629",
   "\u0916\u0947\u0932 \u0936\u0941\u0930\u0942 \u0915\u0930\u0947\u0902", "Mula permainan", "\u5f00\u59cb\u6e38\u620f"),
  "ingame_seed_help": (  "The randomizers are set on the Randomizer page of the title screen, before the game starts: one seed per run, "

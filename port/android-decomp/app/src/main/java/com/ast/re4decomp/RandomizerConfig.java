@@ -98,6 +98,23 @@ final class RandomizerConfig {
     return f;
   }
 
+  /**
+   * Takes another run's values into this object. The views of the page hold references to this run's Feature
+   * objects, so the run must never be swapped for another instance: a new seed or a loaded file changes the values
+   * here instead, and every switch keeps working.
+   */
+  void adopt(RandomizerConfig other) {
+    seed = other.seed;
+    name = other.name;
+    for (Feature mine : features.values()) {
+      Feature theirs = other.features.get(mine.id);
+      if (theirs == null) continue;
+      mine.on = theirs.on;
+      mine.chance = theirs.chance;
+      mine.weapons = theirs.weapons;
+    }
+  }
+
   /** A new seed for a new run, 1..SEED_MAX (0 means "off" in the core, so it is never handed out). */
   static int freshSeed() {
     return 1 + new java.util.Random().nextInt(SEED_MAX);

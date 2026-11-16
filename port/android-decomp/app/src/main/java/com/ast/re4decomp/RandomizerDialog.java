@@ -1,31 +1,41 @@
 package com.ast.re4decomp;
 
+import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
+import android.graphics.Typeface;
 import android.text.InputType;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.*;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
- * The randomizer page, opened from the title screen before the game starts (port/docs randomizer plan, phase 2).
+ * The randomizer page (randomizer plan, phases 2-5): everything a randomizer needs, laid out the way a Ocarina of
+ * Time randomizer does it. One seed defines the run, a switch starts each randomizer, and its options sit beside it.
  *
- * Everything a randomizer needs lives here, as in a Ocarina of Time randomizer: one seed defines the run, the
- * randomizers are switched on or off, and a seed can be kept as a named file to come back to or to reproduce.
- * The in-game menu keeps its own switches until phase 3; both act on the same run (RandomizerConfig), so they
- * cannot disagree.
+ * The layout is horizontal wherever it helps: the seed and its buttons share a line, each randomizer is one row of
+ * switch + options, and a saved seed is one line with its two buttons. Only the page itself scrolls.
+ *
+ * The run is never swapped for another object: a new seed or a loaded file adopts its values (RandomizerConfig.adopt),
+ * so every switch and slider keeps pointing at the run in use. Swapping the object was why the switches stopped
+ * responding after "New seed".
  */
 final class RandomizerDialog extends Dialog {
   private final SeedStore store;
   private final TextView seedLine, status;
   private final LinearLayout savedList;
   private final EditText nameField;
-  private LinearLayout features;
-  /** The switch of each randomizer, by feature id: the container also holds the chance slider and the weapon button. */
+  /** The switch of each randomizer, by feature id. */
   private final java.util.Map<String, CheckBox> boxes = new java.util.HashMap<>();
-  private RandomizerConfig run;
+  /** The chance slider's label, so the row can show its value without a second redraw path. */
+  private final java.util.Map<String, TextView> chanceLabels = new java.util.HashMap<>();
+  /** The weapon button of each randomizer that has a pool, to relabel it when the choice changes. */
+  private final java.util.Map<String, Button> weaponButtons = new java.util.HashMap<>();
+  private final RandomizerConfig run;
   /** The seed file this run came from, "" when it has none yet. */
   private String activeFile;
 
@@ -41,181 +51,181 @@ final class RandomizerDialog extends Dialog {
         .getString(SeedStore.PREF_ACTIVE, "");
     requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
 
+    ScrollView page = new ScrollView(context);
     LinearLayout body = new LinearLayout(context);
     body.setOrientation(LinearLayout.VERTICAL);
-    int pad = dp(18);
+    int pad = dp(16);
     body.setPadding(pad, pad, pad, pad);
+    page.addView(body);
 
     TextView title = new TextView(context);
     title.setText(R.string.randomizer_title);
-    title.setTextSize(22);
-    title.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
-    title.setPadding(0, 0, 0, dp(10));
+    title.setTextSize(20);
+    title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     body.addView(title);
 
     TextView intro = new TextView(context);
     intro.setText(R.string.randomizer_intro);
-    intro.setTextSize(13);
-    intro.setPadding(0, 0, 0, dp(12));
+    intro.setTextSize(12);
+    intro.setPadding(0, dp(4), 0, dp(10));
     body.addView(intro);
 
-    // ---- the seed -----------------------------------------------------------------------------------------------
+    // ---- one line: the seed and its two buttons ---------------------------------------------------------------
     LinearLayout seedRow = new LinearLayout(context);
-    seedRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+    seedRow.setGravity(Gravity.CENTER_VERTICAL);
     seedLine = new TextView(context);
     seedLine.setTextSize(16);
+    seedLine.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     seedRow.addView(seedLine, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-    Button fresh = button(context, R.string.randomizer_new_seed, v -> {
-      run = new RandomizerConfig(RandomizerConfig.freshSeed(), "");
-      // the switches keep their state: a new seed is a new roll of the same rules
-      RandomizerConfig previous = store.current();
-      for (RandomizerConfig.Feature f : run.features.values()) {
-        RandomizerConfig.Feature old = previous.features.get(f.id);
-        if (old != null) {
-          f.on = old.on;
-          f.chance = old.chance;
-        }
-      }
-      activeFile = "";
-      store.setCurrent(run, "");
-      refresh();
-    });
-    seedRow.addView(fresh);
+    seedRow.addView(compactButton(context, R.string.randomizer_new_seed, v -> newSeed()));
     body.addView(seedRow);
 
-    // ---- the randomizers ----------------------------------------------------------------------------------------
-    TextView heading = new TextView(context);
-    heading.setText(R.string.randomizer_features);
-    heading.setTextSize(15);
-    heading.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
-    heading.setPadding(0, dp(14), 0, dp(6));
-    body.addView(heading);
-
-    features = new LinearLayout(context);
-    features.setOrientation(LinearLayout.VERTICAL);
+    // ---- one row per randomizer -------------------------------------------------------------------------------
     for (final RandomizerConfig.Feature f : run.features.values()) {
-      CheckBox box = new CheckBox(context);
-      box.setText(f.label);
-      box.setTextSize(15);
-      box.setChecked(f.on);
-      box.setOnCheckedChangeListener((v, on) -> {
-        f.on = on;
-        if (on && run.seed == 0) run.seed = RandomizerConfig.freshSeed();
-        store.setCurrent(run, activeFile);
-        refresh();
-      });
-      features.addView(box);
-      boxes.put(f.id, box);
-      // phase 5: the merchant's options, shown under its switch while it is on
-      if (f.hasChance()) features.addView(chanceRow(f));
-      if (f.hasWeapons()) features.addView(weaponButton(f));
+      body.addView(featureRow(context, f));
     }
-    body.addView(features);
 
-    // ---- saved seeds --------------------------------------------------------------------------------------------
+    // ---- saved seeds: one line each, with Load and Delete -----------------------------------------------------
     TextView savedHeading = new TextView(context);
     savedHeading.setText(R.string.randomizer_saved_seeds);
-    savedHeading.setTextSize(15);
-    savedHeading.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
-    savedHeading.setPadding(0, dp(14), 0, dp(6));
+    savedHeading.setTextSize(13);
+    savedHeading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    savedHeading.setPadding(0, dp(12), 0, dp(2));
     body.addView(savedHeading);
 
-    ScrollView scroll = new ScrollView(context);
     savedList = new LinearLayout(context);
     savedList.setOrientation(LinearLayout.VERTICAL);
-    scroll.addView(savedList);
-    scroll.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(130)));
-    body.addView(scroll);
+    body.addView(savedList);
 
-    // ---- save the run under a name ------------------------------------------------------------------------------
+    // ---- one line: a name and Save ----------------------------------------------------------------------------
     LinearLayout saveRow = new LinearLayout(context);
-    saveRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
-    saveRow.setPadding(0, dp(10), 0, 0);
+    saveRow.setGravity(Gravity.CENTER_VERTICAL);
+    saveRow.setPadding(0, dp(6), 0, 0);
     nameField = new EditText(context);
     nameField.setHint(R.string.randomizer_name_hint);
-    nameField.setTextSize(14);
+    nameField.setTextSize(13);
+    nameField.setSingleLine(true);
     nameField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
     saveRow.addView(nameField, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-    saveRow.addView(button(context, R.string.randomizer_save, v -> saveRun()));
+    saveRow.addView(compactButton(context, R.string.randomizer_save, v -> saveRun()));
     body.addView(saveRow);
 
     status = new TextView(context);
-    status.setTextSize(13);
-    status.setPadding(0, dp(8), 0, dp(8));
+    status.setTextSize(12);
+    status.setPadding(0, dp(6), 0, dp(4));
     body.addView(status);
 
     LinearLayout bottom = new LinearLayout(context);
-    bottom.setGravity(android.view.Gravity.END);
-    bottom.addView(button(context, R.string.randomizer_close, v -> dismiss()));
+    bottom.setGravity(Gravity.END);
+    bottom.addView(compactButton(context, R.string.randomizer_close, v -> dismiss()));
     body.addView(bottom);
 
-    ScrollView page = new ScrollView(context);
-    page.addView(body);
     setContentView(page);
     refresh();
   }
 
-  private Button button(Context context, int label, View.OnClickListener click) {
+  /** A small button, so a row of them fits beside a label on a phone. */
+  private Button compactButton(Context context, int label, View.OnClickListener click) {
     Button b = new Button(context);
     b.setText(label);
-    b.setTextSize(14);
+    b.setTextSize(12);
+    b.setMinWidth(0);
+    b.setMinimumWidth(0);
+    b.setPadding(dp(10), dp(2), dp(10), dp(2));
     b.setOnClickListener(click);
     return b;
   }
 
-  /** The chance option (phase 5): how often a merchant offers new goods. A slider, 10..100 in steps of 10. */
-  private View chanceRow(final RandomizerConfig.Feature f) {
-    LinearLayout row = new LinearLayout(getContext());
-    row.setOrientation(LinearLayout.VERTICAL);
-    row.setPadding(dp(28), 0, 0, dp(4));
-    final TextView label = new TextView(getContext());
-    label.setTextSize(13);
-    label.setText(getContext().getString(R.string.randomizer_chance,
-        f.chance <= 0 ? 100 : f.chance));
-    final SeekBar bar = new SeekBar(getContext());
-    bar.setMax(9);
-    bar.setProgress(Math.max(0, Math.min(9, (f.chance <= 0 ? 100 : f.chance) / 10 - 1)));
-    bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-      @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-        f.chance = (progress + 1) * 10;
-        label.setText(getContext().getString(R.string.randomizer_chance, f.chance));
-        if (fromUser) store.setCurrent(run, activeFile);
-      }
-      @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-      @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+  /**
+   * One randomizer as a single row: its switch, then its own options beside it (the merchant's chance and weapon
+   * pool). The options are disabled while the switch is off, so the row reads as one thing.
+   */
+  private View featureRow(Context context, final RandomizerConfig.Feature f) {
+    LinearLayout row = new LinearLayout(context);
+    row.setGravity(Gravity.CENTER_VERTICAL);
+    row.setPadding(0, dp(4), 0, dp(4));
+
+    final CheckBox box = new CheckBox(context);
+    box.setText(f.label);
+    box.setTextSize(14);
+    box.setChecked(f.on);
+    box.setOnCheckedChangeListener((v, on) -> {
+      f.on = on;
+      if (on && run.seed == 0) run.seed = RandomizerConfig.freshSeed();
+      store.setCurrent(run, activeFile);
+      refresh();
     });
-    row.addView(label);
-    row.addView(bar);
-    row.setTag("chance:" + f.id);
+    boxes.put(f.id, box);
+    row.addView(box, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+    if (f.hasChance()) row.addView(chanceOption(context, f));
+    if (f.hasWeapons()) row.addView(weaponOption(context, f));
     return row;
   }
 
-  /** The weapon pool (phase 5): which weapons the merchant may hand out. A dialog with one switch per weapon. */
-  private View weaponButton(final RandomizerConfig.Feature f) {
-    Button b = new Button(getContext());
-    b.setTextSize(13);
-    b.setText(getContext().getString(R.string.randomizer_weapons, weaponCount(f)));
-    b.setPadding(dp(28), 0, 0, dp(4));
-    b.setOnClickListener(v -> {
-      final boolean[] chosen = new boolean[RandomizerConfig.WEAPONS.length];
-      final int mask = f.weapons == 0 ? RandomizerConfig.WEAPONS_DEFAULT : f.weapons;
-      for (int i = 0; i < chosen.length; i++) chosen[i] = (mask >> i & 1) != 0;
-      new android.app.AlertDialog.Builder(getContext())
-          .setTitle(R.string.randomizer_weapons_title)
-          .setMultiChoiceItems(RandomizerConfig.WEAPONS, chosen,
-              (d, which, checked) -> chosen[which] = checked)
-          .setPositiveButton(R.string.randomizer_ok, (d, w) -> {
-            int result = 0;
-            for (int i = 0; i < chosen.length; i++) if (chosen[i]) result |= 1 << i;
-            f.weapons = result;
-            store.setCurrent(run, activeFile);
-            b.setText(getContext().getString(R.string.randomizer_weapons, weaponCount(f)));
-            status.setText("");
-          })
-          .setNegativeButton(R.string.randomizer_cancel, null)
-          .show();
-    });
+  /** The chance, as a compact "+/-" pair rather than a slider: it reads at a glance and fits a row. 10..100 in tens. */
+  private View chanceOption(Context context, final RandomizerConfig.Feature f) {
+    LinearLayout group = new LinearLayout(context);
+    group.setGravity(Gravity.CENTER_VERTICAL);
+
+    final TextView label = new TextView(context);
+    label.setTextSize(12);
+    label.setGravity(Gravity.CENTER);
+    label.setPadding(dp(4), 0, dp(4), 0);
+    chanceLabels.put(f.id, label);
+
+    final Button less = compactButton(context, R.string.randomizer_minus, v -> changeChance(f, -10));
+    final Button more = compactButton(context, R.string.randomizer_plus, v -> changeChance(f, 10));
+    group.addView(less);
+    group.addView(label);
+    group.addView(more);
+    group.setTag("chance:" + f.id);
+    updateChanceLabel(f);
+    return group;
+  }
+
+  private void changeChance(RandomizerConfig.Feature f, int delta) {
+    int now = f.chance <= 0 ? 100 : f.chance;
+    f.chance = Math.max(10, Math.min(100, now + delta));
+    updateChanceLabel(f);
+    store.setCurrent(run, activeFile);
+  }
+
+  private void updateChanceLabel(RandomizerConfig.Feature f) {
+    TextView label = chanceLabels.get(f.id);
+    if (label != null) label.setText(getContext().getString(R.string.randomizer_chance_short, f.chance <= 0 ? 100 : f.chance));
+  }
+
+  /** The weapon pool, as one small button that says how many are chosen and opens the list. */
+  private View weaponOption(Context context, final RandomizerConfig.Feature f) {
+    Button b = compactButton(context, R.string.randomizer_weapons_short, v -> chooseWeapons(f));
+    weaponButtons.put(f.id, b);
+    updateWeaponButton(f);
     return b;
+  }
+
+  private void chooseWeapons(final RandomizerConfig.Feature f) {
+    final boolean[] chosen = new boolean[RandomizerConfig.WEAPONS.length];
+    final int mask = f.weapons == 0 ? RandomizerConfig.WEAPONS_DEFAULT : f.weapons;
+    for (int i = 0; i < chosen.length; i++) chosen[i] = (mask >> i & 1) != 0;
+    new AlertDialog.Builder(getContext())
+        .setTitle(R.string.randomizer_weapons_title)
+        .setMultiChoiceItems(RandomizerConfig.WEAPONS, chosen, (d, which, checked) -> chosen[which] = checked)
+        .setPositiveButton(R.string.randomizer_ok, (d, w) -> {
+          int result = 0;
+          for (int i = 0; i < chosen.length; i++) if (chosen[i]) result |= 1 << i;
+          f.weapons = result;
+          store.setCurrent(run, activeFile);
+          updateWeaponButton(f);
+          status.setText("");
+        })
+        .setNegativeButton(R.string.randomizer_cancel, null)
+        .show();
+  }
+
+  private void updateWeaponButton(RandomizerConfig.Feature f) {
+    Button b = weaponButtons.get(f.id);
+    if (b != null) b.setText(getContext().getString(R.string.randomizer_weapons_short, weaponCount(f)));
   }
 
   private static int weaponCount(RandomizerConfig.Feature f) {
@@ -225,44 +235,60 @@ final class RandomizerDialog extends Dialog {
     return n;
   }
 
-  /** Redraws everything from the current run and the seed files. */
+  /**
+   * A new seed: the same rules, a new roll. The run object stays the same one the page was built from (adopt), so
+   * every switch keeps working afterwards.
+   */
+  private void newSeed() {
+    // only the seed changes: the switches and options are this run's rules, and stay as they are
+    run.seed = RandomizerConfig.freshSeed();
+    activeFile = "";
+    store.setCurrent(run, "");
+    refresh();
+  }
+
+  /** Redraws the values the page shows. The views themselves stay; only their state is updated. */
   private void refresh() {
-    boolean any = run.anyEnabled();
-    String where = activeFile.isEmpty() ? "" : " (" + activeFile + ")";
     seedLine.setText(run.seed == 0 ? getContext().getString(R.string.randomizer_no_seed)
-        : getContext().getString(R.string.randomizer_seed, run.seed) + where);
-    // only the switches: the chance slider and the weapon button sit in the same container
+        : getContext().getString(R.string.randomizer_seed, run.seed)
+            + (activeFile.isEmpty() ? "" : "  \u00b7  " + activeFile));
     for (RandomizerConfig.Feature f : run.features.values()) {
       CheckBox box = boxes.get(f.id);
       if (box != null) box.setChecked(f.on);
+      if (f.hasChance()) updateChanceLabel(f);
+      if (f.hasWeapons()) updateWeaponButton(f);
     }
+    rebuildSavedList();
+    status.setText(run.anyEnabled() ? "" : getContext().getString(R.string.randomizer_none_on));
+  }
 
+  private void rebuildSavedList() {
     savedList.removeAllViews();
-    java.util.List<String> names = store.names();
+    List<String> names = store.names();
     if (names.isEmpty()) {
       TextView empty = new TextView(getContext());
       empty.setText(R.string.randomizer_no_files);
-      empty.setTextSize(13);
+      empty.setTextSize(12);
       savedList.addView(empty);
+      return;
     }
     for (final String name : names) {
       LinearLayout row = new LinearLayout(getContext());
-      row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+      row.setGravity(Gravity.CENTER_VERTICAL);
       TextView label = new TextView(getContext());
-      label.setText(name);
-      label.setTextSize(14);
+      label.setTextSize(13);
+      label.setText((name.equals(activeFile) ? "\u25cf " : "") + name);
       row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-      row.addView(button(getContext(), R.string.randomizer_load, v -> loadRun(name)));
-      row.addView(button(getContext(), R.string.randomizer_delete, v -> deleteRun(name)));
+      row.addView(compactButton(getContext(), R.string.randomizer_load, v -> loadRun(name)));
+      row.addView(compactButton(getContext(), R.string.randomizer_delete, v -> deleteRun(name)));
       savedList.addView(row);
     }
-    status.setText(any ? "" : getContext().getString(R.string.randomizer_none_on));
   }
 
   private void loadRun(String name) {
     try {
       RandomizerConfig loaded = store.load(name);
-      run = loaded;
+      run.adopt(loaded);  // the page keeps its own object, so every switch stays live
       activeFile = name;
       store.setCurrent(run, name);
       status.setText(getContext().getString(R.string.randomizer_loaded, name));

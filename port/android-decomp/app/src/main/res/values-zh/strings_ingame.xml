@@ -508,4 +508,8 @@
     <string name="ingame_seed_help">随机项在标题屏幕的随机页面上设置，在游戏开始之前：每一轮一个种子，相同的种子总会得到相同的游戏。本菜单只显示当前使用的种子；请在那里开关。</string>
     <string name="randomizer_open_page">随机设置</string>
     <string name="randomizer_start">开始游戏</string>
+    <string name="randomizer_chance_short">%1$d%%</string>
+    <string name="randomizer_weapons_short">武器 %1$d</string>
+    <string name="randomizer_minus">−</string>
+    <string name="randomizer_plus">+</string>
 </resources>

@@ -510,4 +510,8 @@
     <string name="ingame_seed_help">Die Randomizer stellst du auf der Randomizer-Seite des Titelbildschirms ein, bevor das Spiel startet: ein Seed pro Durchlauf, und derselbe Seed ergibt immer dasselbe Spiel. Dieses Menü zeigt nur, welchen Seed du spielst; ein- und ausschalten tust du sie dort.</string>
     <string name="randomizer_open_page">Randomizer-Einstellungen</string>
     <string name="randomizer_start">Spiel starten</string>
+    <string name="randomizer_chance_short">%1$d%%</string>
+    <string name="randomizer_weapons_short">Waffen %1$d</string>
+    <string name="randomizer_minus">−</string>
+    <string name="randomizer_plus">+</string>
 </resources>

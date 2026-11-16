@@ -510,4 +510,8 @@
     <string name="ingame_seed_help">रैंडमाइज़र टाइटल स्क्रीन के रैंडमाइज़र पेज पर सेट होते हैं, खेल शुरू होने से पहले: हर खेल के लिए एक सीड, और वही सीड हमेशा वही खेल देता है। यह मेनू केवल दिखाता है कि कौन सा सीड खेल रहे हैं; चालू वहां करें।</string>
     <string name="randomizer_open_page">रैंडमाइज़र सेटिंग</string>
     <string name="randomizer_start">खेल शुरू करें</string>
+    <string name="randomizer_chance_short">%1$d%%</string>
+    <string name="randomizer_weapons_short">हथियार %1$d</string>
+    <string name="randomizer_minus">−</string>
+    <string name="randomizer_plus">+</string>
 </resources>

@@ -513,4 +513,8 @@
     <string name="ingame_seed_help">Los aleatorizadores se configuran en la página Aleatorio de la pantalla de título, antes de empezar: una semilla por partida, y la misma semilla da siempre el mismo juego. Este menú solo muestra qué semilla juegas; actívalos allí.</string>
     <string name="randomizer_open_page">Ajustes del aleatorio</string>
     <string name="randomizer_start">Empezar partida</string>
+    <string name="randomizer_chance_short">%1$d%%</string>
+    <string name="randomizer_weapons_short">Armas %1$d</string>
+    <string name="randomizer_minus">−</string>
+    <string name="randomizer_plus">+</string>
 </resources>
