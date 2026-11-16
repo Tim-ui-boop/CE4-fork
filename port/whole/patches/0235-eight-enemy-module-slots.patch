@@ -1,0 +1,101 @@
+# Port patch (0.99.17, the owner's wish of 17.11.2026 -- the whole game on Android carries the
+# decompiled source, so the engine itself may be modded): eight enemy module slots instead of
+# four. A room with its own four kinds (the village raid: two villager kinds, the cow, the bird)
+# could never take a randomizer's kind -- the fifth module had no slot, the room's own enemies
+# failed to load and the room script followed the error pointer into a crash (the crashes of
+# 17.11.2026). With eight slots a randomizer kind loads beside the room's own four; a vanilla
+# game fills four at most and sees no difference (the slots sit empty until the randomizer
+# asks). All the engine's own users loop over the array -- frees (EmReadInit), the search
+# (SearchEmModule), the free-slot handout (pullEmModule), the crash reporter's symbol list
+# (exception.cpp) -- and the engine frees every slot at a stage's start, so a stage still ends
+# where it began. read.h also names pullEmModule for the randomizer's runtime, whose
+# kindLoaded now allows a kind that is loaded or has a free slot to load into.
+--- a/src/game/read.cpp
++++ b/src/game/read.cpp
+@@ -75,7 +75,10 @@
+ u32 out_data_size;
+ u8 oldWepId;
+ 
+-MODULE_DAT EmReadModule[4] __attribute__((aligned(32)));
++/* port (patch 0235): eight enemy module slots, so a randomizer's kind can load beside the
++   room's own four without evicting one (the village raid fills all four: two villager kinds,
++   the cow, the bird -- a fifth kind killed a villager's load and the room crashed) */
++MODULE_DAT EmReadModule[8] __attribute__((aligned(32)));
+ MODULE_DAT PlReadModule __attribute__((aligned(32)));
+ MODULE_DAT WepReadModule __attribute__((aligned(32)));
+ 
+@@ -506,12 +509,12 @@
+     }
+ }
+ 
+-// Frees the four enemy module slots (stage / game start).
++// Frees the enemy module slots (stage / game start; eight since port patch 0235).
+ void EmReadInit()
+ {
+     int i;
+ 
+-    for (i = 0; i < 4; i++) {
++    for (i = 0; i < 8; i++) {
+         InitModule(&EmReadModule[i]);
+     }
+ }
+@@ -551,7 +554,8 @@
+     int i;
+ 
+     id = checkAshleyId(id);
+-    for (m = EmReadModule, i = 0; i < 4; i++, m++) {
++    /* port (patch 0235): eight slots */
++    for (m = EmReadModule, i = 0; i < 8; i++, m++) {
+         if (m->id == (u16) id) {
+             return m;
+         }
+@@ -559,12 +563,12 @@
+     return NULL;
+ }
+ 
+-// A free enemy module slot (pArc NULL), or NULL when all four are used.
++// A free enemy module slot (pArc NULL), or NULL when all eight are used (port patch 0235).
+ MODULE_DAT* pullEmModule()
+ {
+     int i;
+ 
+-    for (i = 0; i < 4; i++) {
++    for (i = 0; i < 8; i++) {
+         if (EmReadModule[i].pData == NULL) {
+             return &EmReadModule[i];
+         }
+
+--- a/src/game/exception.cpp
++++ b/src/game/exception.cpp
+@@ -236,7 +236,8 @@
+     char buf[32];
+ 
+     symbol_err = excepLoadSymbolSub("bio4.sym", 0);
+-    for (i = 0; i < 4; i++) {
++    /* port (patch 0235): eight enemy module slots (read.cpp) */
++    for (i = 0; i < 8; i++) {
+         if (EmReadModule[i].pDll) {
+             switch (EmReadModule[i].id) {
+             case 2:
+
+--- a/include/read.h
++++ b/include/read.h
+@@ -27,7 +27,8 @@
+     MODULE_DAT() { ctrl_flag.reset(); }
+ };
+ 
+-extern MODULE_DAT EmReadModule[4];
++/* port (patch 0235): eight enemy module slots (read.cpp) */
++extern MODULE_DAT EmReadModule[8];
+ extern MODULE_DAT PlReadModule;
+ extern MODULE_DAT WepReadModule;
+ 
+@@ -50,5 +51,7 @@
+ 
+ // The enemy module entry of enemy `id` (the rooms swap event data into the boss module's block).
+ MODULE_DAT* SearchEmModule(int id);
++// A free enemy module slot, or NULL when all eight are used (port patch 0235).
++MODULE_DAT* pullEmModule(void);
+ 
+ #endif
+

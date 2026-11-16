@@ -195,13 +195,14 @@ bool ordinary(const EM_LIST& e)
     return ganadoSpot(e) && !specialForm(e);
 }
 
-// The enemy kinds this room has loaded right now (EmReadModule, 4 slots max, read.cpp:78): a swap must never
-// need a fifth -- the engine then refuses to create the room's own enemies ("Em set failed, Id = 12") and the
-// room script that summoned one follows a null pointer (0.99.17, the crashes of 17.11.2026). Every Ganado
-// sub-kind 0x10..0x20 is a module of its own, so the Chainsaw Man needs its module loaded too.
+// The module rule (the crashes of 17.11.2026): the engine holds a fixed number of enemy module
+// slots (four vanilla; eight since the engine patch 0235, the owner's wish of 17.11.2026 -- the
+// whole game on Android carries the decompiled source, so the engine itself may be modded). A
+// kind may load when its slot is free to take: `pullEmModule` (read.cpp) names it. A swap still
+// never evicts a kind that is loaded: the room's own enemies may come after the swap's.
 bool kindLoaded(const Kind& to)
 {
-    return SearchEmModule(to.id) != 0;
+    return SearchEmModule(to.id) != 0 || pullEmModule() != 0;
 }
 
 bool deadBit(int no)
@@ -477,7 +478,8 @@ extern "C" void re4_core_set_enemy_options(int pool, int ratios)
 // of rolling: same seed, same plan; the plan is a block the log can dump whole (and a file the app could share
 // later). The per-entry decisions that need the live room -- the places (the room's own collision), the +/-
 // 10 % number (how many stand there now) -- still happen at the door, seeded the same as ever. The module rule
-// stays too (kindLoaded): a kind the room does not hold is never handed out, however it was planned.
+// stays too (kindLoaded): only a kind whose module is loaded or has a free slot -- never
+// eviction of a kind the room's own script still needs.
 struct RoomPlan {
     u16 room;
     u8 kind;         // after unsafe mode's opening of a cautious room
@@ -815,9 +817,11 @@ extern "C" void re4_enemy_random_room(void)
         if (family && p.rolledKind[pick] > 2) {
             continue;  // a counting room keeps its family forms
         }
+        // 0.99.17: the kind needs its module loaded or a free slot for it (the engine patch
+        // 0235 widened the room to eight); never a kind that would evict one the room still needs
         if (!kindLoaded(kPoolKinds[p.rolledKind[pick]])) {
             p.swapRefused++;
-            continue;  // 0.99.17: never a fifth enemy type in the room
+            continue;
         }
         p.swapKind[i] = p.rolledKind[pick];
         p.kindSwaps++;
