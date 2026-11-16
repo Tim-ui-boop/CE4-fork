@@ -469,6 +469,153 @@ extern "C" void re4_core_set_enemy_options(int pool, int ratios)
     re4_log("core: random enemies options: pool 0x%x, ratios 0x%x", pool, ratios & 0x0003FFFF);
 }
 
+// 0.99.17, the manifest (the owner's decision of 17.11.2026, in-app planner, PC-style): the whole chapter
+// section is planned once, when its enemy list loads -- every room the list names and the scanner knows gets
+// its kinds rolled ahead, with a sub-boss quota across the section (one chainsaw / Gatling / Garrador / Krauser
+// room per four, so a section is not a boss parade) and the same per-room rules as before (the pool, the
+// variety cap, the family rule of counting rooms, unsafe mode's opening). A room then reads its plan instead
+// of rolling: same seed, same plan; the plan is a block the log can dump whole (and a file the app could share
+// later). The per-entry decisions that need the live room -- the places (the room's own collision), the +/-
+// 10 % number (how many stand there now) -- still happen at the door, seeded the same as ever. The module rule
+// stays too (kindLoaded): a kind the room does not hold is never handed out, however it was planned.
+struct RoomPlan {
+    u16 room;
+    u8 kind;         // after unsafe mode's opening of a cautious room
+    u8 rolledCount;
+    u8 subBoss;      // its rolls hold a chainsaw / Gatling / Garrador / Krauser kind
+    u8 rolledKind[kPoolCount];
+};
+struct Manifest {
+    bool on;
+    int list;
+    u32 seed;
+    int pool;
+    int ratios;
+    int rooms;
+    int subBosses;
+    RoomPlan plan[64];
+};
+Manifest gManifest;
+
+const RoomPlan* manifestAt(u16 room)
+{
+    if (!gManifest.on) {
+        return 0;
+    }
+    for (int i = 0; i < gManifest.rooms; i++) {
+        if (gManifest.plan[i].room == room) {
+            return &gManifest.plan[i];
+        }
+    }
+    return 0;
+}
+
+// The kinds one room's plan rolls. `subBossLeft`: the section's quota of sub-boss rooms; a roll that would
+// take one with the quota spent keeps drawing instead. Returns whether a sub-boss kind was taken.
+bool manifestRollKinds(RoomPlan* p, u32 seed, int list, int pool, bool familyOnly, int cap, bool subBossLeft)
+{
+    bool taken = false;
+    bool subBossTaken = false;
+    p->rolledCount = 0;
+    for (int draws = 0; draws < 48 && p->rolledCount < cap; draws++) {
+        const int pick =
+            (int) (hashOf(seed, (u32) list, (u32) p->room, 0x500u + (u32) draws) % (u32) kPoolCount);
+        if (!(pool >> pick & 1)) {
+            continue;
+        }
+        if (familyOnly && pick > 2) {
+            continue;  // a counting room rolls only family members (chainsaw, Gatling, Garrador)
+        }
+        bool have = false;
+        for (int k = 0; k < p->rolledCount; k++) {
+            have |= p->rolledKind[k] == pick;
+        }
+        const bool subBoss = pick <= 2 || pick >= 10;
+        if (have || (subBoss && subBossTaken) || (subBoss && !subBossLeft)) {
+            continue;
+        }
+        if (subBoss) {
+            subBossTaken = true;
+            taken = true;
+        }
+        p->rolledKind[p->rolledCount++] = (u8) pick;
+    }
+    return taken;
+}
+
+// Plans the whole loaded list at once (its 256 entries name every room of the chapter section).
+void manifestBuild()
+{
+    Manifest& m = gManifest;
+    const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
+    const int ratios = __atomic_load_n(&gRatios, __ATOMIC_RELAXED);
+    const int seed = seedNow();
+    const int list = pG ? pG->em_list_no : -1;
+    if (!seed || list < 0) {
+        m.on = false;
+        return;
+    }
+    memset(&m, 0, sizeof(m));
+    m.on = true;
+    m.list = list;
+    m.seed = (u32) seed;
+    m.pool = pool;
+    m.ratios = ratios;
+    const bool unsafe = unsafeOn();
+    // the rooms of this list, in entry order (the loop keeps the first of a kind)
+    u16 rooms[64];
+    int n = 0;
+    for (int i = 0; i < 256 && n < 64; i++) {
+        const EM_LIST& e = pG->Em_list[i];
+        if (e.id == 0 || !rowOf(e.room)) {
+            continue;
+        }
+        bool have = false;
+        for (int k = 0; k < n; k++) {
+            have |= rooms[k] == e.room;
+        }
+        if (!have) {
+            rooms[n++] = e.room;
+        }
+    }
+    const int cap = varietyCap();
+    // one sub-boss room per four of the section (at least one: a section that plans at all may see one)
+    int subBossLeft = n > 0 ? 1 + n / 4 : 0;
+    for (int k = 0; k < n && m.rooms < 64; k++) {
+        const RoomRow* row = rowOf(rooms[k]);
+        RoomPlan* p = &m.plan[m.rooms++];
+        p->room = rooms[k];
+        p->kind = row->kind;
+        if (unsafe && row->kind == kUntouched && !row->boss) {
+            p->kind = kOpenCautioned;
+        }
+        const bool kindsMayChange = p->kind == kOpen
+            || (unsafe && (p->kind == kCountsFamily || p->kind == kOpenCautioned));
+        const bool familyOnly = p->kind == kCountsFamily || p->kind == kOpenCautioned;
+        p->subBoss = pool && kindsMayChange
+            && manifestRollKinds(p, m.seed, m.list, pool, familyOnly, cap, subBossLeft > 0);
+        if (p->subBoss) {
+            m.subBosses++;
+            subBossLeft--;
+        }
+    }
+    if (gLines < 300) {
+        gLines++;
+        re4_log("enemies: manifest list %d (seed %u): %d rooms planned, %d with a sub-boss kind",
+                m.list, m.seed, m.rooms, m.subBosses);
+    }
+}
+
+// The plan is stale when the seed, the list, or the options it was planned from changed.
+bool manifestStale()
+{
+    const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
+    const int ratios = __atomic_load_n(&gRatios, __ATOMIC_RELAXED);
+    const int list = pG ? pG->em_list_no : -1;
+    return !gManifest.on || gManifest.list != list || gManifest.seed != (u32) seedNow()
+        || gManifest.pool != pool || gManifest.ratios != ratios;
+}
+
 // Patch 0231, EmSetFromList's start: the room's plan.
 extern "C" void re4_enemy_random_room(void)
 {
@@ -488,6 +635,8 @@ extern "C" void re4_enemy_random_room(void)
     // (named, waited, last-of-kind, non-ordinary) never turn off, so what the script truly needs stays; the
     // copies (the +/- 10 % of the number) stay off there, so a script that counts never gets extra enemies.
     // A boss room keeps its lock either way.
+    // 0.99.17: a room whose list is stale has no plan yet -- manifestBuild (below) re-plans the whole section,
+    // and unsafe mode's opening of a cautious room is decided there; `unsafe` here only gates the why-text
     const bool unsafe = unsafeOn();
     if (unsafe && row && row->kind == kUntouched && !row->boss) {
         p.kind = kOpenCautioned;  // open for places and kinds, but the copies stay off
@@ -559,53 +708,28 @@ extern "C" void re4_enemy_random_room(void)
                 "ordinary one at the start: only the waves roll", p.room, p.list, p.seed);
     }
     p.on = true;
-    // the kinds this room may hand out (see the roll below); no entry's kind yet
+    // 0.99.17: the room reads its kinds from the manifest -- the whole list was planned once (with its sub-boss
+    // quota), the same hash per seed as the old per-room roll, so nothing of the picture changes; what moves
+    // away is the last-moment dice and the possibility of a section-wide boss parade
+    if (manifestStale()) {
+        manifestBuild();
+    }
+    const RoomPlan* mp = manifestAt(p.room);
+    // the kinds this room's plan rolled; no entry's kind yet
     for (int i = 0; i < 256; i++) {
         p.swapKind[i] = -1;
     }
-    // 0.99.16: the kinds this room may hand out (the PC randomizer's replacements pool + its variety limit). The
-    // roll is a hash of the seed, list and room, so the same run always rolls the same kinds; sub-boss kinds
-    // (chainsaw, Gatling, Garrador) stay rare: at most one of the room's rolls may pick one.
-    const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
     p.rolledCount = 0;
     p.kindSwaps = 0;
     p.swapRefused = 0;
-    // a room that counts its enemies by kind keeps the kinds it counts: places move, kinds never. A family-wide
-    // count ("all Ganados dead", 0x10..0x20) survives a form change inside the family, so in unsafe mode its
-    // unnamed Ganados may become chainsaw, Gatling or Garrador forms -- the pool kinds that are family members;
-    // never a dog or an Armadura (an outsider: the count would never reach zero). A narrow count pins its kinds
-    // always. A room unsafe mode opened from "untouched" takes the family rule too (its script may count).
-    const bool kindsMayChange = p.kind == kOpen
-        || (unsafe && (p.kind == kCountsFamily || p.kind == kOpenCautioned));
-    const bool familyOnly = p.kind == kCountsFamily || p.kind == kOpenCautioned;
-    if (pool && kindsMayChange) {
-        const int cap = varietyCap();
-        bool subBossTaken = false;
-        for (int draws = 0; draws < 48 && p.rolledCount < cap; draws++) {
-            const int pick = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x500u + (u32) draws) % (u32) kPoolCount);
-            if (!(pool >> pick & 1)) {
-                continue;
-            }
-            // a counting room rolls only family members (chainsaw, Gatling, Garrador): the count still holds
-            if (familyOnly && pick > 2) {
-                continue;
-            }
-            bool have = false;
-            for (int k = 0; k < p.rolledCount; k++) {
-                have |= p.rolledKind[k] == pick;
-            }
-            // sub-bosses (chainsaw, Gatling, Garrador) and the Krausers: at most one of them a room
-            const bool subBoss = pick <= 2 || pick >= 10;
-            if (have || (subBoss && subBossTaken)) {
-                continue;
-            }
-            if (subBoss) subBossTaken = true;
-            p.rolledKind[p.rolledCount++] = pick;
+    if (mp) {
+        p.rolledCount = mp->rolledCount;
+        for (int i = 0; i < mp->rolledCount; i++) {
+            p.rolledKind[i] = mp->rolledKind[i];
         }
-        if (gLines < 300 && p.rolledCount == 0) {
-            gLines++;
-            re4_log("enemies: random enemies r%03x: the pool rolled no kind", p.room);
-        }
+    } else if (gLines < 300) {
+        gLines++;
+        re4_log("enemies: random enemies r%03x: no plan of its own in this list (the kinds stay)", p.room);
     }
     // the spots shuffled (Fisher-Yates from the seed), the k-th mover takes the k-th; from there a safe place nearby
     for (int k = ns - 1; k > 0; k--) {
@@ -772,10 +896,10 @@ extern "C" void re4_enemy_random_room(void)
         memcpy(gBefore, pG->Em_list, sizeof(gBefore));
         gChecking = true;
     }
-    if (gLines < 300 && (p.kindSwaps > 0)) {
+    if (gLines < 300 && p.kindSwaps > 0) {
         gLines++;
-        re4_log("enemies: random enemies r%03x: %d kinds rolled, %d of %d entries change kind", p.room, p.rolledCount,
-                p.kindSwaps, p.movers);
+        re4_log("enemies: random enemies r%03x: %d kinds planned (%d of %d entries change kind)", p.room,
+                p.rolledCount, p.kindSwaps, p.movers);
     }
 }
 
