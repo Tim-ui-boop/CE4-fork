@@ -23,6 +23,8 @@ final class RandomizerDialog extends Dialog {
   private final LinearLayout savedList;
   private final EditText nameField;
   private LinearLayout features;
+  /** The switch of each randomizer, by feature id: the container also holds the chance slider and the weapon button. */
+  private final java.util.Map<String, CheckBox> boxes = new java.util.HashMap<>();
   private RandomizerConfig run;
   /** The seed file this run came from, "" when it has none yet. */
   private String activeFile;
@@ -103,6 +105,7 @@ final class RandomizerDialog extends Dialog {
         refresh();
       });
       features.addView(box);
+      boxes.put(f.id, box);
       // phase 5: the merchant's options, shown under its switch while it is on
       if (f.hasChance()) features.addView(chanceRow(f));
       if (f.hasWeapons()) features.addView(weaponButton(f));
@@ -228,9 +231,10 @@ final class RandomizerDialog extends Dialog {
     String where = activeFile.isEmpty() ? "" : " (" + activeFile + ")";
     seedLine.setText(run.seed == 0 ? getContext().getString(R.string.randomizer_no_seed)
         : getContext().getString(R.string.randomizer_seed, run.seed) + where);
-    for (int i = 0; i < features.getChildCount(); i++) {
-      RandomizerConfig.Feature f = run.features.values().toArray(new RandomizerConfig.Feature[0])[i];
-      ((CheckBox) features.getChildAt(i)).setChecked(f.on);
+    // only the switches: the chance slider and the weapon button sit in the same container
+    for (RandomizerConfig.Feature f : run.features.values()) {
+      CheckBox box = boxes.get(f.id);
+      if (box != null) box.setChecked(f.on);
     }
 
     savedList.removeAllViews();
