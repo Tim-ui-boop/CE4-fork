@@ -39,6 +39,8 @@ final class RandomizerDialog extends Dialog {
   private final java.util.Map<String, View> chanceGroups = new java.util.HashMap<>();
   /** The weapon button of each randomizer that has a pool, to relabel it when the choice changes. */
   private final java.util.Map<String, Button> weaponButtons = new java.util.HashMap<>();
+  /** The enemy options button (pool + mix) of the enemies feature, relabelled as the settings change. */
+  private final java.util.Map<String, Button> enemyButtons = new java.util.HashMap<>();
   private final RandomizerConfig run;
   /** The seed file this run came from, "" when it has none yet. */
   private String activeFile;
@@ -167,6 +169,7 @@ final class RandomizerDialog extends Dialog {
 
     if (f.hasChance()) row.addView(chanceOption(context, f));
     if (f.hasWeapons()) row.addView(weaponOption(context, f));
+    if (f.hasEnemyOptions()) row.addView(enemyOption(context, f));
     return row;
   }
 
@@ -243,6 +246,132 @@ final class RandomizerDialog extends Dialog {
     return n;
   }
 
+  // ---- the enemies feature's options (0.99.16: the PC randomizer's "Enemy settings") --------------------------------
+
+  /** The enemies' options as one small button (like the merchant's weapon pool button). */
+  private View enemyOption(Context context, final RandomizerConfig.Feature f) {
+    Button b = compactButton(context, R.string.randomizer_enemy_options_short, v -> chooseEnemyOptions(f));
+    enemyButtons.put(f.id, b);  // greyed out with the switch through refresh()
+    updateEnemyButton(f);
+    return b;
+  }
+
+  private static int poolCount(RandomizerConfig.Feature f) {
+    int mask = f.pool == 0 ? RandomizerConfig.ENEMY_POOL_DEFAULT : f.pool;
+    int n = 0;
+    for (int i = 0; i < RandomizerConfig.ENEMY_POOL.length; i++) if ((mask >> i & 1) != 0) n++;
+    return n;
+  }
+
+  private void updateEnemyButton(RandomizerConfig.Feature f) {
+    Button b = enemyButtons.get(f.id);
+    if (b != null) b.setText(getContext().getString(R.string.randomizer_enemy_options_short, poolCount(f)));
+  }
+
+  /**
+   * The pool, the mix and the variety cap. The pool is a checklist like the merchant's weapons; the rest are four
+   * "one in N" choices and a cap 1..4, one row each, built by hand for want of a stock layout that fits.
+   */
+  private void chooseEnemyOptions(final RandomizerConfig.Feature f) {
+    final boolean[] chosen = new boolean[RandomizerConfig.ENEMY_POOL.length];
+    final int startPool = f.pool == 0 ? RandomizerConfig.ENEMY_POOL_DEFAULT : f.pool;
+    for (int i = 0; i < chosen.length; i++) chosen[i] = (startPool >> i & 1) != 0;
+    final int[] steps = new int[RandomizerConfig.ENEMY_RATIOS.length];
+    for (int i = 0; i < steps.length; i++) steps[i] = (f.ratios >> RandomizerConfig.RATIO_SHIFT[i]) & 0xF;
+    final int[] variety = {f.ratios >> RandomizerConfig.VARIETY_SHIFT & RandomizerConfig.VARIETY_MASK};
+    if (variety[0] < 1) variety[0] = RandomizerConfig.VARIETY_DEFAULT;
+
+    LinearLayout list = new LinearLayout(getContext());
+    list.setOrientation(LinearLayout.VERTICAL);
+    int pad = dp(12);
+    list.setPadding(pad, pad, pad, pad);
+    TextView poolTitle = new TextView(getContext());
+    poolTitle.setText(R.string.randomizer_enemy_pool_title);
+    poolTitle.setTextSize(13);
+    poolTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    list.addView(poolTitle);
+    for (int i = 0; i < chosen.length; i++) {
+      final int bit = i;
+      CheckBox kind = new CheckBox(getContext());
+      kind.setText(RandomizerConfig.ENEMY_POOL[i]);
+      kind.setTextSize(13);
+      kind.setChecked(chosen[i]);
+      kind.setOnCheckedChangeListener((v, on) -> chosen[bit] = on);
+      list.addView(kind);
+    }
+    TextView mixTitle = new TextView(getContext());
+    mixTitle.setText(R.string.randomizer_enemy_mix_title);
+    mixTitle.setTextSize(13);
+    mixTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    mixTitle.setPadding(0, dp(10), 0, 0);
+    list.addView(mixTitle);
+    for (int i = 0; i < RandomizerConfig.ENEMY_RATIOS.length; i++) {
+      list.addView(ratioRow(RandomizerConfig.ENEMY_RATIOS[i], steps, i, false));
+    }
+    list.addView(ratioRow(getContext().getString(R.string.randomizer_enemy_variety), variety, 0, true));
+
+    ScrollView scroll = new ScrollView(getContext());
+    scroll.addView(list);
+    new AlertDialog.Builder(getContext())
+        .setTitle(R.string.randomizer_enemy_options_title)
+        .setView(scroll)
+        .setPositiveButton(R.string.randomizer_ok, (d, w) -> {
+          int pool = 0;
+          for (int i = 0; i < chosen.length; i++) if (chosen[i]) pool |= 1 << i;
+          f.pool = pool;
+          f.ratios = RandomizerConfig.packRatios(steps[0], steps[1], steps[2], steps[3], variety[0]);
+          store.setCurrent(run, activeFile);
+          updateEnemyButton(f);
+          status.setText("");
+        })
+        .setNegativeButton(R.string.randomizer_cancel, null)
+        .show();
+  }
+
+  /** One "one in N" line: the label, the step, minus/plus buttons. `slot` indexes the value array (the variety's
+   *  own array, when `variety`). */
+  private View ratioRow(String label, final int[] values, final int slot, final boolean variety) {
+    LinearLayout rowIn = new LinearLayout(getContext());
+    rowIn.setGravity(Gravity.CENTER_VERTICAL);
+    TextView name = new TextView(getContext());
+    name.setText(label);
+    name.setTextSize(12);
+    rowIn.addView(name, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+    final TextView value = new TextView(getContext());
+    value.setTextSize(12);
+    value.setGravity(Gravity.CENTER);
+    value.setMinWidth(dp(44));
+    final Button less = compactButton(getContext(), R.string.randomizer_minus, v -> changeStep(values, slot, -1, variety, value));
+    final Button more = compactButton(getContext(), R.string.randomizer_plus, v -> changeStep(values, slot, 1, variety, value));
+    rowIn.addView(less);
+    rowIn.addView(value);
+    rowIn.addView(more);
+    stepLabel(value, values[slot], variety);
+    return rowIn;
+  }
+
+  private void changeStep(int[] values, int slot, int delta, boolean variety, TextView value) {
+    if (variety) {
+      values[slot] = Math.max(1, Math.min(4, values[slot] + delta));
+    } else {
+      values[slot] = Math.max(RandomizerConfig.RATIO_OFF, Math.min(RandomizerConfig.RATIO_MAX, values[slot] + delta));
+    }
+    stepLabel(value, values[slot], variety);
+  }
+
+  /** The step as it reads on the page: "off", "1 in 2", "1 in 3", ...; the variety cap shown as its plain number. */
+  private void stepLabel(TextView value, int step, boolean variety) {
+    if (variety) {
+      value.setText(String.valueOf(step));
+      return;
+    }
+    if (step <= 0) {
+      value.setText(R.string.ingame_off);
+      return;
+    }
+    value.setText(getContext().getString(R.string.randomizer_one_in, 16 - step));
+  }
+
   /**
    * A new seed: the same rules, a new roll. The run object stays the same one the page was built from (adopt), so
    * every switch keeps working afterwards.
@@ -275,6 +404,10 @@ final class RandomizerDialog extends Dialog {
       if (f.hasWeapons()) {
         updateWeaponButton(f);
         setOptionsEnabled(weaponButtons.get(f.id), f.on);
+      }
+      if (f.hasEnemyOptions()) {
+        updateEnemyButton(f);
+        setOptionsEnabled(enemyButtons.get(f.id), f.on);
       }
     }
     rebuildSavedList();

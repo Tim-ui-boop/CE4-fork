@@ -372,6 +372,11 @@ void re4_core_set_merchant_random(int seed);
 /* The merchant randomizer's options (phase 5; runtime/merchant_random.cpp): `chance` the percent of merchants that
  * offer new goods (0..100), `weapons` a bit per weapon in the core's list (0: its default set). Any thread. */
 void re4_core_set_merchant_options(int chance, unsigned weapons);
+/* The enemy randomizer's options (0.99.16, port of the PC randomizer's \"Enemy settings\"; runtime/enemy_random.cpp):
+ * `pool` a bit per enemy kind that may replace an ordinary Ganado (0: the game's own kinds, nothing replaced),
+ * `ratios` the mix chances packed one nibble each: bits 0..3 plaga, 4..7 helmet, 8..11 shield, 12..15 sub-boss
+ * (0 = never, 15 = every one). Any thread. */
+void re4_core_set_enemy_options(int pool, int ratios);
 /* "Gentler QTEs" (cores since 14.11.2026, 0.99.15; runtime/qte_touch.cpp re4_qte_level, patch 0232): on, the quick-time
  * events of Professional take the time windows and press counts of Normal; damage, enemies and the rest stay
  * Professional's. Any thread. */

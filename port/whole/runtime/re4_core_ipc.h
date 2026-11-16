@@ -86,6 +86,7 @@ enum MsgType : uint32_t {
     kSetGentleQte = 45,    // a = on: Professional's quick-time events as Normal's (no reply; re4_core_set_gentle_qte, 0.99.15)
     kSetMerchantRandom = 46,  // a = the seed of "Random merchant stock", 0 off (no reply; re4_core_set_merchant_random)
     kSetMerchantOptions = 47, // a = percent of merchants that deal anew, b = weapon bits (no reply; re4_core_set_merchant_options)
+    kSetEnemyOptions = 48,    // a = enemy-kind pool bits, b = ratios packed (no reply; re4_core_set_enemy_options, 0.99.16)
 };
 
 struct MsgHeader {

@@ -312,6 +312,55 @@ T = {
   "\u5728\u6e38\u620f\u5f00\u59cb\u4e4b\u524d\uff1a\u6bcf\u4e00\u8f6e\u4e00\u4e2a\u79cd\u5b50\uff0c\u76f8"
   "\u540c\u7684\u79cd\u5b50\u603b\u4f1a\u5f97\u5230\u76f8\u540c\u7684\u6e38\u620f\u3002\u672c\u83dc\u5355"
   "\u53ea\u663e\u793a\u5f53\u524d\u4f7f\u7528\u7684\u79cd\u5b50\uff1b\u8bf7\u5728\u90a3\u91cc\u5f00\u5173\u3002"),
+ "randomizer_enemy_options_short": (
+  "Enemies %1$d", "Gegner %1$d", "Enemigos %1$d", "Ennemis %1$d", "Nemici %1$d", "Inimigos %1$d",
+  "\u0412\u0440\u0430\u0433\u0438 %1$d", "\u0627\u0644\u0623\u0639\u062f\u0627\u0621 %1$d",
+  "\u0926\u0941\u0936\u094d\u092e\u0928 %1$d", "Musuh %1$d", "\u657c\u4eba %1$d"),
+ "randomizer_enemy_options_title": (
+  "Enemy settings", "Gegner-Einstellungen", "Ajustes de enemigos", "R\u00e9glages des ennemis",
+  "Impostazioni nemici", "Ajustes de inimigos", "\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 "
+  "\u0432\u0440\u0430\u0433\u043e\u0432", "\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0623\u0639\u062f\u0627\u0621",
+  "\u0926\u0941\u0936\u094d\u092e\u0928 \u0938\u0947\u091f\u093f\u0902\u0917", "Pengaturan musuh",
+  "\u657c\u4eba\u8bbe\u7f6e"),
+ "randomizer_enemy_pool_title": (
+  "Which enemy types may appear", "Welche Gegnerarten d\u00fcrfen erscheinen",
+  "Qu\u00e9 tipos de enemigos pueden aparecer", "Quels types d'ennemis peuvent appara\u00eetre",
+  "Quali tipi di nemici possono apparire", "Quais tipos de inimigos podem aparecer",
+  "\u041a\u0430\u043a\u0438\u0435 \u0442\u0438\u043f\u044b \u0432\u0440\u0430\u0433\u043e\u0432 "
+  "\u043c\u043e\u0433\u0443\u0442 \u043f\u043e\u044f\u0432\u043b\u044f\u0442\u044c\u0441\u044f",
+  "\u0623\u064a \u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0623\u0639\u062f\u0627\u0621 \u064a\u0645\u0643\u0646 "
+  "\u0623\u0646 \u062a\u0638\u0647\u0631",
+  "\u0915\u094c\u0928 \u0938\u0947 \u0926\u0941\u0936\u094d\u092e\u0928 \u092a\u094d\u0930\u0915\u093e\u0930 "
+  "\u0926\u093f\u0916 \u0938\u0915\u0924\u0947 \u0939\u0948\u0902", "Jenis musuh yang boleh muncul",
+  "\u54ea\u4e9b\u657c\u4eba\u53ef\u4ee5\u51fa\u73b0"),
+ "randomizer_enemy_mix_title": (
+  "How often the rest roll a mix", "Wie oft die \u00fcbrigen eine Mischung w\u00fcrfeln",
+  "Con qu\u00e9 frecuencia saca una mezcla el resto",
+  "\u00c0 quelle fr\u00e9quence le reste tire une mixture",
+  "Con quale frequenza il resto tira una miscela",
+  "Com que frequ\u00eancia o restante tira uma mistura",
+  "\u041a\u0430\u043a \u0447\u0430\u0441\u0442\u043e \u043e\u0441\u0442\u0430\u043b\u044c\u043d\u044b\u0435 "
+  "\u0431\u0440\u043e\u0441\u0430\u044e\u0442 \u0441\u043c\u0435\u0441\u044c",
+  "\u0643\u0645 \u0645\u0631\u0629 \u064a\u0633\u062d\u0628 \u0627\u0644\u0628\u0627\u0642\u064a "
+  "\u062e\u0644\u0637\u064b\u0627",
+  "\u092c\u093e\u0915\u093c\u0940 \u0915\u093f\u0924\u0928\u0940 \u092c\u093e\u0930 \u092e\u093f\u0936\u094d\u0930\u0923 "
+  "\u0932\u0949\u0917 \u0915\u0930\u0924\u0947 \u0939\u0948\u0902", "Betapa kerap yang lain mengambil campuran",
+  "\u5176\u4f59\u657c\u4eba\u51fa\u73b0\u7279\u6b8a\u5c5e\u6027\u7684\u9891\u7387"),
+ "randomizer_enemy_variety": (
+  "\u00b7 Max. enemy types per room", "\u00b7 H\u00f6chstens Gegnerarten je Raum",
+  "\u00b7 M\u00e1x. tipos de enemigos por habitaci\u00f3n",
+  "\u00b7 Max. types d'ennemis par pi\u00e8ce", "\u00b7 Max. tipi di nemici per stanza",
+  "\u00b7 M\u00e1x. tipos de inimigos por sala",
+  "\u00b7 \u041c\u0430\u043a\u0441. \u0442\u0438\u043f\u044b \u0432\u0440\u0430\u0433\u043e\u0432 \u0432 "
+  "\u043a\u043e\u043c\u043d\u0430\u0442\u0435",
+  "\u00b7 \u062d\u062f \u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0623\u0639\u062f\u0627\u0621 \u0641\u064a "
+  "\u0627\u0644\u063a\u0631\u0641\u0629",
+  "\u00b7 \u092a\u094d\u0930\u0924\u093f \u0915\u092e\u0930\u0947 \u0926\u0941\u0936\u094d\u092e\u0928 \u092a\u094d"
+  "\u0930\u0915\u093e\u0930",
+  "\u00b7 Maks. jenis musuh per bilik", "\u00b7 \u6bcf\u4e2a\u623f\u95f4\u7684\u6700\u5927\u657c\u4eba\u79cd\u7c7b"),
+ "randomizer_one_in": (
+  "1 in %1$d", "1 von %1$d", "1 de %1$d", "1 sur %1$d", "1 su %1$d", "1 em %1$d", "1 \u0438\u0437 %1$d",
+  "1 \u0645\u0646 %1$d", "1 \u092e\u0647\u0902 %1$d", "1 daripada %1$d", "1 \u5728 %1$d"),
 }
 
 LANGS = ["values", "values-de", "values-es", "values-fr", "values-it", "values-pt",

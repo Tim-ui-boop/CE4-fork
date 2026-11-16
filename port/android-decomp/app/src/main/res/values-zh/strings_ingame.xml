@@ -512,4 +512,10 @@
     <string name="randomizer_weapons_short">武器 %1$d</string>
     <string name="randomizer_minus">−</string>
     <string name="randomizer_plus">+</string>
+    <string name="randomizer_enemy_options_short">敼人 %1$d</string>
+    <string name="randomizer_enemy_options_title">敼人设置</string>
+    <string name="randomizer_enemy_pool_title">哪些敼人可以出现</string>
+    <string name="randomizer_enemy_mix_title">其余敼人出现特殊属性的频率</string>
+    <string name="randomizer_enemy_variety">· 每个房间的最大敼人种类</string>
+    <string name="randomizer_one_in">1 在 %1$d</string>
 </resources>

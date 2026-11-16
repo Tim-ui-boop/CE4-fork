@@ -130,6 +130,12 @@ final class SeedStore {
       f.on = prefs.getBoolean("seedOn_" + f.id, false);
       f.chance = prefs.getInt("seedChance_" + f.id, 100);
       f.weapons = prefs.getInt("seedWeapons_" + f.id, 0);
+      // 0.99.16: a feature's pool/ratios (the enemies feature); a pref from before they existed stays 0 =
+      // "the defaults of the core", but the feature starts with the PC randomizer's own defaults
+      if (f.hasEnemyOptions()) {
+        f.pool = prefs.getInt("seedPool_" + f.id, RandomizerConfig.ENEMY_POOL_DEFAULT);
+        f.ratios = prefs.getInt("seedRatios_" + f.id, RandomizerConfig.ENEMY_RATIOS_DEFAULT);
+      }
     }
     return config;
   }
@@ -144,6 +150,10 @@ final class SeedStore {
       edit.putBoolean("seedOn_" + f.id, f.on);
       edit.putInt("seedChance_" + f.id, f.chance);
       edit.putInt("seedWeapons_" + f.id, f.weapons);
+      if (f.hasEnemyOptions()) {
+        edit.putInt("seedPool_" + f.id, f.pool);
+        edit.putInt("seedRatios_" + f.id, f.ratios);
+      }
       any |= f.on;
     }
     // the item randomizer stays the cheat bit it always was in the core (runtime/cheats.cpp, patch 0218): bit 1024,

@@ -332,6 +332,10 @@ public final class CoreBridge {
   /** The merchant randomizer's options: `chance` the percent of merchants that offer new goods (0..100),
    *  `weapons` a bit per weapon in the core's list (0: its default set). Cores without it ignore it. */
   public static native void setMerchantOptions(int chance, int weapons);
+  /** The enemy randomizer's options (0.99.16): `pool` a bit per enemy kind that may replace an ordinary
+   *  Ganado (0: none replaced), `ratios` the mix chances packed one nibble each — bits 0..3 plaga, 4..7
+   *  helmet, 8..11 shield, 12..15 sub-boss (0 = never, 15 = every one). Cores without it ignore it. */
+  public static native void setEnemyOptions(int pool, int ratios);
   /** "Gentler QTEs" (CoreMenu, comfort controls, 0.99.15): Professional's quick-time events as Normal's
    *  (runtime/qte_touch.cpp re4_qte_level, patch 0232); cores before 0.99.15 leave it out. */
   public static native void setGentleQte(boolean on);

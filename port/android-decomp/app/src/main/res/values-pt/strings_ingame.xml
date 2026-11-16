@@ -518,4 +518,10 @@
     <string name="randomizer_weapons_short">Armas %1$d</string>
     <string name="randomizer_minus">−</string>
     <string name="randomizer_plus">+</string>
+    <string name="randomizer_enemy_options_short">Inimigos %1$d</string>
+    <string name="randomizer_enemy_options_title">Ajustes de inimigos</string>
+    <string name="randomizer_enemy_pool_title">Quais tipos de inimigos podem aparecer</string>
+    <string name="randomizer_enemy_mix_title">Com que frequência o restante tira uma mistura</string>
+    <string name="randomizer_enemy_variety">· Máx. tipos de inimigos por sala</string>
+    <string name="randomizer_one_in">1 em %1$d</string>
 </resources>

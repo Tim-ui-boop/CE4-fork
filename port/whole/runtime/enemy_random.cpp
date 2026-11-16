@@ -31,6 +31,16 @@
 // that enemy dies); entries that are not ordinary Ganados (ids 0x10..0x20 except the trader 0x18, `set` 0 =
 // "Normal", no chainsaw, trader, Garrador or gatling form, t_emlist.cpp); waves and reinforcements (scripts create
 // them later with EmSetFromList2, never through EmSetFromList).
+//
+// The options of the PC randomizer's "Enemy settings" (0.99.16, the owner's choice of 16.11.2026: its replacements
+// pool, its ratios and its variety limit; not its HP tab): a room rolls its kinds from the pool
+// (re4_core_set_enemy_options), an ordinary Ganado becomes one of them at its new place — a dog, an Armadura, a
+// Regenerator — at most `variety` pool kinds a room and at most one of them a sub-boss, never the last of a
+// kind, never an entry a script names; the Ganados that stay roll the ratios: a plaga in the head (flag bit 20 of
+// every family, t_emlist.cpp), a ballistic helmet (bit 19, military 0x1D..0x20; a helmet rules out the plaga, as
+// the PC tool says), a shield (bit 31 of the shield families), a hammer (bit 29, zealot and military) — a
+// "1 in 15-k" chance a nibble of the ratios names. A new kind sets no flags of the old family (the bits are
+// family-relative, t_emlist.cpp's tables); behaviour, hp and guard radius stay the entry's own.
 #include "types.h"
 #include "global.h"
 #include "em.h"
@@ -46,6 +56,7 @@ extern GLOBAL_WK* pG;
 
 extern "C" void re4_log(const char* fmt, ...);
 extern "C" void re4_core_set_enemy_random(int seed);
+extern "C" void re4_core_set_enemy_options(int pool, int ratios);
 extern "C" void re4_enemy_random_room(void);
 extern "C" int re4_enemy_random_entry(int no, EM_LIST* out);
 extern "C" int re4_enemy_random_extra(EM_LIST* out);
@@ -66,6 +77,34 @@ const RoomRow kRooms[] = {
 };
 
 volatile int gSeed;  // 20 bits, 0 off (the app's switch)
+
+// The enemy options of the app (re4_core_set_enemy_options, 0.99.16: a port of the PC randomizer's "Enemy
+// settings"). `gPool`: a bit per kind of kPoolKinds that may replace an ordinary Ganado. `gRatios` the mix, one
+// nibble per chance (0 never .. 15 most of them): bits 0..3 plaga, 4..7 helmet, 8..11 shield, 12..15 sub-boss
+// (the hammer), bits 16..17 the variety cap of pool kinds a room (1..4, the engine enemy kinds' own limit).
+volatile int gPool;
+volatile int gRatios;
+
+// A kind of the pool: what an ordinary Ganado becomes (t_emlist.cpp's tables). The kind's own model loads on
+// demand (module_loader); a room that cannot hold it simply does not create it (kinds stay within the cap).
+struct Kind {
+    u8 id;
+    u8 type;
+    u8 set;
+    u16 minHp;  // the PC tool's own floor (0: the entry's own hp stays), so a replacement keeps its strength
+};
+const Kind kPoolKinds[] = {
+    {0x16, 4, 0, 0},     // b0: Chainsaw Man ("EM16 C.S.")
+    {0x1D, 2, 0, 0},     // b1: Gatling Man
+    {0x1B, 10, 0, 0},    // b2: Garrador ("EM1C ClawMan")
+    {0x2D, 0, 0, 0},     // b3: Novistador (InsectHuman; the PC randomizer keeps it off by default too)
+    {0x22, 0, 0, 1000},  // b4: Dog (Colmillos, "Enemy Dog")
+    {0x23, 0, 0, 0},     // b5: Crow
+    {0x26, 0, 0, 1000},  // b6: Cow
+    {0x3C, 0, 0, 2000},  // b7: Armadura ("Armor", Gray + AXE)
+    {0x36, 0, 0, 3000},  // b8: Regenerator ("Regenerater", Normal A)
+    {0x36, 2, 0, 3000},  // b9: Iron Maiden (Strong A)
+};
 
 u32 mix(u32 x)
 {
@@ -147,6 +186,21 @@ struct Place {
 
 constexpr int kMaxCopies = 2;
 
+// The chance nibble of `ratios` (re4_core_set_enemy_options) as a percent roll: a count of k of the nibble's
+// 15 steps is "one in (16 - k)": k 0 never, 15 every one of them. The PC randomizer's 1:1..1:9 map 15..7.
+bool ratioHit(int ratios, int shift, u32 roll)
+{
+    const int k = (ratios >> shift) & 0xF;
+    return k > 0 && (roll % (u32) (16 - k)) == 0;
+}
+
+// The pool's variety cap of gRatios bits 16..17: 1..4 pool kinds a room (0: the core's own default of 4).
+int varietyCap()
+{
+    const int cap = (__atomic_load_n(&gRatios, __ATOMIC_RELAXED) >> 16) & 3;
+    return cap == 0 ? 4 : cap;
+}
+
 struct Plan {
     bool on;
     int room, list, kind;
@@ -163,6 +217,12 @@ struct Plan {
     } copies[kMaxCopies];
     int copyCount, copyNext, copiesMade, copiesFailed;
     int movers, swapped, nearby, spots, protectedByArea, copyRefused;
+    // 0.99.16, the PC randomizer's kinds: the pool kinds this room rolls, their count bounded by varietyCap();
+    // `swap[entry]` -1 none, else the kPoolKinds index the entry becomes; `swapped` the ones changed by kind
+    int rolledKind[10];
+    int rolledCount;
+    int swapKind[256];
+    int kindSwaps;
     char why[96];
     char refused[64];
 };
@@ -349,6 +409,15 @@ extern "C" void re4_core_set_enemy_random(int seed)
     }
 }
 
+// The app (CoreBridge.setEnemyOptions, 0.99.16): the pool of kinds that may replace an ordinary Ganado and the mix
+// ratios; from the next room on. Any thread.
+extern "C" void re4_core_set_enemy_options(int pool, int ratios)
+{
+    __atomic_store_n(&gPool, pool, __ATOMIC_RELAXED);
+    __atomic_store_n(&gRatios, ratios & 0x0003FFFF, __ATOMIC_RELAXED);
+    re4_log("core: random enemies options: pool 0x%x, ratios 0x%x", pool, ratios & 0x0003FFFF);
+}
+
 // Patch 0231, EmSetFromList's start: the room's plan.
 extern "C" void re4_enemy_random_room(void)
 {
@@ -429,6 +498,41 @@ extern "C" void re4_enemy_random_room(void)
         return;
     }
     p.on = true;
+    // the kinds this room may hand out (see the roll below); no entry's kind yet
+    for (int i = 0; i < 256; i++) {
+        p.swapKind[i] = -1;
+    }
+    // 0.99.16: the kinds this room may hand out (the PC randomizer's replacements pool + its variety limit). The
+    // roll is a hash of the seed, list and room, so the same run always rolls the same kinds; sub-boss kinds
+    // (chainsaw, Gatling, Garrador) stay rare: at most one of the room's rolls may pick one.
+    const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
+    p.rolledCount = 0;
+    p.kindSwaps = 0;
+    // a room that counts its enemies by kind keeps the kinds it counts (kCountsOnly): places move, kinds never
+    if (pool && p.kind != kCountsOnly) {
+        const int cap = varietyCap();
+        bool subBossTaken = false;
+        for (int draws = 0; draws < 32 && p.rolledCount < cap; draws++) {
+            const int pick = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x500u + (u32) draws) % 10u);
+            if (!(pool >> pick & 1)) {
+                continue;
+            }
+            bool have = false;
+            for (int k = 0; k < p.rolledCount; k++) {
+                have |= p.rolledKind[k] == pick;
+            }
+            const bool subBoss = pick <= 2;  // chainsaw, Gatling, Garrador: at most one of them a room
+            if (have || (subBoss && subBossTaken)) {
+                continue;
+            }
+            if (subBoss) subBossTaken = true;
+            p.rolledKind[p.rolledCount++] = pick;
+        }
+        if (gLines < 300 && p.rolledCount == 0) {
+            gLines++;
+            re4_log("enemies: random enemies r%03x: the pool rolled no kind", p.room);
+        }
+    }
     // the spots shuffled (Fisher-Yates from the seed), the k-th mover takes the k-th; from there a safe place nearby
     for (int k = ns - 1; k > 0; k--) {
         const int j = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x100u + (u32) k) % (u32) (k + 1));
@@ -450,6 +554,16 @@ extern "C" void re4_enemy_random_room(void)
             p.place[no] = spot;
             p.moved[no] = true;
             p.swapped++;
+        }
+        // 0.99.16: the PC randomizer's mix. The kind roll comes from its own hash, so a place and a kind never
+        // decide each other. Only ordinary Ganados that come now may change kind: a script's named entries and
+        // the room's special forms stay as they are (the movers loop already kept those out).
+        p.swapKind[no] = -1;
+        if (p.rolledCount > 0 && ordinary(pG->Em_list[no]) && comesNow(pG->Em_list[no], no)) {
+            const u32 roll = hashOf(p.seed, (u32) p.list, (u32) p.room, 0x600u + (u32) no);
+            const int pick = (int) (roll % (u32) p.rolledCount);
+            p.swapKind[no] = p.rolledKind[pick];
+            p.kindSwaps++;
         }
         if (comesNow(pG->Em_list[no], no)) {
             now[nn++] = no;
@@ -530,6 +644,11 @@ extern "C" void re4_enemy_random_room(void)
         memcpy(gBefore, pG->Em_list, sizeof(gBefore));
         gChecking = true;
     }
+    if (gLines < 300 && (p.kindSwaps > 0)) {
+        gLines++;
+        re4_log("enemies: random enemies r%03x: %d kinds rolled, %d of %d entries change kind", p.room, p.rolledCount,
+                p.kindSwaps, p.movers);
+    }
 }
 
 // Patch 0231, EmSetFromList for entry `no` (it passed the game's checks): -1 left out, 0 as it is, 1 created from
@@ -544,12 +663,52 @@ extern "C" int re4_enemy_random_entry(int no, EM_LIST* out)
         p.leftDone++;
         return -1;
     }
-    if (!p.moved[no]) {
+    const int kind = p.swapKind[no];
+    if (!p.moved[no] && kind < 0) {
         return 0;
     }
     *out = pG->Em_list[no];
-    memcpy(out->pos, p.place[no].pos, sizeof(out->pos));
-    memcpy(out->rot, p.place[no].rot, sizeof(out->rot));
+    if (p.moved[no]) {
+        memcpy(out->pos, p.place[no].pos, sizeof(out->pos));
+        memcpy(out->rot, p.place[no].rot, sizeof(out->rot));
+    }
+    // 0.99.16, the pool kind: the entry becomes one of the kinds the room rolled (the flag bits are family-
+    // relative, so a new kind starts with no flags of the old family; its place, hp and guard radius stay)
+    if (kind >= 0) {
+        const Kind& to = kPoolKinds[kind];
+        out->id = to.id;
+        out->type = to.type;
+        out->set = to.set;
+        out->flag = 0;
+        out->Character = 0;  // "Chase": the family's own vanilla behaviour
+        // the PC tool's own floors: a replacement is never weaker than its real self (a villager's hp is too
+        // little for a Regenerator; the game's own two bytes hold every value here)
+        if (to.minHp > out->hp) out->hp = to.minHp;
+        return 1;
+    }
+    // 0.99.16, the mix ratios of the PC randomizer, only for an entry that stays a Ganado of its own kind: plaga
+    // bit 20 of every family; the ballistic helmet bit 19 of the military (0x1D..0x20); the shield bit 31 of the
+    // shield families (0x11, 0x19..0x20); the hammer ("Weapon M Star") bit 29 of zealot and military. A helmet
+    // rules out a plaga, as the PC tool's help says. The bits only ever set what the family's own table names;
+    // a room that counts its enemies by kind keeps its kinds' looks as they are (places still move).
+    if (p.kind != kCountsOnly) {
+        const int ratios = __atomic_load_n(&gRatios, __ATOMIC_RELAXED);
+        const u32 roll = hashOf(p.seed, (u32) p.list, (u32) p.room, 0x700u + (u32) no);
+        const u32 roll2 = roll * 2654435761u >> 8;
+        if (ganadoId(out->id) && (out->flag & ((1u << 20) | (1u << 19) | (1u << 31) | (1u << 29))) == 0) {
+            if (out->id >= 0x1D && ratioHit(ratios, 4, roll)) {
+                out->flag |= 1u << 19;  // the ballistic helmet; its ganado carries no plaga
+            } else if (ratioHit(ratios, 0, roll)) {
+                out->flag |= 1u << 20;  // a plaga in its head
+            }
+            if ((out->id == 0x11 || (out->id >= 0x19 && out->id <= 0x20)) && ratioHit(ratios, 8, roll2)) {
+                out->flag |= 1u << 31;  // the shield
+            }
+            if (out->id >= 0x19 && out->id <= 0x20 && ratioHit(ratios, 12, roll2 ^ 0x5Fu)) {
+                out->flag |= 1u << 29;  // the hammer
+            }
+        }
+    }
     return 1;
 }
 

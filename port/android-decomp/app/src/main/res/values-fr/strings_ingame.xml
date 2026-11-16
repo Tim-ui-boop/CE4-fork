@@ -519,4 +519,10 @@
     <string name="randomizer_weapons_short">Armes %1$d</string>
     <string name="randomizer_minus">−</string>
     <string name="randomizer_plus">+</string>
+    <string name="randomizer_enemy_options_short">Ennemis %1$d</string>
+    <string name="randomizer_enemy_options_title">Réglages des ennemis</string>
+    <string name="randomizer_enemy_pool_title">Quels types d\'ennemis peuvent apparaître</string>
+    <string name="randomizer_enemy_mix_title">À quelle fréquence le reste tire une mixture</string>
+    <string name="randomizer_enemy_variety">· Max. types d\'ennemis par pièce</string>
+    <string name="randomizer_one_in">1 sur %1$d</string>
 </resources>

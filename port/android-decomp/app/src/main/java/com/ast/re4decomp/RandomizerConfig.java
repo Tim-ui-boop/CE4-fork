@@ -42,11 +42,7 @@ final class RandomizerConfig {
     int weapons;
 
     Feature(String id, String label, boolean on, int chance) {
-      this.id = id;
-      this.label = label;
-      this.on = on;
-      this.chance = chance;
-      this.weapons = 0;
+      this(id, label, on, chance, 0, 0);
     }
 
     boolean hasChance() {
@@ -55,6 +51,26 @@ final class RandomizerConfig {
 
     boolean hasWeapons() {
       return id.equals("merchant");
+    }
+
+    /** The enemies feature has a kind pool and ratio mix instead (0.99.16); see ENEMY_POOL and packRatios. */
+    int pool;
+
+    /** The ratio mix packed one nibble each: plaga, helmet, shield, sub-boss; bits 16..17 the variety cap. */
+    int ratios;
+
+    boolean hasEnemyOptions() {
+      return id.equals("enemies");
+    }
+
+    Feature(String id, String label, boolean on, int chance, int pool, int ratios) {
+      this.id = id;
+      this.label = label;
+      this.on = on;
+      this.chance = chance;
+      this.weapons = 0;
+      this.pool = pool;
+      this.ratios = ratios;
     }
   }
 
@@ -70,6 +86,38 @@ final class RandomizerConfig {
   /** The core's default set: everything but Chicago Typewriter, Handcannon and the Rocket Launcher. */
   static final int WEAPONS_DEFAULT = ~((1 << 11) | (1 << 15) | (1 << 16)) & ((1 << 17) - 1);
 
+  /**
+   * The enemy kinds the enemy randomizer may turn an ordinary Ganado into, in the core's bit order
+   * (runtime/enemy_random.cpp kPoolKinds). Bit i of the feature's `pool` answers "may the i-th kind appear".
+   */
+  static final String[] ENEMY_POOL = {
+      "Chainsaw Man", "Gatling Man", "Garrador", "Novistador", "Dog", "Crow", "Cow", "Armadura",
+      "Regenerator", "Iron Maiden",
+  };
+  /** The default pool: the PC randomizer's own defaults keep Novistador, Crow and Cow off (its help text). */
+  static final int ENEMY_POOL_DEFAULT = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 4) | (1 << 7) | (1 << 8) | (1 << 9);
+  /** The ratio sliders' shifts in the packed `ratios`: a step k means "one in 16 - k" (0 never, 15 every one). */
+  static final String[] ENEMY_RATIOS = {"Plaga", "Helmet", "Shield", "Sub-boss"};
+  static final int[] RATIO_SHIFT = {0, 4, 8, 12};
+  static final int RATIO_OFF = 0, RATIO_MAX = 15;
+  /** The variety cap: pool kinds a room may roll (bits 16..17 of `ratios`; 0: the core's default of 4). */
+  static final int VARIETY_MASK = 3, VARIETY_SHIFT = 16, VARIETY_DEFAULT = 3;
+
+  /** Packs the four ratio steps (0..15 each) and the variety cap (1..4) into one int, as the core reads it. */
+  static int packRatios(int plaga, int helmet, int shield, int subBoss, int variety) {
+    int out = 0;
+    int[] steps = {plaga, helmet, shield, subBoss};
+    for (int i = 0; i < 4; i++) {
+      out |= Math.max(RATIO_OFF, Math.min(RATIO_MAX, steps[i])) << RATIO_SHIFT[i];
+    }
+    return out | (Math.max(1, Math.min(4, variety)) << VARIETY_SHIFT);
+  }
+
+  /** The mix the enemies feature starts with — the PC tool's Default profile flavor: plaga its 5, helmet its 1
+   *  (rare), shield its 7, the armored hammer about its 1:10, the variety limit its 3. One constant, so the page,
+   *  the store and the seed file all agree on "the defaults". */
+  static final int ENEMY_RATIOS_DEFAULT = packRatios(5, 1, 7, 6, VARIETY_DEFAULT);
+
   int seed;
   String name = "";
 
@@ -82,7 +130,10 @@ final class RandomizerConfig {
   {
     features.put("merchant", new Feature("merchant", "Random merchant stock", false, 100));
     features.put("items", new Feature("items", "Random items", false, 0));
-    features.put("enemies", new Feature("enemies", "Random enemies", false, 0));
+    // 0.99.16: the PC randomizer's "Enemy settings" (the owner's choice of 16.11.2026): its replacements pool,
+    // its ratios and its variety limit; its HP tab stays out. Defaults are that tool's own defaults.
+    features.put("enemies", new Feature("enemies", "Random enemies", false, 0, ENEMY_POOL_DEFAULT,
+        ENEMY_RATIOS_DEFAULT));
   }
 
   RandomizerConfig() {}
@@ -112,6 +163,8 @@ final class RandomizerConfig {
       mine.on = theirs.on;
       mine.chance = theirs.chance;
       mine.weapons = theirs.weapons;
+      mine.pool = theirs.pool;
+      mine.ratios = theirs.ratios;
     }
   }
 
@@ -148,6 +201,10 @@ final class RandomizerConfig {
       out.append(f.id).append(' ').append(f.on ? "on" : "off");
       if (f.hasChance() && f.chance != 100) out.append(' ').append(f.chance);
       if (f.hasWeapons() && f.weapons != 0) out.append(" w").append(f.weapons);
+      if (f.hasEnemyOptions()) {
+        if (f.pool != ENEMY_POOL_DEFAULT) out.append(" p").append(f.pool);
+        if (f.ratios != ENEMY_RATIOS_DEFAULT) out.append(" r").append(f.ratios);
+      }
       out.append('\n');
     }
     return out.toString();
@@ -175,9 +232,17 @@ final class RandomizerConfig {
         if (part.length > 2) {
           String third = part[2];
           if (third.startsWith("w")) f.weapons = parse(third.substring(1));
+          else if (third.startsWith("p")) f.pool = parse(third.substring(1));
+          else if (third.startsWith("r")) f.ratios = parse(third.substring(1));
           else f.chance = Math.max(1, Math.min(100, parse(third)));
         }
-        if (part.length > 3 && part[3].startsWith("w")) f.weapons = parse(part[3].substring(1));
+        if (part.length > 3) {
+          // third and fourth column both carry an option: the merchant's weapon mask (older files), the
+          // enemies' packed ratios (0.99.16)
+          if (part[3].startsWith("w")) f.weapons = parse(part[3].substring(1));
+          else if (part[3].startsWith("r")) f.ratios = parse(part[3].substring(1));
+          else if (part[3].startsWith("p")) f.pool = parse(part[3].substring(1));
+        }
       }
     }
     if (format > FORMAT) throw new IOException("This seed comes from a newer version (" + format + ")");
@@ -219,10 +284,14 @@ final class RandomizerConfig {
       return;
     }
     final int s = seed == 0 ? 0 : seed;
-    CoreBridge.setEnemyRandom(feature("enemies").on ? s : 0);
+    final Feature enemies = feature("enemies");
+    CoreBridge.setEnemyRandom(enemies.on ? s : 0);
     final Feature merchant = feature("merchant");
     CoreBridge.setMerchantRandom(merchant.on ? s : 0);
     // phase 5: how often a merchant deals anew, and which weapons he may hand out
     if (merchant.on) CoreBridge.setMerchantOptions(merchant.chance <= 0 ? 100 : merchant.chance, merchant.weapons);
+    // 0.99.16: the enemies' pool and ratios (the PC randomizer's "Enemy settings"); sent also while the switch
+    // is off, so a core that keeps running stops swapping kinds from the next room on
+    CoreBridge.setEnemyOptions(enemies.pool, enemies.ratios);
   }
 }

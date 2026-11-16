@@ -510,4 +510,10 @@
     <string name="randomizer_weapons_short">Senjata %1$d</string>
     <string name="randomizer_minus">−</string>
     <string name="randomizer_plus">+</string>
+    <string name="randomizer_enemy_options_short">Musuh %1$d</string>
+    <string name="randomizer_enemy_options_title">Pengaturan musuh</string>
+    <string name="randomizer_enemy_pool_title">Jenis musuh yang boleh muncul</string>
+    <string name="randomizer_enemy_mix_title">Betapa kerap yang lain mengambil campuran</string>
+    <string name="randomizer_enemy_variety">· Maks. jenis musuh per bilik</string>
+    <string name="randomizer_one_in">1 daripada %1$d</string>
 </resources>

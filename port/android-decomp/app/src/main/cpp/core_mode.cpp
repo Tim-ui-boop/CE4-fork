@@ -121,6 +121,7 @@ struct CoreApi {
   void (*setEnemyRandom)(int){};  // optional (cores since 12.11.2026, 0.99.12): the cheat "Random enemies"
   void (*setMerchantRandom)(int){};  // optional (cores since this build): the cheat "Random merchant stock"
   void (*setMerchantOptions)(int, unsigned){};  // optional: its chance and weapon pool
+  void (*setEnemyOptions)(int, int){};  // optional (cores since 0.99.16): "Random enemies" pool and ratios
   void (*setGentleQte)(int){};    // optional (cores since 14.11.2026, 0.99.15): "Gentler QTEs"
   void (*swipe)(int){};           // optional (cores since 22.10.2026): a swipe across it
   void (*slash)(float){};         // optional (cores since 22.10.2026): the knife by a swipe
@@ -475,6 +476,7 @@ void loadCore(JNIEnv *env) {
   api.setEnemyRandom = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_set_enemy_random"));
   api.setMerchantRandom = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_set_merchant_random"));
   api.setMerchantOptions = reinterpret_cast<void (*)(int, unsigned)>(dlsym(api.main, "re4_core_set_merchant_options"));
+  api.setEnemyOptions = reinterpret_cast<void (*)(int, int)>(dlsym(api.main, "re4_core_set_enemy_options"));
   api.setGentleQte = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_set_gentle_qte"));
   api.swipe = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_swipe"));
   api.slash = reinterpret_cast<void (*)(float)>(dlsym(api.main, "re4_core_slash"));
@@ -3107,6 +3109,7 @@ void useCoreProcess(const std::string &why) {
   api.setGentleQte = re4ipc_set_gentle_qte;
   api.setMerchantRandom = re4ipc_set_merchant_random;
   api.setMerchantOptions = re4ipc_set_merchant_options;
+  api.setEnemyOptions = re4ipc_set_enemy_options;
   api.swipe = re4ipc_swipe;
   api.slash = re4ipc_slash;
   api.instant = re4ipc_instant;
@@ -3860,6 +3863,12 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setMerchantR
 
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setMerchantOptions(JNIEnv *, jclass, jint chance, jint weapons) {
   if (api.setMerchantOptions) api.setMerchantOptions(chance, (unsigned) weapons);
+}
+
+// The enemy randomizer's options (0.99.16): the kind pool bits and the packed ratio nibbles
+// (cores since 0.99.16; older ones: nothing).
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setEnemyOptions(JNIEnv *, jclass, jint pool, jint ratios) {
+  if (api.setEnemyOptions) api.setEnemyOptions(pool, ratios);
 }
 
 // Gyro aiming (GyroAim.java): the turn rates to the core (cores since 19.10.2026; older ones: none).

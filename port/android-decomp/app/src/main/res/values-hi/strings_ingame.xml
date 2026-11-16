@@ -514,4 +514,10 @@
     <string name="randomizer_weapons_short">हथियार %1$d</string>
     <string name="randomizer_minus">−</string>
     <string name="randomizer_plus">+</string>
+    <string name="randomizer_enemy_options_short">दुश्मन %1$d</string>
+    <string name="randomizer_enemy_options_title">दुश्मन सेटिंग</string>
+    <string name="randomizer_enemy_pool_title">कौन से दुश्मन प्रकार दिख सकते हैं</string>
+    <string name="randomizer_enemy_mix_title">बाक़ी कितनी बार मिश्रण लॉग करते हैं</string>
+    <string name="randomizer_enemy_variety">· प्रति कमरे दुश्मन प्रकार</string>
+    <string name="randomizer_one_in">1 मهं %1$d</string>
 </resources>

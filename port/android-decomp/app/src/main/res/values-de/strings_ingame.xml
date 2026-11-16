@@ -514,4 +514,10 @@
     <string name="randomizer_weapons_short">Waffen %1$d</string>
     <string name="randomizer_minus">−</string>
     <string name="randomizer_plus">+</string>
+    <string name="randomizer_enemy_options_short">Gegner %1$d</string>
+    <string name="randomizer_enemy_options_title">Gegner-Einstellungen</string>
+    <string name="randomizer_enemy_pool_title">Welche Gegnerarten dürfen erscheinen</string>
+    <string name="randomizer_enemy_mix_title">Wie oft die übrigen eine Mischung würfeln</string>
+    <string name="randomizer_enemy_variety">· Höchstens Gegnerarten je Raum</string>
+    <string name="randomizer_one_in">1 von %1$d</string>
 </resources>

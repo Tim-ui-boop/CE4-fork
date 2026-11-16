@@ -128,6 +128,7 @@ struct Core {
     void (*setGentleQte)(int);    // optional (cores since 14.11.2026, 0.99.15): "Gentler QTEs"
     void (*setMerchantRandom)(int);  // optional (cores since this build): "Random merchant stock"
     void (*setMerchantOptions)(int, unsigned);  // optional: its chance and weapon pool
+    void (*setEnemyOptions)(int, int);  // optional (cores since 0.99.16): "Random enemies" pool and ratios
     void (*swipe)(int);
     void (*slash)(float);
     void (*gyro)(float, float);
@@ -806,6 +807,7 @@ bool loadCore(std::string& problem)
     bind(core.setGentleQte, "re4_core_set_gentle_qte", false);
     bind(core.setMerchantRandom, "re4_core_set_merchant_random", false);
     bind(core.setMerchantOptions, "re4_core_set_merchant_options", false);
+    bind(core.setEnemyOptions, "re4_core_set_enemy_options", false);
     bind(core.swipe, "re4_core_swipe");
     bind(core.slash, "re4_core_slash");
     bind(core.gyro, "re4_core_gyro");
@@ -990,6 +992,9 @@ void serve()
             break;
         case kSetMerchantOptions:
             if (core.setMerchantOptions) core.setMerchantOptions(h.a, (unsigned) h.b);
+            break;
+        case kSetEnemyOptions:
+            if (core.setEnemyOptions) core.setEnemyOptions(h.a, h.b);
             break;
         case kTouch: {
             float u, v;

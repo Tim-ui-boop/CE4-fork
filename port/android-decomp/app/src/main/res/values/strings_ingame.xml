@@ -529,4 +529,10 @@
     <string name="randomizer_weapons_short">Weapons %1$d</string>
     <string name="randomizer_minus">−</string>
     <string name="randomizer_plus">+</string>
+    <string name="randomizer_enemy_options_short">Enemies %1$d</string>
+    <string name="randomizer_enemy_options_title">Enemy settings</string>
+    <string name="randomizer_enemy_pool_title">Which enemy types may appear</string>
+    <string name="randomizer_enemy_mix_title">How often the rest roll a mix</string>
+    <string name="randomizer_enemy_variety">· Max. enemy types per room</string>
+    <string name="randomizer_one_in">1 in %1$d</string>
 </resources>
