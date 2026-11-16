@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - "ci/**"
+      - "**"      # every branch builds: the APK is the one way to test without a PC
   pull_request:
       branches:
       - master
