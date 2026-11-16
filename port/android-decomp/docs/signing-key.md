@@ -1,48 +1,35 @@
-# The builds' signing key (one-time setup)
+# The builds' signing key (already set up)
 
 Android only installs an APK **over** an existing one when both carry the same signature. Without a fixed key every
 GitHub build got a fresh throwaway key, so a new test build had to be installed by uninstalling the old one first.
-This is set up once; afterwards each build installs straight over the previous one.
 
-## What to do (once)
+**This is already done for this repository** (16.11.2026): a permanent key exists, its four values are in the
+repository's Actions secrets, and every build signs with it. Nothing needs to be created again.
 
-You need a computer with Java for this one step — a phone cannot run `keytool`. Any Windows/Linux machine will do;
-the key is then stored in the repository's secrets and never needs the computer again.
+## The one unavoidable uninstall
 
-1. Create the key. Pick your own store password and key password (they may be the same) and keep them somewhere safe:
+The app on the phone right now was signed with a throwaway key from an earlier build. Its signature can never be
+matched, so installing the first build that uses the new key still needs one uninstall. **Every build after that
+installs normally, over the previous one.**
 
-       keytool -genkeypair -v -keystore re4.jks -alias re4 \
-         -keyalg RSA -keysize 2048 -validity 10000 \
-         -storepass YOUR_STORE_PASSWORD -keypass YOUR_KEY_PASSWORD \
-         -dname "CN=CubeEvil4 fork, O=personal, C=US"
+## Backing the key up
 
-2. Turn it into one line of text for GitHub (Linux/macOS; on Windows use `certutil -encode` or WSL):
+The key lives in the repository secrets only. A copy with the key, both passwords and its fingerprint is in
+`SIGNING-KEY-BACKUP.txt` in the workspace root (`port/android-decomp/docs/SIGNING-KEY-BACKUP.txt` when copied into the
+repository); it is listed in `.gitignore` and must never be committed or shared.
 
-       base64 -w0 re4.jks > re4.jks.b64
+Losing it means no future build can update an installed app, and every user would have to uninstall once again.
 
-3. Add four repository secrets at
-   `github.com/Tim-ui-boop/CE4-fork/settings/secrets/actions` → **New repository secret**:
+## How it is wired
 
-   | Secret name | Value |
-   | --- | --- |
-   | `RE4_KEYSTORE_BASE64` | the whole contents of `re4.jks.b64` (one long line) |
-   | `RE4_KEYSTORE_PASSWORD` | the store password from step 1 |
-   | `RE4_KEY_ALIAS` | `re4` |
-   | `RE4_KEY_PASSWORD` | the key password from step 1 |
+`app/build.gradle` defines `signingConfigs.re4` when `RE4_KEYSTORE_FILE` is set and uses it for debug builds. The
+workflow's "Signing key" step decodes `RE4_KEYSTORE_BASE64` into a temporary file and exports the four variables.
+Without the secrets the build still works but falls back to the throwaway debug key, and the run prints a warning.
 
-4. Push anything, or run the workflow by hand from the Actions tab. The run says
-   `signing with the permanent key (re4)` in its "Signing key" step.
+| Secret | Value |
+| --- | --- |
+| `RE4_KEYSTORE_BASE64` | the keystore, base64 encoded on one line |
+| `RE4_KEYSTORE_PASSWORD` | the store password |
+| `RE4_KEY_ALIAS` | `re4` |
+| `RE4_KEY_PASSWORD` | the key password |
 
-Until those secrets exist the workflow prints a warning and keeps the throwaway key — nothing breaks, the APK just
-will not install over an older one.
-
-## Important
-
-- **Keep `re4.jks` and the passwords.** Without them no future build can update an installed app; you would have to
-  uninstall again. A backup in two places is worth the minute.
-- **Do not commit `re4.jks`** to the repository. It belongs in the secrets only. The `.gitignore` does not know it, so
-  keep it outside the checkout.
-- **The first install after setting this up still needs one uninstall**, because the app currently on the phone was
-  signed with a throwaway key. From then on updates install normally.
-- If the app on the phone came from the official CubeEvil4 release rather than a build of this fork, its signature can
-  never match; those builds will always need their own installation path.

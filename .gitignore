@@ -28,3 +28,4 @@ tools/research/mwccdbg/retrowin32
 # texture packs (the player's own; never in the repository, port/docs/textur-lader-plan.md)
 *.c4tex
 *.c4tex.part
+SIGNING-KEY-BACKUP.txt
