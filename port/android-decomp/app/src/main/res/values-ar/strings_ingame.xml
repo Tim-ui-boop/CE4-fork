@@ -525,4 +525,6 @@
     <string name="ingame_seed_active">البذرة %1$d \u00b7 %2$d مفعّل</string>
     <string name="ingame_seed_none">لا بذرة: لعبة عادية.</string>
     <string name="ingame_seed_help">تُضبط العناصر العشوائية في صفحة العشوائية بشاشة العنوان، قبل بدء اللعبة: بذرة واحدة لكل جولة، ونفس البذرة تعطي دائماً نفس اللعبة. هذه القائمة تعرض البذرة الحالية فقط؛ فعّلها هناك.</string>
+    <string name="randomizer_open_page">إعدادات العشوائية</string>
+    <string name="randomizer_start">بدء اللعبة</string>
 </resources>

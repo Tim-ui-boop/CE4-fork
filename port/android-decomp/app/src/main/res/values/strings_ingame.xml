@@ -523,4 +523,6 @@
     <string name="ingame_seed_active">Seed %1$d \u00b7 %2$d on</string>
     <string name="ingame_seed_none">No seed: this is a plain game.</string>
     <string name="ingame_seed_help">The randomizers are set on the Randomizer page of the title screen, before the game starts: one seed per run, and the same seed always gives the same game. This menu shows only which seed you are playing; turn the randomizers on or off there.</string>
+    <string name="randomizer_open_page">Randomizer settings</string>
+    <string name="randomizer_start">Start game</string>
 </resources>

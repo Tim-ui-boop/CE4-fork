@@ -512,4 +512,6 @@
     <string name="ingame_seed_active">Semente %1$d \u00b7 %2$d lig.</string>
     <string name="ingame_seed_none">Sem semente: jogo normal.</string>
     <string name="ingame_seed_help">Os aleatorizadores configuram-se na página Aleatório do ecrã de título, antes de começar: uma semente por partida, e a mesma semente dá sempre o mesmo jogo. Este menu mostra apenas a semente em uso; liga-os lá.</string>
+    <string name="randomizer_open_page">Definições do aleatório</string>
+    <string name="randomizer_start">Iniciar jogo</string>
 </resources>

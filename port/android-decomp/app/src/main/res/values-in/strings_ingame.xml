@@ -504,4 +504,6 @@
     <string name="ingame_seed_active">Benih %1$d \u00b7 %2$d hidup</string>
     <string name="ingame_seed_none">Tiada benih: permainan biasa.</string>
     <string name="ingame_seed_help">Pengacak ditetapkan pada halaman Pengacak di skrin tajuk, sebelum permainan bermula: satu benih setiap permainan, dan benih yang sama selalu memberi permainan yang sama. Menu ini hanya menunjukkan benih yang sedang dimainkan; hidupkan di sana.</string>
+    <string name="randomizer_open_page">Tetapan pengacak</string>
+    <string name="randomizer_start">Mula permainan</string>
 </resources>

@@ -511,4 +511,6 @@
     <string name="ingame_seed_active">Seme %1$d \u00b7 %2$d att.</string>
     <string name="ingame_seed_none">Nessun seme: partita normale.</string>
     <string name="ingame_seed_help">I casualizzatori si impostano nella pagina Casuale della schermata del titolo, prima di iniziare: un seme per partita, e lo stesso seme dà sempre lo stesso gioco. Questo menu mostra solo il seme in uso; attivali lì.</string>
+    <string name="randomizer_open_page">Impostazioni casuali</string>
+    <string name="randomizer_start">Avvia il gioco</string>
 </resources>

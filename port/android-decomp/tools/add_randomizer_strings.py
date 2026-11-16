@@ -242,8 +242,18 @@ T = {
   "\u0644\u0627 \u0628\u0630\u0631\u0629: \u0644\u0639\u0628\u0629 \u0639\u0627\u062f\u064a\u0629.",
   "\u0915\u094b\u0908 \u0938\u0940\u0921 \u0928\u0939\u0940\u0902: \u0938\u093e\u0927\u093e\u0930\u0923 \u0916\u0947\u0932\u0964",
   "Tiada benih: permainan biasa.", "\u65e0\u79cd\u5b50\uff1a\u666e\u901a\u6e38\u620f\u3002"),
- "ingame_seed_help": (
-  "The randomizers are set on the Randomizer page of the title screen, before the game starts: one seed per run, "
+ "randomizer_open_page": (
+  "Randomizer settings", "Randomizer-Einstellungen", "Ajustes del aleatorio", "R\u00e9glages al\u00e9atoires",
+  "Impostazioni casuali", "Defini\u00e7\u00f5es do aleat\u00f3rio",
+  "\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0440\u0430\u043d\u0434\u043e\u043c\u0430\u0439\u0437\u0435\u0440\u0430",
+  "\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0639\u0634\u0648\u0627\u0626\u064a\u0629",
+  "\u0930\u0948\u0902\u0921\u092e\u093e\u0907\u091c\u093c\u0930 \u0938\u0947\u091f\u093f\u0902\u0917",
+  "Tetapan pengacak", "\u968f\u673a\u8bbe\u7f6e"),
+ "randomizer_start": (
+  "Start game", "Spiel starten", "Empezar partida", "Lancer le jeu", "Avvia il gioco", "Iniciar jogo",
+  "\u041d\u0430\u0447\u0430\u0442\u044c \u0438\u0433\u0440\u0443", "\u0628\u062f\u0621 \u0627\u0644\u0644\u0639\u0628\u0629",
+  "\u0916\u0947\u0932 \u0936\u0941\u0930\u0942 \u0915\u0930\u0947\u0902", "Mula permainan", "\u5f00\u59cb\u6e38\u620f"),
+ "ingame_seed_help": (  "The randomizers are set on the Randomizer page of the title screen, before the game starts: one seed per run, "
   "and the same seed always gives the same game. This menu shows only which seed you are playing; turn the "
   "randomizers on or off there.",
   "Die Randomizer stellst du auf der Randomizer-Seite des Titelbildschirms ein, bevor das Spiel startet: ein Seed "

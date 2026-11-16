@@ -511,4 +511,6 @@
     <string name="ingame_seed_active">Semilla %1$d \u00b7 %2$d act.</string>
     <string name="ingame_seed_none">Sin semilla: partida normal.</string>
     <string name="ingame_seed_help">Los aleatorizadores se configuran en la página Aleatorio de la pantalla de título, antes de empezar: una semilla por partida, y la misma semilla da siempre el mismo juego. Este menú solo muestra qué semilla juegas; actívalos allí.</string>
+    <string name="randomizer_open_page">Ajustes del aleatorio</string>
+    <string name="randomizer_start">Empezar partida</string>
 </resources>

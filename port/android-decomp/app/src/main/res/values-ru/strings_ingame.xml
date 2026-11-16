@@ -514,4 +514,6 @@
     <string name="ingame_seed_active">Seed %1$d \u00b7 %2$d вкл.</string>
     <string name="ingame_seed_none">Нет seed: обычная игра.</string>
     <string name="ingame_seed_help">Рандомайзеры настраиваются на странице Рандомайзер экрана заголовка, до начала игры: один seed на прохождение, и тот же seed всегда даёт ту же игру. Здесь виден только текущий seed; включают их там.</string>
+    <string name="randomizer_open_page">Настройки рандомайзера</string>
+    <string name="randomizer_start">Начать игру</string>
 </resources>

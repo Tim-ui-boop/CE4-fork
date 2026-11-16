@@ -506,4 +506,6 @@
     <string name="ingame_seed_active">种子 %1$d \u00b7 %2$d 开启</string>
     <string name="ingame_seed_none">无种子：普通游戏。</string>
     <string name="ingame_seed_help">随机项在标题屏幕的随机页面上设置，在游戏开始之前：每一轮一个种子，相同的种子总会得到相同的游戏。本菜单只显示当前使用的种子；请在那里开关。</string>
+    <string name="randomizer_open_page">随机设置</string>
+    <string name="randomizer_start">开始游戏</string>
 </resources>

@@ -513,4 +513,6 @@
     <string name="ingame_seed_active">Graine %1$d \u00b7 %2$d actifs</string>
     <string name="ingame_seed_none">Pas de graine\u00A0: partie normale.</string>
     <string name="ingame_seed_help">Les modes aléatoires se règlent sur la page Aléatoire de l’écran titre, avant de commencer\u00A0: une graine par partie, et la même graine donne toujours le même jeu. Ce menu indique seulement la graine utilisée\u00A0; activez-les là-bas.</string>
+    <string name="randomizer_open_page">Réglages aléatoires</string>
+    <string name="randomizer_start">Lancer le jeu</string>
 </resources>

@@ -511,11 +511,14 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
         CoreBridge.setCheats(cheats);
       }
       // the randomizers of the current seed (RandomizerConfig/SeedStore): one seed for the whole run, its
-      // settings kept in the seed file. The toggles in the in-game menu change this same run, so both places
-      // act on one config instead of two.
-      RandomizerConfig run = seedStore().current();
+      // settings kept in the seed file. The page before the game starts and this menu act on one config.
+      // The messages reach the core only once its reader thread reported hello, which can be a moment after
+      // CoreBridge.start returned; apply once now and once shortly after, so a lost first message cannot leave
+      // the run unrandomized.
+      final RandomizerConfig run = seedStore().current();
       if (run.anyEnabled()) Log.i(TAG, "seed: " + run.seed + " (" + run.summary() + ")");
       run.applyToCore();
+      main.postDelayed(run::applyToCore, 1500);
     }
     setContentView(root);
     // Android Automotive: the bars the car keeps stay off the picture (CarDisplay; nothing elsewhere)
