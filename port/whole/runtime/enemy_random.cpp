@@ -56,6 +56,7 @@
 #include "types.h"
 #include "global.h"
 #include "em.h"
+#include "read.h"
 #include "sce_at.h"
 #include "atari.h"
 
@@ -194,6 +195,15 @@ bool ordinary(const EM_LIST& e)
     return ganadoSpot(e) && !specialForm(e);
 }
 
+// The enemy kinds this room has loaded right now (EmReadModule, 4 slots max, read.cpp:78): a swap must never
+// need a fifth -- the engine then refuses to create the room's own enemies ("Em set failed, Id = 12") and the
+// room script that summoned one follows a null pointer (0.99.17, the crashes of 17.11.2026). Every Ganado
+// sub-kind 0x10..0x20 is a module of its own, so the Chainsaw Man needs its module loaded too.
+bool kindLoaded(const Kind& to)
+{
+    return SearchEmModule(to.id) != 0;
+}
+
 bool deadBit(int no)
 {
     if (pG->em_list_no < 0) {
@@ -263,6 +273,7 @@ struct Plan {
     int rolledCount;
     int swapKind[256];
     int kindSwaps;
+    int swapRefused;  // 0.99.17: the kind was not loaded in the room (never a fifth enemy module)
     char why[96];
     char refused[64];
 };
@@ -558,6 +569,7 @@ extern "C" void re4_enemy_random_room(void)
     const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
     p.rolledCount = 0;
     p.kindSwaps = 0;
+    p.swapRefused = 0;
     // a room that counts its enemies by kind keeps the kinds it counts: places move, kinds never. A family-wide
     // count ("all Ganados dead", 0x10..0x20) survives a form change inside the family, so in unsafe mode its
     // unnamed Ganados may become chainsaw, Gatling or Garrador forms -- the pool kinds that are family members;
@@ -624,8 +636,14 @@ extern "C" void re4_enemy_random_room(void)
         if (p.rolledCount > 0 && ordinary(pG->Em_list[no]) && comesNow(pG->Em_list[no], no)) {
             const u32 roll = hashOf(p.seed, (u32) p.list, (u32) p.room, 0x600u + (u32) no);
             const int pick = (int) (roll % (u32) p.rolledCount);
-            p.swapKind[no] = p.rolledKind[pick];
-            p.kindSwaps++;
+            // 0.99.17: only a kind the room already has loaded -- the engine holds 4 enemy modules, and a fifth
+            // makes it refuse the room's own enemies ("Em set failed") ahead of the scripts' null pointer
+            if (!kindLoaded(kPoolKinds[p.rolledKind[pick]])) {
+                p.swapRefused++;
+            } else {
+                p.swapKind[no] = p.rolledKind[pick];
+                p.kindSwaps++;
+            }
         }
         // 0.99.17: the animals roll in their own pass below (a Crow or Cow is never a mover, so this place never
         // saw them; the owner's wish of 17.11.2026 kept: the sub-boss odds, only in a fully open room)
@@ -672,6 +690,10 @@ extern "C" void re4_enemy_random_room(void)
         const int pick = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x618u + (u32) i) % (u32) p.rolledCount);
         if (family && p.rolledKind[pick] > 2) {
             continue;  // a counting room keeps its family forms
+        }
+        if (!kindLoaded(kPoolKinds[p.rolledKind[pick]])) {
+            p.swapRefused++;
+            continue;  // 0.99.17: never a fifth enemy type in the room
         }
         p.swapKind[i] = p.rolledKind[pick];
         p.kindSwaps++;
@@ -857,12 +879,18 @@ extern "C" int re4_enemy_random_wave(int no, EM_LIST* out)
         if (!(pool & 1) || !ratioHit(ratios, 12, hashOf(p.seed, (u32) p.list, (u32) p.room, 0x690u + (u32) no))) {
             return 0;  // not drawn or the pool holds no Chainsaw Man: the summon stays as it is
         }
+        if (!kindLoaded(kPoolKinds[0])) {
+            return 0;  // the room holds no villager module to become one: never load a fifth kind
+        }
         p.swapKind[no] = 0;
     } else if (p.rolledCount > 0) {
         const int pick = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x680u + (u32) no) % (u32) p.rolledCount);
         // a room that counts (its script may count the wave) stays inside the family with its picks
         if ((p.kind == kCountsFamily || p.kind == kOpenCautioned) && p.rolledKind[pick] > 2) {
             return 0;  // no family kind rolled for this room's wave: the entry stays as it is
+        }
+        if (!kindLoaded(kPoolKinds[p.rolledKind[pick]])) {
+            return 0;  // 0.99.17: only a kind the room already has loaded -- never a fifth enemy type
         }
         p.swapKind[no] = p.rolledKind[pick];
     } else {
@@ -943,11 +971,12 @@ extern "C" int re4_enemy_random_extra(EM_LIST* out)
             }
         }
         re4_log("enemies: random enemies in r%03x (list %d, seed %u%s): %d Ganados at the start, %d ordinary, %d spots: "
-                "%d at a new place nearby, %d on another's spot%s%s",
+                "%d at a new place nearby, %d on another's spot, %d changed kind (%d kept: not loaded here)%s%s",
                 p.room, p.list, p.seed, p.kind == kCountsNarrow ? ", counts only" :
                     p.kind == kCountsFamily ? ", counts family-wide" : p.kind == kOpenCautioned ? ", unsafe mode" : "",
                 p.ganados, p.movers, p.spots,
-                p.nearby, p.swapped, count, p.protectedByArea ? " (some kept: an area waits for them)" : "");
+                p.nearby, p.swapped, p.kindSwaps, p.swapRefused, count,
+                p.protectedByArea ? " (some kept: an area waits for them)" : "");
     }
     if (p.copyNext >= p.copyCount) {
         // (after the copies: their entries are empty ones, whose be_flag the game may set; the check sees the rest)
