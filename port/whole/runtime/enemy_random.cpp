@@ -933,6 +933,11 @@ extern "C" void re4_enemy_random_room(void)
         if (p.ganados >= 10) {
             wanted /= 2;  // a room already thick with Ganados takes fewer extra
         }
+        // a room whose entries the game never fills (r120's sceneried start) always takes at least one:
+        // otherwise a plain phase of the seed leaves it exactly as vanilla, and the owner sees nothing
+        if (nm == 0 && wanted == 0) {
+            wanted = 1;
+        }
         // the room's scenery objects as anchor candidates (object order, capped)
         int anchor[16];
         int na = 0;
@@ -1118,30 +1123,19 @@ extern "C" int re4_enemy_random_wave(int no, EM_LIST* out)
         return 0;  // already created, dead, or no plain Ganado entry of the family
     }
     const RoomRow* r = rowOf(p.room);
-    const bool named = namedIn(r, no);
-    const bool unsafe = unsafeOn();
-    if (named && !unsafe) {
-        return 0;  // safe mode never touches what a script summons by number
+    // crash-proven 17.11.2026: a named summon is the script's cast (the village raid's house zombie, entry
+    // 0x25, is the approaching-the-house cutscene's actor; the swap to the Chainsaw Man -- another class
+    // through the same slots -- broke the scene's calls and crashed it). The script's cast never changes kind.
+    if (namedIn(r, no)) {
+        return 0;
     }
+    const bool unsafe = unsafeOn();
     if (p.kind != kOpen && !(unsafe && (p.kind == kCountsFamily || p.kind == kOpenCautioned))) {
         return 0;  // a counting room's waves keep the family rule below; a narrow count and every locked room keeps all
     }
     *out = e;
-    // the same kind roll the start entries get, on its own hash so a wave and a start entry never decide each other
-    if (named) {
-        // 0.99.17: the sub-boss odds decide whether this summon becomes the Chainsaw Man at all (the one form every
-        // Ganado cast survives: a villager variant of the em10 module, t_emlist.cpp: type 4, the form the village's
-        // own scripts garrison; the pool's other kinds live in other classes a Ganado's slots must not meet)
-        const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
-        const int ratios = __atomic_load_n(&gRatios, __ATOMIC_RELAXED);
-        if (!(pool & 1) || !ratioHit(ratios, 12, hashOf(p.seed, (u32) p.list, (u32) p.room, 0x690u + (u32) no))) {
-            return 0;  // not drawn or the pool holds no Chainsaw Man: the summon stays as it is
-        }
-        if (!kindLoaded(kPoolKinds[0])) {
-            return 0;  // the room holds no villager module to become one: never load a fifth kind
-        }
-        p.swapKind[no] = 0;
-    } else if (p.rolledCount > 0) {
+    // the kinds the plan rolled for this room's unnamed waves (never a script-named entry: its cast is its own)
+    if (p.rolledCount > 0) {
         const int pick = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x680u + (u32) no) % (u32) p.rolledCount);
         // a room that counts (its script may count the wave) stays inside the family with its picks
         if ((p.kind == kCountsFamily || p.kind == kOpenCautioned) && p.rolledKind[pick] > 2) {
@@ -1165,8 +1159,8 @@ extern "C" int re4_enemy_random_wave(int no, EM_LIST* out)
         if (to.minHp > out->hp) out->hp = to.minHp;
         if (gLines < 300) {
             gLines++;
-            re4_log("enemies: random enemies r%03x: the wave's 0x%02x (id 0x%02x, %s) becomes id 0x%02x type %d",
-                    p.room, no, e.id, named ? "a script's named entry" : "an ordinary one", to.id, to.type);
+            re4_log("enemies: random enemies r%03x: the wave's 0x%02x (id 0x%02x) becomes id 0x%02x type %d",
+                    p.room, no, e.id, to.id, to.type);
         }
         return 1;
     }
