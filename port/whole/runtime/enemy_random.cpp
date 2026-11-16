@@ -45,6 +45,14 @@
 // (EmSetFromList2, patch 0234: the cabin's siege, an ambush) take the same kind roll, never another place; a new
 // kind sets no flags of the old family (the bits are family-relative, t_emlist.cpp's tables); behaviour, hp and
 // guard radius stay the entry's own.
+// 0.99.17, fixed 17.11.2026: a room whose Ganados all come as waves kept its plan alive (the wave roll needs it),
+// the waves' own checks refused every way a script summons (the alive bit the wrapper sets only after the create,
+// the work tag `set`, the by-number name every summon carries), and the villager-form branch sat unreachable. Now
+// a room plans its waves even when nothing ordinary stands at the start; a plain Ganado of a wave changes into a
+// pool kind; an entry a script names by number becomes only the Chainsaw Man (the villager's own module form,
+// so a script's Ganado casts stay safe) at the sub-boss odds and only with Unsafe
+// mode on; what a script counts keeps its family rule. Standing Ganados with a work tag and the animals change
+// kind at their own post in their own pass; every wave change gets its own log line.
 #include "types.h"
 #include "global.h"
 #include "em.h"
@@ -153,30 +161,37 @@ bool animalSpot(const EM_LIST& e)
     return (e.id == 0x23 || e.id == 0x26) && e.set == 0;
 }
 
-// An ordinary Ganado: no special form (t_emlist.cpp: chainsaw "EM16 C.S." type 4 of 0x10..0x17 and "EM1F Chain Saw"
-// type 22 or the chainsaw flag of 0x20, "EM18 Trader" type 6, "EM1C ClawMan" 0x1B type 10 and 0x1C types 10, 13,
-// "Gatling Man" 0x1D type 2)
-bool ordinary(const EM_LIST& e)
+// A special form of the Ganado family (t_emlist.cpp's tables): the forms a swap must not take away -- a chainsaw
+// head ("EM16 C.S." type 4 of 0x10..0x17, "EM1F Chain Saw" type 22), the trader's type 6, a claw form
+// ("EM1C ClawMan", "Gatling Man"), Dr. Salvador's head burst (0x20's flag 28). The rest of an entry -- its weapon
+// or work tag (`set`) -- is its own: a kind swap takes the whole entry anyway, so `set` may not protect it
+// (0.99.17: the farm's field workers).
+bool specialForm(const EM_LIST& e)
 {
-    if (!ganadoSpot(e)) {
-        return false;
-    }
     if (e.id <= 0x17 && e.type == 4) {
-        return false;
+        return true;
     }
     if (e.type == 6 && (e.id == 0x13 || e.id == 0x14 || e.id == 0x1E)) {
-        return false;
+        return true;
     }
     if ((e.id == 0x1B && e.type == 10) || (e.id == 0x1C && (e.type == 10 || e.type == 13))) {
-        return false;
+        return true;
     }
     if (e.id == 0x1D && e.type == 2) {
-        return false;
+        return true;
     }
     if (e.id == 0x20 && (e.type == 22 || (e.flag & (1u << 28)))) {
-        return false;
+        return true;
     }
-    return true;
+    return false;
+}
+
+// An ordinary Ganado: a plain "Normal"-set Ganado spot without a special form (t_emlist.cpp: chainsaw "EM16 C.S."
+// type 4 of 0x10..0x17 and "EM1F Chain Saw" type 22 or the chainsaw flag of 0x20, "EM18 Trader" type 6,
+// "EM1C ClawMan" 0x1B type 10 and 0x1C types 10, 13, "Gatling Man" 0x1D type 2)
+bool ordinary(const EM_LIST& e)
+{
+    return ganadoSpot(e) && !specialForm(e);
 }
 
 bool deadBit(int no)
@@ -525,13 +540,12 @@ extern "C" void re4_enemy_random_room(void)
     }
     p.movers = nm;
     p.spots = ns;
-    if (nm == 0) {
-        if (gLines < 300) {
-            gLines++;
-            re4_log("enemies: random enemies in r%03x (list %d, seed %u): no ordinary Ganado to change", p.room, p.list,
-                    p.seed);
-        }
-        return;
+    if (nm == 0 && gLines < 300) {
+        gLines++;
+        // 0.99.17: the plan stays alive anyway -- a room whose enemies all come as the script's waves (the farm,
+        // the village raid) rolls kinds for them; before, this return left the wave changer dead in those rooms
+        re4_log("enemies: random enemies in r%03x (list %d, seed %u): none of the room's Ganados stands here as an "
+                "ordinary one at the start: only the waves roll", p.room, p.list, p.seed);
     }
     p.on = true;
     // the kinds this room may hand out (see the roll below); no entry's kind yet
@@ -613,23 +627,54 @@ extern "C" void re4_enemy_random_room(void)
             p.swapKind[no] = p.rolledKind[pick];
             p.kindSwaps++;
         }
-        // 0.99.16: the animals (the owner's wish of 17.11.2026): a Crow or Cow of the room may become a kind of
-        // the pool too -- each rolls on its own hash, at the sub-boss odds, so a field of crows is not a
-        // Regenerator parade; the counting grades keep the kinds their scripts count.
-        if (p.rolledCount > 0 && animalSpot(pG->Em_list[no]) && comesNow(pG->Em_list[no], no)
-            && !namedIn(row, no) && !waited[no] && p.kind == kOpen) {
-            const int ratios = __atomic_load_n(&gRatios, __ATOMIC_RELAXED);
-            if (ratioHit(ratios, 12, hashOf(p.seed, (u32) p.list, (u32) p.room, 0x610u + (u32) no))) {
-                p.swapKind[no] = p.rolledKind[hashOf(p.seed, (u32) p.list, (u32) p.room, 0x618u + (u32) no)
-                                               % (u32) p.rolledCount];
-                p.kindSwaps++;
-            }
-        }
+        // 0.99.17: the animals roll in their own pass below (a Crow or Cow is never a mover, so this place never
+        // saw them; the owner's wish of 17.11.2026 kept: the sub-boss odds, only in a fully open room)
         if (comesNow(pG->Em_list[no], no)) {
             now[nn++] = no;
         } else if (idle < 0) {
             idle = no;
         }
+    }
+    // 0.99.17: the kinds of the rest that stand here now: a Ganado with a script's work tag (`set` -- the farm's
+    // field workers; a wave entry with such a tag comes through the wave hook instead) and the animals (a Crow or
+    // Cow of the room) change kind at their own post, without moving -- the movers loop above already rolled the
+    // ordinary set-0 ones. Never a named or waited entry, never a special form; the counting grades keep their
+    // family rule; the animals only in a fully open room and at the sub-boss odds (a field of crows is not a
+    // Regenerator parade).
+    for (int i = 0; i < 256; i++) {
+        const EM_LIST& e = pG->Em_list[i];
+        if (e.id == 0 || e.room != (u16) p.room || p.swapKind[i] >= 0) {
+            continue;
+        }
+        const bool animal = animalSpot(e);
+        if (!animal && (!ganadoId(e.id) || specialForm(e))) {
+            continue;
+        }
+        if (!comesNow(e, i) || namedIn(row, i) || waited[i]) {
+            continue;
+        }
+        bool may = p.kind == kOpen;
+        bool family = false;
+        if (!may && unsafe && (p.kind == kCountsFamily || p.kind == kOpenCautioned)) {
+            may = true;
+            family = true;
+        }
+        if (!may || (animal && family)) {
+            continue;  // the animals never in a counting room's family pass
+        }
+        if (p.rolledCount == 0) {
+            continue;
+        }
+        if (animal && !ratioHit(__atomic_load_n(&gRatios, __ATOMIC_RELAXED), 12,
+                                hashOf(p.seed, (u32) p.list, (u32) p.room, 0x610u + (u32) i))) {
+            continue;
+        }
+        const int pick = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x618u + (u32) i) % (u32) p.rolledCount);
+        if (family && p.rolledKind[pick] > 2) {
+            continue;  // a counting room keeps its family forms
+        }
+        p.swapKind[i] = p.rolledKind[pick];
+        p.kindSwaps++;
     }
     // the number: +/- 10 % (rooms with 10 or more Ganados at the start), never in a room that counts (all three
     // of its grades), and never in a room unsafe mode opened (its script may count what the scanner could not see)
@@ -774,10 +819,14 @@ extern "C" int re4_enemy_random_entry(int no, EM_LIST* out)
     return 1;
 }
 
-// Patch 0234, EmSetFromList2 for entry `no` (a script creates it on demand -- the cabin's siege, an ambush): the wave
-// entries the room's start entries also get, minus the places: a wave's place is the script's own, so only a kind
-// ever changes, and only for an ordinary Ganado (never a script-named entry, never a counted kind, never a special
-// form). -1 not at all, 0 as it is, 1 created from `out`.
+// Patch 0234, EmSetFromList2 for entry `no` (a script creates it on demand -- the cabin's siege, an ambush): the
+// wave entries take the room's kind roll, never another place (a wave's place is the script's own). 0.99.17: a
+// summon no longer fails the waves' own checks -- every summon carries its by-number name (that is how the script
+// wrapper works), the alive bit comes only after the create, and `set` is just the work tag a swap overwrites;
+// what stays is what matters: a plain Ganado of the family. An entry a script names by number may become only
+// the Chainsaw Man (the villager's own module form, so a script's Ganado casts stay safe) at the sub-boss odds,
+// and only with Unsafe mode on: the village raid and the cabin's siege open that way. A
+// room that counts keeps its family rule. -1 not at all, 0 as it is, 1 created from `out`.
 extern "C" int re4_enemy_random_wave(int no, EM_LIST* out)
 {
     Plan& p = gPlan;
@@ -785,24 +834,41 @@ extern "C" int re4_enemy_random_wave(int no, EM_LIST* out)
         return 0;  // no plan (the switch off, or the room protected): the entry comes exactly as the game wants
     }
     const EM_LIST& e = pG->Em_list[no];
-    // a script wants this enemy and made it alive now (EmListSetAlive 1); not created, not dead
-    if (!ordinary(e) || (e.be_flag & 2) || deadBit(no) || !(e.be_flag & 1)) {
-        return 0;
+    if ((e.be_flag & 2) || deadBit(no) || !ganadoId(e.id) || specialForm(e)) {
+        return 0;  // already created, dead, or no plain Ganado entry of the family
     }
     const RoomRow* r = rowOf(p.room);
-    if (namedIn(r, no) || (p.kind != kOpen && !(unsafeOn() && p.kind == kOpenCautioned))) {
-        return 0;  // a room that counts or names its enemies keeps the kinds its script expects; unsafe mode opens
-                   // the cautious rooms' waves too, with the family rule below
+    const bool named = namedIn(r, no);
+    const bool unsafe = unsafeOn();
+    if (named && !unsafe) {
+        return 0;  // safe mode never touches what a script summons by number
+    }
+    if (p.kind != kOpen && !(unsafe && (p.kind == kCountsFamily || p.kind == kOpenCautioned))) {
+        return 0;  // a counting room's waves keep the family rule below; a narrow count and every locked room keeps all
     }
     *out = e;
     // the same kind roll the start entries get, on its own hash so a wave and a start entry never decide each other
-    if (p.rolledCount > 0) {
-        int pick = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x680u + (u32) no) % (u32) p.rolledCount);
+    if (named) {
+        // 0.99.17: the sub-boss odds decide whether this summon becomes the Chainsaw Man at all (the one form every
+        // Ganado cast survives: a villager variant of the em10 module, t_emlist.cpp: type 4, the form the village's
+        // own scripts garrison; the pool's other kinds live in other classes a Ganado's slots must not meet)
+        const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
+        const int ratios = __atomic_load_n(&gRatios, __ATOMIC_RELAXED);
+        if (!(pool & 1) || !ratioHit(ratios, 12, hashOf(p.seed, (u32) p.list, (u32) p.room, 0x690u + (u32) no))) {
+            return 0;  // not drawn or the pool holds no Chainsaw Man: the summon stays as it is
+        }
+        p.swapKind[no] = 0;
+    } else if (p.rolledCount > 0) {
+        const int pick = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x680u + (u32) no) % (u32) p.rolledCount);
         // a room that counts (its script may count the wave) stays inside the family with its picks
         if ((p.kind == kCountsFamily || p.kind == kOpenCautioned) && p.rolledKind[pick] > 2) {
             return 0;  // no family kind rolled for this room's wave: the entry stays as it is
         }
         p.swapKind[no] = p.rolledKind[pick];
+    } else {
+        p.swapKind[no] = -1;
+    }
+    if (p.swapKind[no] >= 0) {
         p.kindSwaps++;
         const Kind& to = kPoolKinds[p.swapKind[no]];
         out->id = to.id;
@@ -811,10 +877,15 @@ extern "C" int re4_enemy_random_wave(int no, EM_LIST* out)
         out->flag = 0;
         out->Character = 0;
         if (to.minHp > out->hp) out->hp = to.minHp;
+        if (gLines < 300) {
+            gLines++;
+            re4_log("enemies: random enemies r%03x: the wave's 0x%02x (id 0x%02x, %s) becomes id 0x%02x type %d",
+                    p.room, no, e.id, named ? "a script's named entry" : "an ordinary one", to.id, to.type);
+        }
         return 1;
     }
     // no kind rolled: the wave Ganado still takes the ratios' mix like any other that stays its own kind
-    if (p.kind == kOpen) {
+    if (p.kind == kOpen || p.kind == kOpenCautioned) {
         const int ratios = __atomic_load_n(&gRatios, __ATOMIC_RELAXED);
         const u32 roll = hashOf(p.seed, (u32) p.list, (u32) p.room, 0x780u + (u32) no);
         const u32 roll2 = roll * 2654435761u >> 8;
