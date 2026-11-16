@@ -279,7 +279,7 @@ final class RandomizerDialog extends Dialog {
     final int[] steps = new int[RandomizerConfig.ENEMY_RATIOS.length];
     for (int i = 0; i < steps.length; i++) steps[i] = (f.ratios >> RandomizerConfig.RATIO_SHIFT[i]) & 0xF;
     final int[] variety = {f.ratios >> RandomizerConfig.VARIETY_SHIFT & RandomizerConfig.VARIETY_MASK};
-    if (variety[0] < 1) variety[0] = RandomizerConfig.VARIETY_DEFAULT;
+    if (variety[0] < 1) variety[0] = 4;  // the core's own encoding: 0 in the two bits is its default, the cap 4
 
     LinearLayout list = new LinearLayout(getContext());
     list.setOrientation(LinearLayout.VERTICAL);

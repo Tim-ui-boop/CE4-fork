@@ -103,14 +103,16 @@ final class RandomizerConfig {
   /** The variety cap: pool kinds a room may roll (bits 16..17 of `ratios`; 0: the core's default of 4). */
   static final int VARIETY_MASK = 3, VARIETY_SHIFT = 16, VARIETY_DEFAULT = 3;
 
-  /** Packs the four ratio steps (0..15 each) and the variety cap (1..4) into one int, as the core reads it. */
+  /** Packs the four ratio steps (0..15 each) and the variety cap into one int, as the core reads it. The cap
+   *  1..4 goes into bits 16..17 the core's own way (runtime/enemy_random.cpp varietyCap): 1..3 as themselves,
+   *  4 as 0, the core's "its default" — so the whole setting always fits the 18 bits the core keeps. */
   static int packRatios(int plaga, int helmet, int shield, int subBoss, int variety) {
     int out = 0;
     int[] steps = {plaga, helmet, shield, subBoss};
     for (int i = 0; i < 4; i++) {
       out |= Math.max(RATIO_OFF, Math.min(RATIO_MAX, steps[i])) << RATIO_SHIFT[i];
     }
-    return out | (Math.max(1, Math.min(4, variety)) << VARIETY_SHIFT);
+    return out | ((Math.max(1, Math.min(4, variety)) & 3) << VARIETY_SHIFT);
   }
 
   /** The mix the enemies feature starts with — the PC tool's Default profile flavor: plaga its 5, helmet its 1
