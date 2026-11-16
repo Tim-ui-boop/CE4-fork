@@ -942,11 +942,31 @@ extern "C" void re4_enemy_random_room(void)
         int anchor[16];
         int na = 0;
         const int objNum = SmdGetObjNum();
-        for (int o = 0; o < objNum && na < 16; o++) {
+        // near Leon first (the owner sees nothing when the add lands in a far corner of a big outdoor
+        // room: the anchors are the scenery objects nearest where the player stands, capped at 16)
+        struct AnchorDist { int o; long d2; };
+        AnchorDist near[16];
+        for (int o = 0; o < objNum; o++) {
             cObj* obj = SmdGetObjPtr((u32) o);
-            if (obj != 0) {
-                anchor[na++] = o;
+            if (obj == 0) {
+                continue;
             }
+            const float dx = obj->pos.x - pPL->pos.x;
+            const float dy = obj->pos.y - pPL->pos.y;
+            const float dz = obj->pos.z - pPL->pos.z;
+            const long d2 = (long) (dx * dx + dy * dy + dz * dz);
+            int k = na < 16 ? na++ : 15;
+            while (k > 0 && near[k - 1].d2 > d2) {
+                if (k < 16) {
+                    near[k] = near[k - 1];
+                }
+                k--;
+            }
+            near[k].o = o;
+            near[k].d2 = d2;
+        }
+        for (int k = 0; k < na; k++) {
+            anchor[k] = near[k].o;
         }
         if (na == 0) {
             snprintf(p.addRefused, sizeof(p.addRefused), "no scenery place to stand at");
@@ -1020,6 +1040,12 @@ extern "C" void re4_enemy_random_room(void)
                 Plan::Add& ad = p.adds[p.addCount++];
                 ad.kind = kind;
                 ad.at = at;
+                if (gLines < 300) {
+                    gLines++;
+                    const Kind& to = kPoolKinds[kind];
+                    re4_log("enemies: random enemies r%03x: an added id 0x%02x type %d at (%d, %d, %d)",
+                            p.room, to.id, to.type, at.pos[0], at.pos[1], at.pos[2]);
+                }
                 if (subBoss) {
                     subBossAdds++;
                 }
@@ -1125,9 +1151,54 @@ extern "C" int re4_enemy_random_wave(int no, EM_LIST* out)
     const RoomRow* r = rowOf(p.room);
     // crash-proven 17.11.2026: a named summon is the script's cast (the village raid's house zombie, entry
     // 0x25, is the approaching-the-house cutscene's actor; the swap to the Chainsaw Man -- another class
-    // through the same slots -- broke the scene's calls and crashed it). The script's cast never changes kind.
+    // through the same slots -- broke the scene's calls and crashed it). The script's cast never changes kind
+    // -- but it may wear another costume: the villager's own flag bits (t_emlist.cpp's tables -- a plaga
+    // head, a ballistic helmet, a torch, a hammer) are looks of the same skeleton, and the scene's own
+    // animations still fit the body they were made for. The ratios decide, the same odds the PC tool's mix
+    // names, on the wave's own hash, so the same seed always dresses the same cast.
     if (namedIn(r, no)) {
-        return 0;
+        if (!ganadoId(e.id)) {
+            return 0;  // the cast's non-Ganado members (the cow, the bird) wear no costume
+        }
+        const int ratios = __atomic_load_n(&gRatios, __ATOMIC_RELAXED);
+        const u32 roll = hashOf(p.seed, (u32) p.list, (u32) p.room, 0x790u + (u32) no);
+        const u32 roll2 = roll * 2654435761u >> 8;
+        EM_LIST* dressed = out;  // the costume is written into the copy the patch creates from
+        *dressed = e;
+        u8 id = e.id;
+        bool changed = false;
+        if (id >= 0x19 && id <= 0x20 && ratioHit(ratios, 4, roll)) {
+            // the ballistic helmet of a military ganado: id 0x1D..0x20 (the zealot families' hats are
+            // their own models' business, not a flag)
+            if (id >= 0x1D) {
+                dressed->flag |= 1u << 19;
+                changed = true;
+            }
+        }
+        if (id <= 0x17) {
+            // a villager's weapon costume (t_emlist.cpp's own flag table: bit 8 hat, bit 9 hat2, bit 11 torch,
+            // bit 16 mugen, bit 17 bomb, bit 27 sickle, bit 29 axe, bit 30 bucket, bit 31 suki): clothes and
+            // tools of the same body, so the scene's villager animations still fit. The hats always (pure
+            // looks), the tools only with Unsafe mode (a torch in a scene's hands changes the beat), and
+            // the plaga deliberately left out (a scene's scripted death and a plaga head are not friends).
+            const u32 pick = hashOf(p.seed, (u32) p.list, (u32) p.room, 0x795u + (u32) no);
+            static const u8 bits[] = {8, 9, 11, 16, 17, 27, 29, 30, 31};
+            const int which = (int) (pick % (u32) (sizeof(bits) / sizeof(bits[0])));
+            const bool tool = bits[which] >= 16 || bits[which] == 11;
+            const u32 bit = 1u << bits[which];
+            if ((e.flag & bit) == 0 && (!tool || unsafeOn())
+                && ratioHit(ratios, 8, pick >> 4)) {
+                dressed->flag |= bit;
+                changed = true;
+            }
+        }
+        (void) roll2;
+        if (changed && gLines < 300) {
+            gLines++;
+            re4_log("enemies: random enemies r%03x: the named wave's 0x%02x wears a costume (flag 0x%08x)",
+                    p.room, no, dressed->flag);
+        }
+        return changed ? 1 : 0;
     }
     const bool unsafe = unsafeOn();
     if (p.kind != kOpen && !(unsafe && (p.kind == kCountsFamily || p.kind == kOpenCautioned))) {
