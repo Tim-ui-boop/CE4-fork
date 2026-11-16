@@ -111,7 +111,7 @@ public final class StartupActivity extends Activity {
     worker.execute(()->{
       byte[] image=null;String failure="";boolean unsupported=false;
       try {
-        if(operation==CardFlow.Operation.DELETE)saveStore.delete(slot);
+        if(operation==CardFlow.Operation.DELETE){saveStore.delete(slot);SeedStore.stamp(new File(getFilesDir(),"saves"),slot,0);}
         else {image=saveStore.read(slot);String problem=NativeBridge.savedGameProblem(image);if(problem==null||!problem.isEmpty()){unsupported=true;failure=problem==null?"Save verification failed":problem;image=null;}}
       }catch(IOException exception){failure=exception.getMessage()==null?exception.toString():exception.getMessage();}
       final byte[] data=image;final String problem=failure;final boolean profileError=unsupported;

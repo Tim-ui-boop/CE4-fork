@@ -157,6 +157,24 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   static final String ENEMY_SEED = "enemySeed";
   /** The cheat "Random merchant stock": its seed, 0 off (CoreBridge.setMerchantRandom). */
   static final String MERCHANT_SEED = "merchantSeed";
+
+  private SeedStore seedCache;
+  /** The seed files and the run in use (RandomizerConfig); one instance per activity. */
+  SeedStore seedStore() {
+    if (seedCache == null) seedCache = new SeedStore(getFilesDir(), getSharedPreferences(GAME_PREFS, MODE_PRIVATE));
+    return seedCache;
+  }
+  /** The seed of the run in use, for another activity (a save is stamped with it); 0 when no randomizer runs. */
+  static int currentSeed(android.content.Context context) {
+    SeedStore store = new SeedStore(context.getFilesDir(),
+        context.getSharedPreferences(GAME_PREFS, android.content.Context.MODE_PRIVATE));
+    RandomizerConfig run = store.current();
+    return run.anyEnabled() ? run.seed : 0;
+  }
+  /** The seed file the current run came from, "" when it has none yet (a run started from the in-game menu). */
+  String activeSeedFile() {
+    return getSharedPreferences(GAME_PREFS, MODE_PRIVATE).getString(SeedStore.PREF_ACTIVE, "");
+  }
   private static final int REQUEST_EXPORT_ALL = 2, REQUEST_IMPORT = 3, REQUEST_REPORT = 4, REQUEST_TEXTURES = 5,
       REQUEST_EXPORT_ZIP = 6;
   // "Import texture pack" (Cheats & Mods, TexturePacks): who hears the import, its cancel switch
@@ -492,12 +510,12 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
         if (cheats != 0) Log.i(TAG, "cheats: " + cheats);
         CoreBridge.setCheats(cheats);
       }
-      int enemySeed = getSharedPreferences(GAME_PREFS, MODE_PRIVATE).getInt(ENEMY_SEED, 0);
-      if (enemySeed != 0) Log.i(TAG, "cheats: random enemies with seed " + enemySeed);
-      CoreBridge.setEnemyRandom(enemySeed);
-      int merchantSeed = getSharedPreferences(GAME_PREFS, MODE_PRIVATE).getInt(MERCHANT_SEED, 0);
-      if (merchantSeed != 0) Log.i(TAG, "cheats: random merchant stock with seed " + merchantSeed);
-      CoreBridge.setMerchantRandom(merchantSeed);
+      // the randomizers of the current seed (RandomizerConfig/SeedStore): one seed for the whole run, its
+      // settings kept in the seed file. The toggles in the in-game menu change this same run, so both places
+      // act on one config instead of two.
+      RandomizerConfig run = seedStore().current();
+      if (run.anyEnabled()) Log.i(TAG, "seed: " + run.seed + " (" + run.summary() + ")");
+      run.applyToCore();
     }
     setContentView(root);
     // Android Automotive: the bars the car keeps stay off the picture (CarDisplay; nothing elsewhere)
@@ -1139,16 +1157,26 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       CoreBridge.setCheats(bits);
     }
 
+    @Override public RandomizerConfig currentRun() {
+      return seedStore().current();
+    }
+
     @Override public void enemyRandomChanged(int seed) {
-      getSharedPreferences(GAME_PREFS, MODE_PRIVATE).edit().putInt(ENEMY_SEED, seed).apply();
-      Log.i(TAG, "cheats: random enemies " + (seed != 0 ? "on with seed " + seed : "off"));
-      CoreBridge.setEnemyRandom(seed);
+      RandomizerConfig run = seedStore().current();
+      if (seed != 0 && run.seed == 0) run.seed = seed;
+      run.feature("enemies").on = seed != 0;
+      seedStore().setCurrent(run, activeSeedFile());
+      Log.i(TAG, "seed: random enemies " + (seed != 0 ? "on, run seed " + run.seed : "off"));
+      CoreBridge.setEnemyRandom(seed != 0 ? run.seed : 0);
     }
 
     @Override public void merchantRandomChanged(int seed) {
-      getSharedPreferences(GAME_PREFS, MODE_PRIVATE).edit().putInt(MERCHANT_SEED, seed).apply();
-      Log.i(TAG, "cheats: random merchant stock " + (seed != 0 ? "on with seed " + seed : "off"));
-      CoreBridge.setMerchantRandom(seed);
+      RandomizerConfig run = seedStore().current();
+      if (seed != 0 && run.seed == 0) run.seed = seed;
+      run.feature("merchant").on = seed != 0;
+      seedStore().setCurrent(run, activeSeedFile());
+      Log.i(TAG, "seed: random merchant stock " + (seed != 0 ? "on, run seed " + run.seed : "off"));
+      CoreBridge.setMerchantRandom(seed != 0 ? run.seed : 0);
     }
 
     @Override public void restartGame() {

@@ -137,6 +137,9 @@ final class CoreMenu extends Dialog {
     /** The cheat "Random merchant stock": a new seed each time it goes on, 0 off (CoreActivity.MERCHANT_SEED
      *  holds it). */
     void merchantRandomChanged(int seed);
+    /** The run in use (RandomizerConfig/SeedStore): one seed and the randomizers it switches on. The in-game
+     *  toggles show and change this same run. */
+    RandomizerConfig currentRun();
     /** A cheat button (1 Killer7, 2 attache case L, 3 money, 4 extra games, 5..9 weapons), off the main thread:
      *  CoreBridge.cheatAction's answer. */
     int cheatAction(int what);
@@ -1872,20 +1875,17 @@ final class CoreMenu extends Dialog {
       cheatBits = withRandomItems(cheatBits, on, new java.util.Random().nextInt(1 << 20));
       host.cheatsChanged(cheatBits);
     });
-    // "Random enemies" next to it (decision of the project owner, 12.11.2026; port/docs/gegner-randomizer-plan.md
-    // stage 1): a seed of its own, a new one each time it goes on
-    final SharedPreferences game = getContext().getSharedPreferences(CoreActivity.GAME_PREFS, Context.MODE_PRIVATE);
-    toggle(items, R.string.ingame_cheat_random_enemies, game.getInt(CoreActivity.ENEMY_SEED, 0) != 0, on -> {
-      int seed = on ? 1 + new java.util.Random().nextInt((1 << 20) - 1) : 0;
-      game.edit().putInt(CoreActivity.ENEMY_SEED, seed).apply();
-      host.enemyRandomChanged(seed);
+    // (phase 1: the randomizers move to the seed page before the game starts; until then this menu changes the
+    //  same run through the host, so both places act on one RandomizerConfig)
+    // the run in use: the toggles here show and change the same seed the future page will set
+    final RandomizerConfig run = host.currentRun();
+    toggle(items, R.string.ingame_cheat_random_enemies, run.feature("enemies").on, on -> {
+      host.enemyRandomChanged(on ? (run.seed != 0 ? run.seed : RandomizerConfig.freshSeed()) : 0);
     });
     // "Random merchant stock": a seed of its own, a new one each time it goes on (runtime/merchant_random.cpp,
     // patch 0233)
-    toggle(items, R.string.ingame_cheat_random_merchant, game.getInt(CoreActivity.MERCHANT_SEED, 0) != 0, on -> {
-      int seed = on ? 1 + new java.util.Random().nextInt((1 << 20) - 1) : 0;
-      game.edit().putInt(CoreActivity.MERCHANT_SEED, seed).apply();
-      host.merchantRandomChanged(seed);
+    toggle(items, R.string.ingame_cheat_random_merchant, run.feature("merchant").on, on -> {
+      host.merchantRandomChanged(on ? (run.seed != 0 ? run.seed : RandomizerConfig.freshSeed()) : 0);
     });
     cheatStatus = text("", 15, false); cheatStatus.setPadding(dp(MenuLayout.GAP), dp(6), dp(MenuLayout.GAP), dp(2));
     cheatStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); cheatStatus.setVisibility(View.GONE);

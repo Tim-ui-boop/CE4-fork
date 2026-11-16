@@ -816,7 +816,10 @@ public final class ControllerActivity
               byte[]image=NativeBridge.saveGame(slot,clock);long transaction=NativeBridge.saveWriteId();
               roomWorker.execute(()->{
                 IOException failure=null;
-                try{if(image==null || transaction==0)throw new IOException("Could not create save file");store.write(slot,image);}
+                try{if(image==null || transaction==0)throw new IOException("Could not create save file");store.write(slot,image);
+                  // which seed made this save, so the load screen can offer it (a small sidecar; the save itself
+                  // stays exactly the game's own data)
+                  SeedStore.stamp(new File(getFilesDir(),"saves"),slot,CoreActivity.currentSeed(this));}
                 catch(IOException e){failure=e;}
                 final IOException writeFailure=failure;final OriginalSaveHeader[] rows=store.headers();
                 surface.queueEvent(()->{
@@ -827,7 +830,7 @@ public final class ControllerActivity
               });
             });}
           @Override public void delete(int slot){roomWorker.execute(()->{
-            IOException failure=null;try{store.delete(slot);}catch(IOException e){failure=e;}
+            IOException failure=null;try{store.delete(slot);SeedStore.stamp(new File(getFilesDir(),"saves"),slot,0);}catch(IOException e){failure=e;}
             final IOException result=failure;final OriginalSaveHeader[] rows=store.headers();handler.post(()->{if(!destroyed&&saveDialog!=null)saveDialog.completed(rows,result);});
           });}
           @Override public void closed(){saveDialog=null;clearInput();surface.queueEvent(NativeBridge::finishSave);NativeBridge.subscreenAudio(false);}
