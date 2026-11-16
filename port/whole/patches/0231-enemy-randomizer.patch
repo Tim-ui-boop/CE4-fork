@@ -36,17 +36,19 @@
  
          if (!(d->be_flag & 1)) {
              continue;
-@@ -168,12 +178,18 @@
+@@ -168,12 +178,19 @@
          if (EM_SET_ID_NG(d->id)) {
              continue;
          }
-+        /* port (patch 0231): left out (-1), as it is (0), or from a copy of the entry with another spot (1); the
-+           list itself stays as it is */
+-        em = EmCreate(d->id);
++        /* port (patch 0231): left out (-1), as it is (0), or from a copy of the entry with another spot or kind (1);
++           the list itself stays as it is. The create uses the copy's id when the kind changed: the new kind is its
++           own enemy, not the old one with new numbers */
 +        how = re4_enemy_random_entry((int) i, &moved);
 +        if (how < 0) {
 +            continue;
 +        }
-         em = EmCreate(d->id);
++        em = EmCreate((how > 0 && moved.id != 0) ? moved.id : d->id);
          if (em == 0) {
              pLog->err(0, 0, "EmSetFromList() Em set failed, Id = %x", d->id);
              continue;
@@ -56,7 +58,7 @@
          d->be_flag |= 2;
          if (d->be_flag & 4) {
              d->be_flag |= 8;
-@@ -185,6 +201,27 @@
+@@ -185,6 +202,27 @@
          em->l_sub = 1.0e16f;
          em->move();
      }
@@ -84,3 +86,4 @@
  }
  
  // Creates list entry `no` on demand (room event scripts): same checks as EmSetFromList, the
+

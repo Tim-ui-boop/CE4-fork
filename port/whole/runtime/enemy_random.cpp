@@ -33,14 +33,18 @@
 // them later with EmSetFromList2, never through EmSetFromList).
 //
 // The options of the PC randomizer's "Enemy settings" (0.99.16, the owner's choice of 16.11.2026: its replacements
-// pool, its ratios and its variety limit; not its HP tab): a room rolls its kinds from the pool
+// pool, its ratios and its variety limit; not its HP tab; 17.11.2026 the owner's additions: the animals crows and
+// cows may change kind too, the pool gains the two Krausers -- knife fight and mutated arm, the bosses the game's
+// scripts own (Saddler, U3, Salazar) stay out): a room rolls its kinds from the pool
 // (re4_core_set_enemy_options), an ordinary Ganado becomes one of them at its new place — a dog, an Armadura, a
 // Regenerator — at most `variety` pool kinds a room and at most one of them a sub-boss, never the last of a
 // kind, never an entry a script names; the Ganados that stay roll the ratios: a plaga in the head (flag bit 20 of
 // every family, t_emlist.cpp), a ballistic helmet (bit 19, military 0x1D..0x20; a helmet rules out the plaga, as
 // the PC tool says), a shield (bit 31 of the shield families), a hammer (bit 29, zealot and military) — a
-// "1 in 15-k" chance a nibble of the ratios names. A new kind sets no flags of the old family (the bits are
-// family-relative, t_emlist.cpp's tables); behaviour, hp and guard radius stay the entry's own.
+// "1 in 15-k" chance a nibble of the ratios names. The wave entries the room's script creates on demand
+// (EmSetFromList2, patch 0234: the cabin's siege, an ambush) take the same kind roll, never another place; a new
+// kind sets no flags of the old family (the bits are family-relative, t_emlist.cpp's tables); behaviour, hp and
+// guard radius stay the entry's own.
 #include "types.h"
 #include "global.h"
 #include "em.h"
@@ -98,13 +102,16 @@ const Kind kPoolKinds[] = {
     {0x1D, 2, 0, 0},     // b1: Gatling Man
     {0x1B, 10, 0, 0},    // b2: Garrador ("EM1C ClawMan")
     {0x2D, 0, 0, 0},     // b3: Novistador (InsectHuman; the PC randomizer keeps it off by default too)
-    {0x22, 0, 0, 1000},  // b4: Dog (Colmillos, "Enemy Dog")
+    {0x22, 0, 0, 1000},  // b4: Dog (Colmillos, "Enemy Dog") -- also a source: a Crow or Cow may become one
     {0x23, 0, 0, 0},     // b5: Crow
     {0x26, 0, 0, 1000},  // b6: Cow
     {0x3C, 0, 0, 2000},  // b7: Armadura ("Armor", Gray + AXE)
     {0x36, 0, 0, 3000},  // b8: Regenerator ("Regenerater", Normal A)
     {0x36, 2, 0, 3000},  // b9: Iron Maiden (Strong A)
+    {0x39, 1, 0, 1250},  // b10: Krauser, the knife fight (em39 type 1, the first battle's ruins stalker)
+    {0x39, 2, 0, 2500},  // b11: Krauser, the mutated arm (em39 type 2, the final battle's form)
 };
+constexpr int kPoolCount = 12;
 
 u32 mix(u32 x)
 {
@@ -135,6 +142,14 @@ bool ganadoId(int id)
 bool ganadoSpot(const EM_LIST& e)
 {
     return ganadoId(e.id) && e.set == 0;
+}
+
+// An entry whose kind the pool may replace beyond the ordinary Ganados (0.99.16, the owner's wish of 17.11.2026:
+// the animals too): a Crow (0x23) or a Cow (0x26) of the room -- both plain set-0 animals -- may become any kind
+// of the pool, the odds tied to the ratios' sub-boss nibble so a farm is not a boss parade.
+bool animalSpot(const EM_LIST& e)
+{
+    return (e.id == 0x23 || e.id == 0x26) && e.set == 0;
 }
 
 // An ordinary Ganado: no special form (t_emlist.cpp: chainsaw "EM16 C.S." type 4 of 0x10..0x17 and "EM1F Chain Saw"
@@ -218,8 +233,8 @@ struct Plan {
     int copyCount, copyNext, copiesMade, copiesFailed;
     int movers, swapped, nearby, spots, protectedByArea, copyRefused;
     // 0.99.16, the PC randomizer's kinds: the pool kinds this room rolls, their count bounded by varietyCap();
-    // `swap[entry]` -1 none, else the kPoolKinds index the entry becomes; `swapped` the ones changed by kind
-    int rolledKind[10];
+    // `swapKind[entry]` -1 none, else the kPoolKinds index the entry becomes; `kindSwaps` the ones changed by kind
+    int rolledKind[kPoolCount];
     int rolledCount;
     int swapKind[256];
     int kindSwaps;
@@ -512,8 +527,8 @@ extern "C" void re4_enemy_random_room(void)
     if (pool && p.kind != kCountsOnly) {
         const int cap = varietyCap();
         bool subBossTaken = false;
-        for (int draws = 0; draws < 32 && p.rolledCount < cap; draws++) {
-            const int pick = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x500u + (u32) draws) % 10u);
+        for (int draws = 0; draws < 48 && p.rolledCount < cap; draws++) {
+            const int pick = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x500u + (u32) draws) % (u32) kPoolCount);
             if (!(pool >> pick & 1)) {
                 continue;
             }
@@ -521,7 +536,8 @@ extern "C" void re4_enemy_random_room(void)
             for (int k = 0; k < p.rolledCount; k++) {
                 have |= p.rolledKind[k] == pick;
             }
-            const bool subBoss = pick <= 2;  // chainsaw, Gatling, Garrador: at most one of them a room
+            // sub-bosses (chainsaw, Gatling, Garrador) and the Krausers: at most one of them a room
+            const bool subBoss = pick <= 2 || pick >= 10;
             if (have || (subBoss && subBossTaken)) {
                 continue;
             }
@@ -564,6 +580,18 @@ extern "C" void re4_enemy_random_room(void)
             const int pick = (int) (roll % (u32) p.rolledCount);
             p.swapKind[no] = p.rolledKind[pick];
             p.kindSwaps++;
+        }
+        // 0.99.16: the animals (the owner's wish of 17.11.2026): a Crow or Cow of the room may become a kind of
+        // the pool too -- each rolls on its own hash, at the sub-boss odds, so a field of crows is not a
+        // Regenerator parade; the room "counts" rows keep the kinds their scripts count.
+        if (p.rolledCount > 0 && animalSpot(pG->Em_list[no]) && comesNow(pG->Em_list[no], no)
+            && !namedIn(row, no) && !waited[no] && p.kind != kCountsOnly) {
+            const int ratios = __atomic_load_n(&gRatios, __ATOMIC_RELAXED);
+            if (ratioHit(ratios, 12, hashOf(p.seed, (u32) p.list, (u32) p.room, 0x610u + (u32) no))) {
+                p.swapKind[no] = p.rolledKind[hashOf(p.seed, (u32) p.list, (u32) p.room, 0x618u + (u32) no)
+                                               % (u32) p.rolledCount];
+                p.kindSwaps++;
+            }
         }
         if (comesNow(pG->Em_list[no], no)) {
             now[nn++] = no;
@@ -706,6 +734,62 @@ extern "C" int re4_enemy_random_entry(int no, EM_LIST* out)
             }
             if (out->id >= 0x19 && out->id <= 0x20 && ratioHit(ratios, 12, roll2 ^ 0x5Fu)) {
                 out->flag |= 1u << 29;  // the hammer
+            }
+        }
+    }
+    return 1;
+}
+
+// Patch 0234, EmSetFromList2 for entry `no` (a script creates it on demand -- the cabin's siege, an ambush): the wave
+// entries the room's start entries also get, minus the places: a wave's place is the script's own, so only a kind
+// ever changes, and only for an ordinary Ganado (never a script-named entry, never a counted kind, never a special
+// form). -1 not at all, 0 as it is, 1 created from `out`.
+extern "C" int re4_enemy_random_wave(int no, EM_LIST* out)
+{
+    Plan& p = gPlan;
+    if (!p.on || no < 0 || no > 255) {
+        return 0;  // no plan (the switch off, or the room protected): the entry comes exactly as the game wants
+    }
+    const EM_LIST& e = pG->Em_list[no];
+    // a script wants this enemy and made it alive now (EmListSetAlive 1); not created, not dead
+    if (!ordinary(e) || (e.be_flag & 2) || deadBit(no) || !(e.be_flag & 1)) {
+        return 0;
+    }
+    const RoomRow* r = rowOf(p.room);
+    if (namedIn(r, no) || p.kind != kOpen) {
+        return 0;  // a room that counts or names its enemies keeps the kinds its script expects
+    }
+    *out = e;
+    // the same kind roll the start entries get, on its own hash so a wave and a start entry never decide each other
+    if (p.rolledCount > 0) {
+        p.swapKind[no] = p.rolledKind[hashOf(p.seed, (u32) p.list, (u32) p.room, 0x680u + (u32) no)
+                                       % (u32) p.rolledCount];
+        p.kindSwaps++;
+        const Kind& to = kPoolKinds[p.swapKind[no]];
+        out->id = to.id;
+        out->type = to.type;
+        out->set = to.set;
+        out->flag = 0;
+        out->Character = 0;
+        if (to.minHp > out->hp) out->hp = to.minHp;
+        return 1;
+    }
+    // no kind rolled: the wave Ganado still takes the ratios' mix like any other that stays its own kind
+    if (p.kind != kCountsOnly) {
+        const int ratios = __atomic_load_n(&gRatios, __ATOMIC_RELAXED);
+        const u32 roll = hashOf(p.seed, (u32) p.list, (u32) p.room, 0x780u + (u32) no);
+        const u32 roll2 = roll * 2654435761u >> 8;
+        if (ganadoId(out->id) && (out->flag & ((1u << 20) | (1u << 19) | (1u << 31) | (1u << 29))) == 0) {
+            if (out->id >= 0x1D && ratioHit(ratios, 4, roll)) {
+                out->flag |= 1u << 19;
+            } else if (ratioHit(ratios, 0, roll)) {
+                out->flag |= 1u << 20;
+            }
+            if ((out->id == 0x11 || (out->id >= 0x19 && out->id <= 0x20)) && ratioHit(ratios, 8, roll2)) {
+                out->flag |= 1u << 31;
+            }
+            if (out->id >= 0x19 && out->id <= 0x20 && ratioHit(ratios, 12, roll2 ^ 0x5Fu)) {
+                out->flag |= 1u << 29;
             }
         }
     }

@@ -89,10 +89,12 @@ final class RandomizerConfig {
   /**
    * The enemy kinds the enemy randomizer may turn an ordinary Ganado into, in the core's bit order
    * (runtime/enemy_random.cpp kPoolKinds). Bit i of the feature's `pool` answers "may the i-th kind appear".
+   * The two Krausers (the owner's wish of 17.11.2026) are off by default: a boss in every room is a much
+   * different game; the game's own bosses (Saddler, U3, Salazar) stay out — the scripts own them.
    */
   static final String[] ENEMY_POOL = {
       "Chainsaw Man", "Gatling Man", "Garrador", "Novistador", "Dog", "Crow", "Cow", "Armadura",
-      "Regenerator", "Iron Maiden",
+      "Regenerator", "Iron Maiden", "Krauser (knife)", "Krauser (mutated)",
   };
   /** The default pool: the PC randomizer's own defaults keep Novistador, Crow and Cow off (its help text). */
   static final int ENEMY_POOL_DEFAULT = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 4) | (1 << 7) | (1 << 8) | (1 << 9);
