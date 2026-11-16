@@ -1,10 +1,13 @@
 # Port patch, the cheat "Random merchant stock": the merchant sells items drawn from one shared pool
-# (runtime/merchant_random.cpp). The merchant builds his stock by merging small tables into it, one per room and
-# stage (MerchantRoomInit, MerchantGameInit, Merchant2ndRoundInit); stockDataAdd is that merge, so it is the one
-# place every table passes. With the cheat on, the table is replaced by one of the same length whose ids come from
-# the merchant's own price table, restricted to what may be sold at any time (weapons, ammunition, grenades,
-# recovery, pesetas, treasures, weapon parts: never keys, files, maps or the case upgrades, and never the FN57 or
-# 0xC5). The "new" marks keep working as in the untouched game, because the merge below sets them itself.
+# (runtime/merchant_random.cpp). The hook is the shop session's constructor: ss_shop.cpp builds one with
+# `new Merchant(&merchantChar)` each time the shop opens, and the constructor loads the stock the save holds. Dealing
+# there (and not at the room start) is what makes the cheat show in a game whose stock was written to the save before
+# the switch went on: the stock is save data (card.cpp SAVE_MERCHANT, game.cpp MerchantDataSave/Load), so a room-start
+# hook would never touch a game that had already passed a merchant.
+# The dealt ids come from the merchant's own price table, restricted to what may be sold at any time (weapons,
+# ammunition, grenades, recovery, pesetas, treasures, weapon parts: never keys, files, maps or the case upgrades, and
+# never the FN57 or 0xC5). The number of things on sale stays as it was; an item the visit did not have before is
+# marked new, as the game marks what it appended.
 # With the cheat off nothing changes.
 --- a/src/game/merchant.cpp
 +++ b/src/game/merchant.cpp
@@ -13,21 +16,19 @@
  #include "merchant.h"
  
 +/* port (patch 0233): the cheat "Random merchant stock" (runtime/merchant_random.cpp) */
-+extern "C" StockEntry* re4_merchant_random(StockEntry* tbl, StockEntry* out, int max);
++extern "C" void re4_merchant_random_stock(StockEntry* e, int max);
 +
  #define MERCHANT_NUM 1
  #define STOCK_MAX 64
  #define LEVEL_MAX 32
-@@ -1004,6 +1007,12 @@
-     StockEntry* s;
-     int i;
+@@ -1134,6 +1137,9 @@
+     memclr_asm(&m_stock, sizeof(STOCK_INFO));
+     memclr_asm(&level, sizeof(LEVEL_INFO));
+     load(c->m_p_data);
++    /* port (patch 0233): the cheat "Random merchant stock" deals the stock this session loaded anew, from the
++       shared pool; with the switch off the entries stay exactly as the save has them */
++    re4_merchant_random_stock(m_stock.e, STOCK_MAX);
+ }
  
-+    /* port (patch 0233): the cheat "Random merchant stock" deals this table anew; the table itself is the
-+       game's read-only data and is never written (static: one merge at a time, on the game thread) */
-+    {
-+        static StockEntry dealt[STOCK_MAX];
-+        tbl = re4_merchant_random(tbl, dealt, STOCK_MAX);
-+    }
-     for (s = d->stock.e, i = 0; i < STOCK_MAX && s->id != 0xFFFF; i++, s++) {
-         s->isNew = 0;
-     }
+ // Writes the session's stock/tune/favor/discount back into the merchant data.
+
