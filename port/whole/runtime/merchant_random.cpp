@@ -3,11 +3,16 @@
 // at the very first merchant. Compiled with the game's flags into libre4_main; patch 0233 (src/game/merchant.cpp
 // Merchant::Merchant) asks it when a shop opens.
 //
+// Each merchant's stock is fixed, not rolled per visit: the draw depends on the switch's seed and the room only, and
+// dealing is idempotent (the same save, the same seed and the same room always give the same stock). So talking to
+// him twice, or reloading a save and coming back, shows the same things; only switching the cheat off and on again
+// (a new seed) or entering another room gives another draw. That is what keeps it from being a reroll.
+//
 // Why the shop and not the room: the merchant's stock is part of the game's save data (card.cpp SAVE_MERCHANT,
-// game.cpp MerchantDataSave/Load). A game that was started or passed a shop before the switch went on therefore
-// carries the untouched stock, and re-dealing at the room start would never show. Dealing the finished stock when
-// the shop session is built (ss_shop.cpp `new Merchant(&merchantChar)`) works on whatever the save holds now and
-// shows on the very next visit, in old and new games alike.
+// game.cpp MerchantDataSave/Load), so a game whose village stock was written before the switch went on would keep
+// the untouched stock if the deal happened at the room start. Dealing the finished stock when the shop session is
+// built (ss_shop.cpp `new Merchant(&merchantChar)`) works on whatever the save holds now and shows on the very next
+// visit, in old and new games alike.
 //
 // The pool is the merchant's own price table (merchant.cpp g_item_price_tbl), restricted to what it is sensible to
 // sell at any time: weapons, ammunition, grenades, recovery, pesetas and treasures, and weapon parts (item types 1,
@@ -177,7 +182,11 @@ void re4_merchant_random_stock(StockEntry* e, int max)
     }
 
     const u32 room = pG ? (u32) pG->room_id : 0u;
-    u32 h = mix((u32) seed * 0x9E3779B1u ^ mix(room << 8 ^ (u32) (++gVisits)));
+    // The draw comes from the seed and the room only, never from how often the shop was opened: a merchant keeps the
+    // stock he was given, so a player can neither reroll him by talking again nor by reloading a save. gVisits is
+    // only counted for the log line below.
+    gVisits++;
+    u32 h = mix((u32) seed * 0x9E3779B1u ^ mix(room << 8));
 
     // A shuffle of the pool (Fisher-Yates from the seed): distinct ids, so the shop keeps its length
     static u16 order[512];

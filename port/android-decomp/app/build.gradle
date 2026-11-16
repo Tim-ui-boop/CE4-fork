@@ -37,6 +37,24 @@ android {
     namespace 'com.ast.re4decomp'
     compileSdk 35
     ndkVersion '28.2.13676358'
+
+    // A permanent signing key so a newly built APK installs OVER the one already on the phone (an update, not a
+    // second app). Android only accepts an update whose signature matches the installed one, and without this every
+    // build got a fresh throwaway debug key, so each test build had to be installed by uninstalling first.
+    // CI passes the key in (keystore base64 + its four values, see .github/workflows/android.yml); a local build
+    // without them keeps the standard debug signing and is not affected.
+    def re4Keystore = System.getenv('RE4_KEYSTORE_FILE') ?: (project.findProperty('re4.keystoreFile') ?: null)
+    signingConfigs {
+        if (re4Keystore) {
+            re4 {
+                storeFile file(re4Keystore)
+                storePassword System.getenv('RE4_KEYSTORE_PASSWORD') ?: ''
+                keyAlias System.getenv('RE4_KEY_ALIAS') ?: ''
+                keyPassword System.getenv('RE4_KEY_PASSWORD') ?: ''
+            }
+        }
+    }
+
     defaultConfig {
         applicationId 'com.ast.re4decomp'
         minSdk 21
@@ -150,7 +168,13 @@ android {
     }
     externalNativeBuild { cmake { path file('src/main/cpp/CMakeLists.txt'); version '3.22.1' } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
-    buildTypes { release { minifyEnabled false } }
+    buildTypes {
+        release { minifyEnabled false }
+        debug {
+            // the permanent key when CI provides one (see signingConfigs above); else the default debug key
+            if (re4Keystore) signingConfig signingConfigs.re4
+        }
+    }
     // the libraries extracted at installation (decision of the project owner, 20.10.2026): a 32-bit
     // device whose Java heap lies on MEM1 runs the core as a program of its own
     // (libre4_coreproc.so, port/docs/32bit-kernprozess.md), and Android runs programs only from
