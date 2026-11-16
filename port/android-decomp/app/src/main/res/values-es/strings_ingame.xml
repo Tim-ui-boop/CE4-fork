@@ -523,4 +523,5 @@
     <string name="randomizer_enemy_mix_title">Con qué frecuencia saca una mezcla el resto</string>
     <string name="randomizer_enemy_variety">· Máx. tipos de enemigos por habitación</string>
     <string name="randomizer_one_in">1 de %1$d</string>
+    <string name="randomizer_enemy_unsafe">Modo inseguro: también las habitaciones cautelosas</string>
 </resources>

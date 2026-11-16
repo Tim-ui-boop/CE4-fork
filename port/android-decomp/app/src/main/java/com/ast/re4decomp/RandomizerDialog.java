@@ -278,8 +278,8 @@ final class RandomizerDialog extends Dialog {
     for (int i = 0; i < chosen.length; i++) chosen[i] = (startPool >> i & 1) != 0;
     final int[] steps = new int[RandomizerConfig.ENEMY_RATIOS.length];
     for (int i = 0; i < steps.length; i++) steps[i] = (f.ratios >> RandomizerConfig.RATIO_SHIFT[i]) & 0xF;
-    final int[] variety = {f.ratios >> RandomizerConfig.VARIETY_SHIFT & RandomizerConfig.VARIETY_MASK};
-    if (variety[0] < 1) variety[0] = 4;  // the core's own encoding: 0 in the two bits is its default, the cap 4
+    final int[] variety = {RandomizerConfig.varietyOf(f.ratios)};
+    final boolean[] unsafe = {RandomizerConfig.unsafeOf(f.ratios)};
 
     LinearLayout list = new LinearLayout(getContext());
     list.setOrientation(LinearLayout.VERTICAL);
@@ -309,6 +309,13 @@ final class RandomizerDialog extends Dialog {
       list.addView(ratioRow(RandomizerConfig.ENEMY_RATIOS[i], steps, i, false));
     }
     list.addView(ratioRow(getContext().getString(R.string.randomizer_enemy_variety), variety, 0, true));
+    // the unsafe switch (the owner's name): the cautious rooms open up; the per-enemy protections never turn off
+    CheckBox unsafeBox = new CheckBox(getContext());
+    unsafeBox.setText(R.string.randomizer_enemy_unsafe);
+    unsafeBox.setTextSize(13);
+    unsafeBox.setChecked(unsafe[0]);
+    unsafeBox.setOnCheckedChangeListener((v, on) -> unsafe[0] = on);
+    list.addView(unsafeBox);
 
     ScrollView scroll = new ScrollView(getContext());
     scroll.addView(list);
@@ -319,7 +326,7 @@ final class RandomizerDialog extends Dialog {
           int pool = 0;
           for (int i = 0; i < chosen.length; i++) if (chosen[i]) pool |= 1 << i;
           f.pool = pool;
-          f.ratios = RandomizerConfig.packRatios(steps[0], steps[1], steps[2], steps[3], variety[0]);
+          f.ratios = RandomizerConfig.packRatios(steps[0], steps[1], steps[2], steps[3], variety[0], unsafe[0]);
           store.setCurrent(run, activeFile);
           updateEnemyButton(f);
           status.setText("");

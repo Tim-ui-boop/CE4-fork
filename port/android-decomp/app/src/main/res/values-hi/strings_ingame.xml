@@ -520,4 +520,5 @@
     <string name="randomizer_enemy_mix_title">बाक़ी कितनी बार मिश्रण लॉग करते हैं</string>
     <string name="randomizer_enemy_variety">· प्रति कमरे दुश्मन प्रकार</string>
     <string name="randomizer_one_in">1 मهं %1$d</string>
+    <string name="randomizer_enemy_unsafe">असुरक्षित मोड: सावधान वाले कमरे भी</string>
 </resources>

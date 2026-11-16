@@ -361,6 +361,16 @@ T = {
  "randomizer_one_in": (
   "1 in %1$d", "1 von %1$d", "1 de %1$d", "1 sur %1$d", "1 su %1$d", "1 em %1$d", "1 \u0438\u0437 %1$d",
   "1 \u0645\u0646 %1$d", "1 \u092e\u0647\u0902 %1$d", "1 daripada %1$d", "1 \u5728 %1$d"),
+ "randomizer_enemy_unsafe": (
+  "Unsafe mode: also randomize the cautious rooms", "Unsicherer Modus: auch die vorsichtigen R\u00e4ume",
+  "Modo inseguro: tambi\u00e9n las habitaciones cautelosas",
+  "Mode non s\u00fbr : aussi les pi\u00e8ces prudentes", "Modalit\u00e0 non sicura: anche le stanze caute",
+  "Modo inseguro: tamb\u00e9m as salas cautelosas",
+  "\u041d\u0435\u0431\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u044b\u0439 \u0440\u0435\u0436\u0438\u043c: \u0438 \u043e\u0441\u0442\u043e\u0440\u043e\u0436\u043d\u044b\u0435 \u043a\u043e\u043c\u043d\u0430\u0442\u044b",
+  "\u0648\u0636\u0639 \u063a\u064a\u0631 \u0622\u0645\u0646: \u0639\u0634\u0648\u0627\u0626\u064a\u0629 \u0627\u0644\u063a\u0631\u0641 \u0627\u0644\u062d\u0630\u0631\u0629 \u0623\u064a\u0636\u064b\u0627",
+  "\u0905\u0938\u0941\u0930\u0915\u094d\u0937\u093f\u0924 \u092e\u094b\u0921: \u0938\u093e\u0935\u0927\u093e\u0928 \u0935\u093e\u0932\u0947 \u0915\u092e\u0930\u0947 \u092d\u0940",
+  "Modus tidak selamat: juga bilik berjaga-jaga",
+  "\u4e0d\u5b89\u5168\u06a21\u5f0f\u6216\u968f\u673a\u5316\u8c28\u614e\u7684\u623f\u95f4"),
 }
 
 LANGS = ["values", "values-de", "values-es", "values-fr", "values-it", "values-pt",

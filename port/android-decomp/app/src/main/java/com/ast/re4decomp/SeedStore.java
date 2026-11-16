@@ -126,6 +126,9 @@ final class SeedStore {
     }
     RandomizerConfig config = new RandomizerConfig();
     config.seed = prefs.getInt(PREF_CURRENT, 0);
+    boolean migrated = false;
+    final String shapeKey = "enemyRatiosShape";
+    final boolean oldShape = prefs.getInt(shapeKey, 1) == 1;
     for (RandomizerConfig.Feature f : config.features.values()) {
       f.on = prefs.getBoolean("seedOn_" + f.id, false);
       f.chance = prefs.getInt("seedChance_" + f.id, 100);
@@ -135,7 +138,27 @@ final class SeedStore {
       if (f.hasEnemyOptions()) {
         f.pool = prefs.getInt("seedPool_" + f.id, RandomizerConfig.ENEMY_POOL_DEFAULT);
         f.ratios = prefs.getInt("seedRatios_" + f.id, RandomizerConfig.ENEMY_RATIOS_DEFAULT);
+        // 0.99.16 unsafe mode re-shaped the packed ratios: the nibbles stay, bit 16 is the unsafe switch and
+        // the variety cap moved to bits 17..18. A value from the earlier build (its cap in bits 16..17) would
+        // read as "unsafe on": re-read it the old way once -- the old build had no unsafe switch, so its bit
+        // 16 was only the cap's low bit -- and keep the player's mix.
+        if (oldShape) {
+          final int nibbles = f.ratios & 0xFFFF;
+          final int oldCap = (f.ratios >> 16) & 3;  // the old bits 16..17, 0 meaning the old cap 4
+          f.ratios = RandomizerConfig.packRatios(nibbles & 0xF, (nibbles >> 4) & 0xF, (nibbles >> 8) & 0xF,
+              (nibbles >> 12) & 0xF, oldCap == 0 ? 4 : oldCap, false);
+          migrated = true;
+        }
       }
+    }
+    if (migrated) {
+      // one time only: the shape marker flips, and the re-read value goes back to the preferences
+      android.content.SharedPreferences.Editor edit = prefs.edit();
+      edit.putInt(shapeKey, 2);
+      for (RandomizerConfig.Feature f : config.features.values()) {
+        if (f.hasEnemyOptions()) edit.putInt("seedRatios_" + f.id, f.ratios);
+      }
+      edit.apply();
     }
     return config;
   }

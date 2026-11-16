@@ -523,4 +523,5 @@
     <string name="randomizer_enemy_mix_title">Con quale frequenza il resto tira una miscela</string>
     <string name="randomizer_enemy_variety">· Max. tipi di nemici per stanza</string>
     <string name="randomizer_one_in">1 su %1$d</string>
+    <string name="randomizer_enemy_unsafe">Modalità non sicura: anche le stanze caute</string>
 </resources>

@@ -524,4 +524,5 @@
     <string name="randomizer_enemy_mix_title">Com que frequência o restante tira uma mistura</string>
     <string name="randomizer_enemy_variety">· Máx. tipos de inimigos por sala</string>
     <string name="randomizer_one_in">1 em %1$d</string>
+    <string name="randomizer_enemy_unsafe">Modo inseguro: também as salas cautelosas</string>
 </resources>

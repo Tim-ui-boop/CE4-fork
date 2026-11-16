@@ -68,11 +68,12 @@ extern "C" void re4_enemy_random_extra_made(int ok);
 
 namespace {
 
-enum { kOpen = 0, kUntouched = 1, kCountsOnly = 2 };
+enum { kOpen = 0, kUntouched = 1, kCountsNarrow = 2, kCountsFamily = 3, kOpenCautioned = 4 };
 
 struct RoomRow {
     u16 room;
     u8 kind;
+    u8 boss;    // 0.99.16: a boss room stays locked even in unsafe mode (its script owns the fight's logic)
     u32 named[8];
 };
 
@@ -209,10 +210,19 @@ bool ratioHit(int ratios, int shift, u32 roll)
     return k > 0 && (roll % (u32) (16 - k)) == 0;
 }
 
-// The pool's variety cap of gRatios bits 16..17: 1..4 pool kinds a room (0: the core's own default of 4).
+// The "unsafe" switch of gRatios bit 16 (the owner's wish of 17.11.2026, the name theirs): when on, the cautious
+// rooms open up -- an untouched room whose only sin is that the scanner could not follow its indirection plans
+// like an open one (the per-entry protections never turn off), and a family-counting room's Ganados may become
+// other forms of their family. Boss rooms and narrow counts stay locked either way.
+bool unsafeOn()
+{
+    return (__atomic_load_n(&gRatios, __ATOMIC_RELAXED) >> 16) & 1;
+}
+
+// The pool's variety cap of gRatios bits 17..18: 1..3 pool kinds a room (0: the core's own default of 4).
 int varietyCap()
 {
-    const int cap = (__atomic_load_n(&gRatios, __ATOMIC_RELAXED) >> 16) & 3;
+    const int cap = (__atomic_load_n(&gRatios, __ATOMIC_RELAXED) >> 17) & 3;
     return cap == 0 ? 4 : cap;
 }
 
@@ -447,14 +457,25 @@ extern "C" void re4_enemy_random_room(void)
     p.seed = (u32) seed;
     const RoomRow* row = rowOf(p.room);
     p.kind = row ? row->kind : kUntouched;
+    // 0.99.16, unsafe mode (the owner's switch of 17.11.2026): a cautious room -- untouched only because the
+    // scanner could not follow its script's indirection -- plans like an open one. The per-entry protections
+    // (named, waited, last-of-kind, non-ordinary) never turn off, so what the script truly needs stays; the
+    // copies (the +/- 10 % of the number) stay off there, so a script that counts never gets extra enemies.
+    // A boss room keeps its lock either way.
+    const bool unsafe = unsafeOn();
+    if (unsafe && row && row->kind == kUntouched && !row->boss) {
+        p.kind = kOpenCautioned;  // open for places and kinds, but the copies stay off
+    }
     if (SysFlagChk(pG, SYS_OMAKE_ADA_GAME) || SysFlagChk(pG, SYS_OMAKE_ETC_GAME) || pG->pl_type == 1) {
         snprintf(p.why, sizeof(p.why), "not in the story's Leon part");
     } else if (pG->stage_no < 1 || pG->stage_no > 3 || p.list < 0 || p.list > 7) {
         snprintf(p.why, sizeof(p.why), "not a story room of stages 1..3");
     } else if (!row) {
         snprintf(p.why, sizeof(p.why), "a room without a script of its own");
-    } else if (row->kind == kUntouched) {
+    } else if (row->kind == kUntouched && !unsafe) {
         snprintf(p.why, sizeof(p.why), "its script names enemies, has a boss, or counts and does more");
+    } else if (row->kind == kUntouched && unsafe && row->boss) {
+        snprintf(p.why, sizeof(p.why), "a boss room (locked even in unsafe mode)");
     }
     char roomText[16];
     snprintf(roomText, sizeof(roomText), "r%03x", p.room);
@@ -523,13 +544,24 @@ extern "C" void re4_enemy_random_room(void)
     const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
     p.rolledCount = 0;
     p.kindSwaps = 0;
-    // a room that counts its enemies by kind keeps the kinds it counts (kCountsOnly): places move, kinds never
-    if (pool && p.kind != kCountsOnly) {
+    // a room that counts its enemies by kind keeps the kinds it counts: places move, kinds never. A family-wide
+    // count ("all Ganados dead", 0x10..0x20) survives a form change inside the family, so in unsafe mode its
+    // unnamed Ganados may become chainsaw, Gatling or Garrador forms -- the pool kinds that are family members;
+    // never a dog or an Armadura (an outsider: the count would never reach zero). A narrow count pins its kinds
+    // always. A room unsafe mode opened from "untouched" takes the family rule too (its script may count).
+    const bool kindsMayChange = p.kind == kOpen
+        || (unsafe && (p.kind == kCountsFamily || p.kind == kOpenCautioned));
+    const bool familyOnly = p.kind == kCountsFamily || p.kind == kOpenCautioned;
+    if (pool && kindsMayChange) {
         const int cap = varietyCap();
         bool subBossTaken = false;
         for (int draws = 0; draws < 48 && p.rolledCount < cap; draws++) {
             const int pick = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x500u + (u32) draws) % (u32) kPoolCount);
             if (!(pool >> pick & 1)) {
+                continue;
+            }
+            // a counting room rolls only family members (chainsaw, Gatling, Garrador): the count still holds
+            if (familyOnly && pick > 2) {
                 continue;
             }
             bool have = false;
@@ -583,9 +615,9 @@ extern "C" void re4_enemy_random_room(void)
         }
         // 0.99.16: the animals (the owner's wish of 17.11.2026): a Crow or Cow of the room may become a kind of
         // the pool too -- each rolls on its own hash, at the sub-boss odds, so a field of crows is not a
-        // Regenerator parade; the room "counts" rows keep the kinds their scripts count.
+        // Regenerator parade; the counting grades keep the kinds their scripts count.
         if (p.rolledCount > 0 && animalSpot(pG->Em_list[no]) && comesNow(pG->Em_list[no], no)
-            && !namedIn(row, no) && !waited[no] && p.kind != kCountsOnly) {
+            && !namedIn(row, no) && !waited[no] && p.kind == kOpen) {
             const int ratios = __atomic_load_n(&gRatios, __ATOMIC_RELAXED);
             if (ratioHit(ratios, 12, hashOf(p.seed, (u32) p.list, (u32) p.room, 0x610u + (u32) no))) {
                 p.swapKind[no] = p.rolledKind[hashOf(p.seed, (u32) p.list, (u32) p.room, 0x618u + (u32) no)
@@ -599,8 +631,9 @@ extern "C" void re4_enemy_random_room(void)
             idle = no;
         }
     }
-    // the number: +/- 10 % (rooms with 10 or more Ganados at the start), never in a room that counts
-    const int range = p.kind == kCountsOnly ? 0 : p.ganados >= 20 ? 2 : p.ganados >= 10 ? 1 : 0;
+    // the number: +/- 10 % (rooms with 10 or more Ganados at the start), never in a room that counts (all three
+    // of its grades), and never in a room unsafe mode opened (its script may count what the scanner could not see)
+    const int range = (p.kind == kOpen) ? (p.ganados >= 20 ? 2 : p.ganados >= 10 ? 1 : 0) : 0;
     p.change = range ? (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x4E) % (u32) (2 * range + 1)) - range : 0;
     if (p.change < 0) {
         // left out: Ganados that come now, never the last of a kind in the room
@@ -718,8 +751,9 @@ extern "C" int re4_enemy_random_entry(int no, EM_LIST* out)
     // bit 20 of every family; the ballistic helmet bit 19 of the military (0x1D..0x20); the shield bit 31 of the
     // shield families (0x11, 0x19..0x20); the hammer ("Weapon M Star") bit 29 of zealot and military. A helmet
     // rules out a plaga, as the PC tool's help says. The bits only ever set what the family's own table names;
-    // a room that counts its enemies by kind keeps its kinds' looks as they are (places still move).
-    if (p.kind != kCountsOnly) {
+    // a room that counts keeps its kinds' looks as they are unless unsafe mode opened it (a family form keeps
+    // its family's flags).
+    if (p.kind == kOpen || p.kind == kOpenCautioned) {
         const int ratios = __atomic_load_n(&gRatios, __ATOMIC_RELAXED);
         const u32 roll = hashOf(p.seed, (u32) p.list, (u32) p.room, 0x700u + (u32) no);
         const u32 roll2 = roll * 2654435761u >> 8;
@@ -756,14 +790,19 @@ extern "C" int re4_enemy_random_wave(int no, EM_LIST* out)
         return 0;
     }
     const RoomRow* r = rowOf(p.room);
-    if (namedIn(r, no) || p.kind != kOpen) {
-        return 0;  // a room that counts or names its enemies keeps the kinds its script expects
+    if (namedIn(r, no) || (p.kind != kOpen && !(unsafeOn() && p.kind == kOpenCautioned))) {
+        return 0;  // a room that counts or names its enemies keeps the kinds its script expects; unsafe mode opens
+                   // the cautious rooms' waves too, with the family rule below
     }
     *out = e;
     // the same kind roll the start entries get, on its own hash so a wave and a start entry never decide each other
     if (p.rolledCount > 0) {
-        p.swapKind[no] = p.rolledKind[hashOf(p.seed, (u32) p.list, (u32) p.room, 0x680u + (u32) no)
-                                       % (u32) p.rolledCount];
+        int pick = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x680u + (u32) no) % (u32) p.rolledCount);
+        // a room that counts (its script may count the wave) stays inside the family with its picks
+        if ((p.kind == kCountsFamily || p.kind == kOpenCautioned) && p.rolledKind[pick] > 2) {
+            return 0;  // no family kind rolled for this room's wave: the entry stays as it is
+        }
+        p.swapKind[no] = p.rolledKind[pick];
         p.kindSwaps++;
         const Kind& to = kPoolKinds[p.swapKind[no]];
         out->id = to.id;
@@ -775,7 +814,7 @@ extern "C" int re4_enemy_random_wave(int no, EM_LIST* out)
         return 1;
     }
     // no kind rolled: the wave Ganado still takes the ratios' mix like any other that stays its own kind
-    if (p.kind != kCountsOnly) {
+    if (p.kind == kOpen) {
         const int ratios = __atomic_load_n(&gRatios, __ATOMIC_RELAXED);
         const u32 roll = hashOf(p.seed, (u32) p.list, (u32) p.room, 0x780u + (u32) no);
         const u32 roll2 = roll * 2654435761u >> 8;
@@ -810,7 +849,7 @@ extern "C" int re4_enemy_random_extra(EM_LIST* out)
         gLines++;
         char count[160] = "";
         int len = 0;
-        if (p.kind == kCountsOnly) {
+        if (p.kind == kCountsNarrow || p.kind == kCountsFamily || p.kind == kOpenCautioned) {
             len = snprintf(count, sizeof(count), "; the number stays (the room counts its enemies)");
         } else if (p.change == 0) {
             len = snprintf(count, sizeof(count), "; the number stays (%s)", p.ganados >= 10 ? "as drawn" : "under 10");
@@ -834,7 +873,8 @@ extern "C" int re4_enemy_random_extra(EM_LIST* out)
         }
         re4_log("enemies: random enemies in r%03x (list %d, seed %u%s): %d Ganados at the start, %d ordinary, %d spots: "
                 "%d at a new place nearby, %d on another's spot%s%s",
-                p.room, p.list, p.seed, p.kind == kCountsOnly ? ", counts only" : "", p.ganados, p.movers, p.spots,
+                p.room, p.list, p.seed, p.kind == kCountsNarrow ? ", counts only" :
+                    p.kind == kCountsFamily ? ", counts family-wide" : p.kind == kOpenCautioned ? ", unsafe mode" : "",
                 p.nearby, p.swapped, count, p.protectedByArea ? " (some kept: an area waits for them)" : "");
     }
     if (p.copyNext >= p.copyCount) {

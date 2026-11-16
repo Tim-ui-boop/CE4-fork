@@ -516,4 +516,5 @@
     <string name="randomizer_enemy_mix_title">Betapa kerap yang lain mengambil campuran</string>
     <string name="randomizer_enemy_variety">· Maks. jenis musuh per bilik</string>
     <string name="randomizer_one_in">1 daripada %1$d</string>
+    <string name="randomizer_enemy_unsafe">Modus tidak selamat: juga bilik berjaga-jaga</string>
 </resources>

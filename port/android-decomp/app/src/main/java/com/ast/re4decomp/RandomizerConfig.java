@@ -102,25 +102,42 @@ final class RandomizerConfig {
   static final String[] ENEMY_RATIOS = {"Plaga", "Helmet", "Shield", "Sub-boss"};
   static final int[] RATIO_SHIFT = {0, 4, 8, 12};
   static final int RATIO_OFF = 0, RATIO_MAX = 15;
-  /** The variety cap: pool kinds a room may roll (bits 16..17 of `ratios`; 0: the core's default of 4). */
-  static final int VARIETY_MASK = 3, VARIETY_SHIFT = 16, VARIETY_DEFAULT = 3;
+  /** The "unsafe" switch of the enemy randomizer (the owner's name, 17.11.2026): bit 16 of `ratios` -- the
+   *  cautious rooms open up (their unnamed enemies shuffle; boss rooms and narrow-counting rooms stay locked). */
+  static final int UNSAFE_SHIFT = 16;
+  /** The variety cap: pool kinds a room may roll (bits 17..18 of `ratios`; 0: the core's default of 4). */
+  static final int VARIETY_MASK = 3, VARIETY_SHIFT = 17, VARIETY_DEFAULT = 3;
 
-  /** Packs the four ratio steps (0..15 each) and the variety cap into one int, as the core reads it. The cap
-   *  1..4 goes into bits 16..17 the core's own way (runtime/enemy_random.cpp varietyCap): 1..3 as themselves,
-   *  4 as 0, the core's "its default" — so the whole setting always fits the 18 bits the core keeps. */
-  static int packRatios(int plaga, int helmet, int shield, int subBoss, int variety) {
+  /** Packs the four ratio steps (0..15 each), the unsafe switch and the variety cap into one int, as the core
+   *  reads it. `variety` is the player's pick 1..4; the core's bits 17..18 take 1..3 as themselves and 4 as 0
+   *  (its own "the default"), bit 16 is the unsafe switch. */
+  static int packRatios(int plaga, int helmet, int shield, int subBoss, int variety, boolean unsafe) {
     int out = 0;
     int[] steps = {plaga, helmet, shield, subBoss};
     for (int i = 0; i < 4; i++) {
       out |= Math.max(RATIO_OFF, Math.min(RATIO_MAX, steps[i])) << RATIO_SHIFT[i];
     }
-    return out | ((Math.max(1, Math.min(4, variety)) & 3) << VARIETY_SHIFT);
+    out |= (unsafe ? 1 : 0) << UNSAFE_SHIFT;
+    final int capBits = variety >= 4 ? 0 : Math.max(1, Math.min(3, variety));
+    return out | (capBits << VARIETY_SHIFT);
+  }
+
+  /** The variety cap the player picked, from the packed `ratios` (the core's 0 = its default of 4). */
+  static int varietyOf(int ratios) {
+    final int bits = (ratios >> VARIETY_SHIFT) & VARIETY_MASK;
+    return bits == 0 ? 4 : bits;
+  }
+
+  /** Whether the unsafe switch is on in the packed `ratios`. */
+  static boolean unsafeOf(int ratios) {
+    return (ratios >> UNSAFE_SHIFT & 1) != 0;
   }
 
   /** The mix the enemies feature starts with — the PC tool's Default profile flavor: plaga its 5, helmet its 1
-   *  (rare), shield its 7, the armored hammer about its 1:10, the variety limit its 3. One constant, so the page,
+   *  (rare), shield its 7, the sub-boss about its 1:10, the variety limit its 3, unsafe mode off (a switch of
+   *  the owner's, 17.11.2026: the cautious rooms stay shut until they ask for it). One constant, so the page,
    *  the store and the seed file all agree on "the defaults". */
-  static final int ENEMY_RATIOS_DEFAULT = packRatios(5, 1, 7, 6, VARIETY_DEFAULT);
+  static final int ENEMY_RATIOS_DEFAULT = packRatios(5, 1, 7, 6, VARIETY_DEFAULT, false);
 
   int seed;
   String name = "";
@@ -137,7 +154,7 @@ final class RandomizerConfig {
     // 0.99.16: the PC randomizer's "Enemy settings" (the owner's choice of 16.11.2026): its replacements pool,
     // its ratios and its variety limit; its HP tab stays out. Defaults are that tool's own defaults.
     features.put("enemies", new Feature("enemies", "Random enemies", false, 0, ENEMY_POOL_DEFAULT,
-        ENEMY_RATIOS_DEFAULT));
+        ENEMY_RATIOS_DEFAULT));  // 0.99.16: unsafe off by default -- the cautious rooms stay shut
   }
 
   RandomizerConfig() {}
