@@ -1875,9 +1875,11 @@ final class CoreMenu extends Dialog {
     final RandomizerConfig run = host.currentRun();
     TextView seedLine = text("", 15, false);
     seedLine.setPadding(dp(MenuLayout.GAP), dp(6), dp(MenuLayout.GAP), dp(8));
+    // s(id) is this class's getContext().getString: a Dialog's own getString(int, Object...) overload would make
+    // the call ambiguous for the format string
     seedLine.setText(run.anyEnabled()
-        ? getString(R.string.ingame_seed_active, run.seed, run.enabledCount())
-        : getString(R.string.ingame_seed_none));
+        ? getContext().getString(R.string.ingame_seed_active, run.seed, run.enabledCount())
+        : s(R.string.ingame_seed_none));
     body.addView(seedLine);
     cheatStatus = text("", 15, false); cheatStatus.setPadding(dp(MenuLayout.GAP), dp(6), dp(MenuLayout.GAP), dp(2));
     cheatStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); cheatStatus.setVisibility(View.GONE);
