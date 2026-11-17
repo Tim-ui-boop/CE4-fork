@@ -318,15 +318,14 @@ final class RandomizerConfig {
       return;
     }
     final int s = seed == 0 ? 0 : seed;
-    final Feature enemies = feature("enemies");
-    CoreBridge.setEnemyRandom(enemies.on ? s : 0);
+    // The enemy randomizer is a data rewrite since 18.11.2026 (EslRandomizer/EnemyRandomizer): one seed writes
+    // patched enemy lists the loader prefers over the disc's own, so there is nothing to tell a running core.
+    // The play-time swap (CoreBridge.setEnemyRandom) is retired in runtime/enemy_random.cpp -- it takes every
+    // seed as 0 and plans nothing.
     final Feature merchant = feature("merchant");
     CoreBridge.setMerchantRandom(merchant.on ? s : 0);
     // phase 5: how often a merchant deals anew, and which weapons he may hand out
     if (merchant.on) CoreBridge.setMerchantOptions(merchant.chance <= 0 ? 100 : merchant.chance, merchant.weapons);
-    // 0.99.16: the enemies' pool and ratios (the PC randomizer's "Enemy settings"); sent also while the switch
-    // is off, so a core that keeps running stops swapping kinds from the next room on
-    CoreBridge.setEnemyOptions(enemies.pool, enemies.ratios);
   }
 
   /**

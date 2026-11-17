@@ -528,10 +528,10 @@
     <string name="randomizer_diag_hint">Scrive un registro dettagliato delle decisioni del casuale per questa partita, per trovare i bug. Non cambia nulla nel gioco. Il registro finisce nella cartella dell\'app, sotto logs.</string>
     <string name="randomizer_diag_on">Registro di diagnostica attivo: la partita registra ogni decisione.</string>
     <string name="randomizer_diag_off">Registro di diagnostica disattivato.</string>
-    <string name="randomizer_esl_patch">Modifica dati nemici</string>
+    <string name="randomizer_esl_patch">Scrivi dati nemici</string>
     <string name="randomizer_esl_restore">Ripristina dati nemici</string>
-    <string name="randomizer_esl_hint">Test di debug: riscrive la lista dei nemici importata, come un randomizzatore per PC riscrive un\'ISO. La valle iniziale (r120) riceve un nemico nello slot libero della lista, e nella prima stanza del villaggio (r100) i nemici vengono sostituiti con tipi del randomizzatore. Avvia una nuova partita o ricarica la stanza per vederlo. L\'originale viene conservato, quindi Ripristina lo rimette.</string>
-    <string name="randomizer_esl_patched">Dati nemici modificati (%1$s), seed %2$d. Avvia o ricarica la stanza per vederlo.</string>
-    <string name="randomizer_esl_restored">Dati nemici ripristinati all\'originale.</string>
-    <string name="randomizer_esl_no_backup">Nessun originale conservato: modifica prima una volta.</string>
+    <string name="randomizer_esl_hint">Estrae i nemici della storia da questo seed e li scrive come liste aggiuntive accanto ai dati del gioco. Il disco non viene mai modificato, quindi rimuoverle ripristina l\'originale. Gli slot da cui dipende lo script di una stanza, i corvi e le mucche e i tipi che una stanza non può tenere in memoria restano intatti. Ha effetto dalla stanza successiva.</string>
+    <string name="randomizer_esl_patched">Nemici scritti: %1$s (seed %2$d). Compaiono dalla stanza successiva.</string>
+    <string name="randomizer_esl_restored">Dati nemici ripristinati a quelli del disco.</string>
+    <string name="randomizer_esl_no_backup">Nessun dato nemici scritto.</string>
 </resources>

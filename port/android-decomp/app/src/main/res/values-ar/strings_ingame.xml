@@ -542,10 +542,10 @@
     <string name="randomizer_diag_hint">يكتب سجلًا مفصلًا لقرارات العشوائية في هذه الجولة، لتتبع الأخطاء. لا يغيّر شيئًا في اللعبة. يُحفظ السجل في مجلد التطبيق داخل logs.</string>
     <string name="randomizer_diag_on">سجل التشخيص مفعّل: تسجّل الجولة كل قرار.</string>
     <string name="randomizer_diag_off">سجل التشخيص متوقف.</string>
-    <string name="randomizer_esl_patch">ترقيع بيانات الأعداء</string>
+    <string name="randomizer_esl_patch">كتابة بيانات الأعداء</string>
     <string name="randomizer_esl_restore">استعادة بيانات الأعداء</string>
-    <string name="randomizer_esl_hint">اختبار تصحيح: يعيد كتابة قائمة الأعداء المستوردة نفسها، كما يعيد مُعشِّئ على الحاسوب كتابة ملف ISO. يحصل وادي البداية (r120) على عدو واحد في الفراغ المتاح في القائمة، وفي أول غرفة في القرية (r100) تُستبدل الأعداء بأنواع المُعشِّئ. ابدأ لعبة جديدة أو أعد تحميل الغرفة لترى ذلك. يُحفظ الأصل، لذا تعيد الاستعادة الأصل.</string>
-    <string name="randomizer_esl_patched">تم ترقيع بيانات الأعداء (%1$s)، البذرة %2$d. ابدأ الغرفة أو أعد تحميلها لترى ذلك.</string>
-    <string name="randomizer_esl_restored">تمت استعادة بيانات الأعداء إلى الأصل.</string>
-    <string name="randomizer_esl_no_backup">لا يوجد أصل محفوظ بعد: رقّع مرة واحدة أولًا.</string>
+    <string name="randomizer_esl_hint">يسحب أعداء القصة من هذه البذرة ويكتبها قوائم إضافية بجانب بيانات اللعبة. لا يُغيَّر القرص أبدًا، لذا حذفها يعيد الأصل. المواضع التي تعتمد عليها غرفة السكربت، والغربان والأبقار، والأنواع التي لا تتسع لها ذاكرة الغرفة تبقى دون تغيير. يسري من الغرفة التالية.</string>
+    <string name="randomizer_esl_patched">كُتب الأعداء: %1$s (البذرة %2$d). يظهرون من الغرفة التالية.</string>
+    <string name="randomizer_esl_restored">أُعيدت بيانات الأعداء إلى القرص.</string>
+    <string name="randomizer_esl_no_backup">لا توجد بيانات أعداء مكتوبة.</string>
 </resources>

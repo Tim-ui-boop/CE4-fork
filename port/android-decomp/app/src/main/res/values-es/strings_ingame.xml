@@ -528,10 +528,10 @@
     <string name="randomizer_diag_hint">Escribe un registro detallado de las decisiones del aleatorio para esta partida, para localizar fallos. No cambia nada en el juego. El registro va a la carpeta de la app, en logs.</string>
     <string name="randomizer_diag_on">Registro de diagnóstico activado: la partida registra cada decisión.</string>
     <string name="randomizer_diag_off">Registro de diagnóstico desactivado.</string>
-    <string name="randomizer_esl_patch">Parchear datos de enemigos</string>
+    <string name="randomizer_esl_patch">Escribir datos de enemigos</string>
     <string name="randomizer_esl_restore">Restaurar datos de enemigos</string>
-    <string name="randomizer_esl_hint">Prueba de depuración: reescribe la lista de enemigos importada, como un aleatorizador de PC reescribe una ISO. El valle inicial (r120) recibe un enemigo en el hueco libre de la lista, y en la primera sala del pueblo (r100) los enemigos se sustituyen por tipos del aleatorizador. Empieza una partida nueva o recarga la sala para verlo. Se guarda el original, así que Restaurar lo devuelve.</string>
-    <string name="randomizer_esl_patched">Datos de enemigos parcheados (%1$s), semilla %2$d. Inicia o recarga la sala para verlo.</string>
-    <string name="randomizer_esl_restored">Datos de enemigos restaurados al original.</string>
-    <string name="randomizer_esl_no_backup">Todavía no hay original guardado: parchea una vez primero.</string>
+    <string name="randomizer_esl_hint">Saca los enemigos de la historia de esta semilla y los escribe como listas adicionales junto a los datos del juego. El disco nunca se modifica, así que eliminarlas restaura el original. Las ranuras de las que depende el guion de una sala, los cuervos y las vacas, y los tipos que una sala no puede tener en memoria se dejan intactos. Se aplica desde la sala siguiente.</string>
+    <string name="randomizer_esl_patched">Enemigos escritos: %1$s (semilla %2$d). Aparecen desde la sala siguiente.</string>
+    <string name="randomizer_esl_restored">Datos de enemigos restaurados a los del disco.</string>
+    <string name="randomizer_esl_no_backup">No hay datos de enemigos escritos.</string>
 </resources>

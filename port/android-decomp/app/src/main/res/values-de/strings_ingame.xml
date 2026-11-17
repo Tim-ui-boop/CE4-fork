@@ -525,10 +525,10 @@
     <string name="randomizer_diag_hint">Schreibt ein ausführliches Protokoll der Entscheidungen des Randomizers für diesen Durchlauf, um Fehler zu finden. Am Spiel ändert es nichts. Das Protokoll landet im Ordner der App unter logs.</string>
     <string name="randomizer_diag_on">Diagnose-Protokoll an: der Durchlauf protokolliert jede Entscheidung.</string>
     <string name="randomizer_diag_off">Diagnose-Protokoll aus.</string>
-    <string name="randomizer_esl_patch">Gegnerdaten patchen</string>
+    <string name="randomizer_esl_patch">Gegnerdaten schreiben</string>
     <string name="randomizer_esl_restore">Gegnerdaten zurücksetzen</string>
-    <string name="randomizer_esl_hint">Debug-Test: schreibt die importierte Gegnerliste selbst um, so wie ein PC-Randomizer eine ISO umschreibt. Das Starttal (r120) bekommt einen Gegner in den freien Platz der Liste, und im ersten Dorfraum (r100) werden die Gegner durch Randomizer-Arten ersetzt. Neues Spiel starten oder den Raum neu laden, um es zu sehen. Das Original wird behalten, Zurücksetzen stellt es wieder her.</string>
-    <string name="randomizer_esl_patched">Gegnerdaten gepatcht (%1$s), Seed %2$d. Raum starten oder neu laden, um es zu sehen.</string>
-    <string name="randomizer_esl_restored">Gegnerdaten auf das Original zurückgesetzt.</string>
-    <string name="randomizer_esl_no_backup">Noch kein Original gesichert: erst einmal patchen.</string>
+    <string name="randomizer_esl_hint">Zieht die Gegner der Story aus diesem Seed und schreibt sie als zusätzliche Listen neben die Daten des Spiels. Die Disc wird nie verändert, Entfernen stellt also das Original wieder her. Plätze, auf die das Skript eines Raums zählt, Krähen und Kühe sowie Arten, die ein Raum nicht in den Speicher bekommt, bleiben unangetastet. Wirkt ab dem nächsten Raum.</string>
+    <string name="randomizer_esl_patched">Gegner geschrieben: %1$s (Seed %2$d). Sie erscheinen ab dem nächsten Raum.</string>
+    <string name="randomizer_esl_restored">Gegnerdaten auf die der Disc zurückgesetzt.</string>
+    <string name="randomizer_esl_no_backup">Es liegen keine geschriebenen Gegnerdaten vor.</string>
 </resources>

@@ -521,10 +521,10 @@
     <string name="randomizer_diag_hint">Menulis log terperinci tentang keputusan pengacak untuk larian ini, untuk mencari pepijat. Ia tidak mengubah apa-apa dalam permainan. Log disimpan dalam folder aplikasi di bawah logs.</string>
     <string name="randomizer_diag_on">Log diagnostik hidup: larian merekod setiap keputusan.</string>
     <string name="randomizer_diag_off">Log diagnostik mati.</string>
-    <string name="randomizer_esl_patch">Tampal data musuh</string>
+    <string name="randomizer_esl_patch">Tulis data musuh</string>
     <string name="randomizer_esl_restore">Pulihkan data musuh</string>
-    <string name="randomizer_esl_hint">Ujian nyahpepijat: menulis semula senarai musuh yang diimport, seperti pengacak PC menulis semula ISO. Lembah permulaan (r120) mendapat satu musuh dalam ruang lapang senarai, dan di bilik pertama kampung (r100) musuh diganti dengan jenis pengacak. Mulakan permainan baharu atau muat semula bilik untuk melihatnya. Yang asal disimpan, jadi Pulihkan mengembalikannya.</string>
-    <string name="randomizer_esl_patched">Data musuh ditampal (%1$s), benih %2$d. Mulakan atau muat semula bilik untuk melihatnya.</string>
-    <string name="randomizer_esl_restored">Data musuh dipulihkan kepada yang asal.</string>
-    <string name="randomizer_esl_no_backup">Belum ada salinan asal: tampal sekali dahulu.</string>
+    <string name="randomizer_esl_hint">Mengambil musuh cerita daripada benih ini dan menulisnya sebagai senarai tambahan di sebelah data permainan. Cakera tidak pernah diubah, jadi memadamnya memulihkan yang asal. Slot yang bergantung pada skrip bilik, burung gagak dan lembu, serta jenis yang tidak dapat ditampung bilik dalam memori dibiarkan. Berkuat kuasa dari bilik seterusnya.</string>
+    <string name="randomizer_esl_patched">Musuh ditulis: %1$s (benih %2$d). Muncul dari bilik seterusnya.</string>
+    <string name="randomizer_esl_restored">Data musuh dipulihkan kepada cakera.</string>
+    <string name="randomizer_esl_no_backup">Tiada data musuh yang ditulis.</string>
 </resources>

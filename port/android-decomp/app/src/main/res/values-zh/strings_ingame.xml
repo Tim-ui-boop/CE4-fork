@@ -523,10 +523,10 @@
     <string name="randomizer_diag_hint">为这次游戏记录随机化每项决定的详细日志，便于查找问题。不会改变游戏内容。日志保存在应用文件夹的 logs 里。</string>
     <string name="randomizer_diag_on">诊断日志已开启：这次游戏会记录每项决定。</string>
     <string name="randomizer_diag_off">诊断日志已关闭。</string>
-    <string name="randomizer_esl_patch">修补敌人数据</string>
+    <string name="randomizer_esl_patch">写入敌人数据</string>
     <string name="randomizer_esl_restore">还原敌人数据</string>
-    <string name="randomizer_esl_hint">调试测试：直接重写导入的敌人列表，就像电脑端随机化工具重写 ISO 一样。起始山谷（r120）会在列表的空位得到一个敌人，村庄的第一个房间（r100）里的敌人会被替换成随机化类型。开始新游戏或重新载入房间即可看到。原文件会保留，所以“还原”可以恢复它。</string>
-    <string name="randomizer_esl_patched">敌人数据已修补（%1$s），种子 %2$d。开始或重新载入房间即可看到。</string>
-    <string name="randomizer_esl_restored">敌人数据已还原为原文件。</string>
-    <string name="randomizer_esl_no_backup">还没有保存原文件：请先修补一次。</string>
+    <string name="randomizer_esl_hint">从这个种子抽出剧情中的敌人，写成游戏数据旁边的额外列表。光盘永不改动，所以删除它们即可恢复原样。房间脚本依赖的槽位、乌鸦和牛，以及房间内存放不下的类型都不会被改动。从下一个房间起生效。</string>
+    <string name="randomizer_esl_patched">敌人已写入：%1$s（种子 %2$d）。从下一个房间起出现。</string>
+    <string name="randomizer_esl_restored">敌人数据已还原为光盘上的数据。</string>
+    <string name="randomizer_esl_no_backup">当前没有写入的敌人数据。</string>
 </resources>

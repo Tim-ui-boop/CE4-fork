@@ -534,14 +534,18 @@ void logLine(const char* fmt, const char* a, const char* b)
 }  // namespace
 
 // The app (CoreBridge.setEnemyRandom): the switch's seed, 0 off; from the next room on. Any thread.
+// RETIRED (18.11.2026): the enemy randomizer is now a data rewrite (EslRandomizer/EnemyRandomizer in
+// the app: one seed writes patched enemy lists the loader prefers over the disc's own), not a
+// play-time swap. This file stays only so the IPC symbols keep linking; the seed is always taken as
+// 0, which turns every path in it off -- no room is planned, no entry is moved and no kind is
+// swapped. See port/tools/enemy_plan.py for why the swap could not be made safe: a room's heap holds
+// only so many enemy modules and a script that loses one uses the missing pointer (the crash of
+// 17.11.2026), which a rewrite never risks because the game loads exactly what the plan wrote.
 extern "C" void re4_core_set_enemy_random(int seed)
 {
-    seed &= 0xFFFFF;
-    if (__atomic_exchange_n(&gSeed, seed, __ATOMIC_RELAXED) != seed) {
-        re4_log("core: random enemies %s", seed ? "on (from the next room)" : "off (from the next room)");
-        if (seed) {
-            re4_log("core: random enemies seed %d", seed);
-        }
+    (void) seed;
+    if (__atomic_exchange_n(&gSeed, 0, __ATOMIC_RELAXED) != 0) {
+        re4_log("core: random enemies retired (the enemy randomizer is a data rewrite now)");
     }
 }
 

@@ -529,10 +529,10 @@
     <string name="randomizer_diag_hint">Grava um registro detalhado das decisões do aleatório para esta partida, para localizar erros. Não muda nada no jogo. O registro vai para a pasta do app, em logs.</string>
     <string name="randomizer_diag_on">Registro de diagnóstico ligado: a partida registra cada decisão.</string>
     <string name="randomizer_diag_off">Registro de diagnóstico desligado.</string>
-    <string name="randomizer_esl_patch">Aplicar dados de inimigos</string>
+    <string name="randomizer_esl_patch">Escrever dados de inimigos</string>
     <string name="randomizer_esl_restore">Restaurar dados de inimigos</string>
-    <string name="randomizer_esl_hint">Teste de depuração: reescreve a lista de inimigos importada, como um aleatorizador de PC reescreve uma ISO. O vale inicial (r120) recebe um inimigo no espaço livre da lista, e na primeira sala da vila (r100) os inimigos são substituídos por tipos do aleatorizador. Comece um jogo novo ou recarregue a sala para ver. O original é guardado, por isso Restaurar repõe-no.</string>
-    <string name="randomizer_esl_patched">Dados de inimigos aplicados (%1$s), semente %2$d. Inicie ou recarregue a sala para ver.</string>
-    <string name="randomizer_esl_restored">Dados de inimigos restaurados ao original.</string>
-    <string name="randomizer_esl_no_backup">Ainda não há original guardado: aplique uma vez primeiro.</string>
+    <string name="randomizer_esl_hint">Tira os inimigos da história desta semente e grava-os como listas extra ao lado dos dados do jogo. O disco nunca é alterado, portanto removê-las restaura o original. As ranhuras de que o guião de uma sala depende, os corvos e as vacas, e os tipos que uma sala não consegue ter em memória ficam intocados. Aplica-se a partir da sala seguinte.</string>
+    <string name="randomizer_esl_patched">Inimigos escritos: %1$s (semente %2$d). Aparecem a partir da sala seguinte.</string>
+    <string name="randomizer_esl_restored">Dados de inimigos restaurados aos do disco.</string>
+    <string name="randomizer_esl_no_backup">Não há dados de inimigos escritos.</string>
 </resources>

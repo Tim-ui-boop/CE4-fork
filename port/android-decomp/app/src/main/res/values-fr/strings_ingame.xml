@@ -530,10 +530,10 @@
     <string name="randomizer_diag_hint">Écrit un journal détaillé des décisions de l\'aléatoire pour cette partie, pour retrouver les bugs. Cela ne change rien au jeu. Le journal va dans le dossier de l\'appli, sous logs.</string>
     <string name="randomizer_diag_on">Journal de diagnostic activé : la partie note chaque décision.</string>
     <string name="randomizer_diag_off">Journal de diagnostic désactivé.</string>
-    <string name="randomizer_esl_patch">Corriger les données d\'ennemis</string>
+    <string name="randomizer_esl_patch">Écrire les données d\'ennemis</string>
     <string name="randomizer_esl_restore">Restaurer les données d\'ennemis</string>
-    <string name="randomizer_esl_hint">Test de débogage : réécrit la liste d\'ennemis importée, comme un aléatoiriseur PC réécrit une ISO. La vallée de départ (r120) reçoit un ennemi dans l\'emplacement libre de la liste, et dans la première salle du village (r100) les ennemis sont remplacés par des types de l\'aléatoiriseur. Lance une nouvelle partie ou recharge la salle pour le voir. L\'original est conservé, donc Restaurer le remet.</string>
-    <string name="randomizer_esl_patched">Données d\'ennemis corrigées (%1$s), graine %2$d. Lance ou recharge la salle pour le voir.</string>
-    <string name="randomizer_esl_restored">Données d\'ennemis restaurées à l\'original.</string>
-    <string name="randomizer_esl_no_backup">Aucun original conservé pour l\'instant : corrige une fois d\'abord.</string>
+    <string name="randomizer_esl_hint">Tire les ennemis de l\'histoire de cette graine et les écrit comme listes supplémentaires à côté des données du jeu. Le disque n\'est jamais modifié : les supprimer restaure l\'original. Les emplacements dont dépend le script d\'une salle, les corbeaux et les vaches, et les types qu\'une salle ne peut pas garder en mémoire restent intacts. Prend effet dès la salle suivante.</string>
+    <string name="randomizer_esl_patched">Ennemis écrits : %1$s (graine %2$d). Ils apparaissent dès la salle suivante.</string>
+    <string name="randomizer_esl_restored">Données d\'ennemis restaurées à celles du disque.</string>
+    <string name="randomizer_esl_no_backup">Aucune donnée d\'ennemis écrite.</string>
 </resources>

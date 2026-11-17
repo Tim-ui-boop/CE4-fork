@@ -163,9 +163,10 @@ final class RandomizerDialog extends Dialog {
     hint.setPadding(dp(34), 0, 0, 0);
     group.addView(hint);
 
-    // ---- the debug data patch (proof of concept, 17.11.2026) ------------------------------------------------
-    // Two buttons that rewrite the imported enemy list itself, the way a PC randomizer rewrites an ISO: the run then
-    // plays out of the patched data. Small text, because they are a test tool and not part of the randomizer.
+    // ---- the enemy data rewrite (18.11.2026) -------------------------------------------------------------------
+    // The enemy randomizer is a data rewrite now, not a play-time swap: one seed writes patched enemy lists the
+    // loader prefers over the disc's own (runtime/dvd.cpp entryPath looks for <name>.re4 first). Nothing on the
+    // disc is written, so removing the files restores vanilla.
     LinearLayout patchRow = new LinearLayout(context);
     patchRow.setGravity(Gravity.CENTER_VERTICAL);
     patchRow.setPadding(dp(34), dp(6), 0, 0);
@@ -182,29 +183,25 @@ final class RandomizerDialog extends Dialog {
   }
 
   /**
-   * Rewrites the enemy list of the imported data: r100's Ganado spots take a randomizer kind and r120 gets the list's
-   * spare slot. Works on the file, so the patch survives a restart and needs no running game; the app's own start of
-   * the core reads the file on the next room change.
+   * Writes this run's enemy lists: the Story's lists take the seed's kinds, checked against each room's script and
+   * its heap. Takes effect on the next room load, so a run already in progress hears it too.
    */
   private void patchEsl() {
     try {
       final int seed = run.seed == 0 ? RandomizerConfig.freshSeed() : run.seed;
-      EslRandomizer.Result result = EslRandomizer.patch(getContext(), seed);
+      if (run.seed == 0) run.seed = seed;
+      EnemyRandomizer.Result result = EnemyRandomizer.apply(getContext(), seed);
       status.setText(getContext().getString(R.string.randomizer_esl_patched, result.summary(), seed));
-      for (String line : result.lines) android.util.Log.i("EslRandomizer", line);
     } catch (java.io.IOException e) {
       status.setText(e.getMessage());
     }
   }
 
-  /** Puts the list the game shipped with back, so the test can be repeated from a clean file. */
+  /** Removes the patched lists, so the disc's own enemy data is what the game reads again. */
   private void restoreEsl() {
-    try {
-      boolean done = EslRandomizer.restore(getContext());
-      status.setText(getContext().getString(done ? R.string.randomizer_esl_restored : R.string.randomizer_esl_no_backup));
-    } catch (java.io.IOException e) {
-      status.setText(e.getMessage());
-    }
+    int removed = EnemyRandomizer.restore(getContext());
+    status.setText(getContext().getString(removed > 0
+        ? R.string.randomizer_esl_restored : R.string.randomizer_esl_no_backup));
   }
 
   /** A small button, so a row of them fits beside a label on a phone. */
