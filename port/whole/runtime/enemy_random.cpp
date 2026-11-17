@@ -943,17 +943,19 @@ extern "C" void re4_enemy_random_room(void)
         int na = 0;
         const int objNum = SmdGetObjNum();
         // near Leon first (the owner sees nothing when the add lands in a far corner of a big outdoor
-        // room: the anchors are the scenery objects nearest where the player stands, capped at 16)
-        struct AnchorDist { int o; long d2; };
-        AnchorDist near[16];
-        for (int o = 0; o < objNum; o++) {
-            cObj* obj = SmdGetObjPtr((u32) o);
-            if (obj == 0) {
-                continue;
-            }
-            const float dx = obj->pos.x - pPL->pos.x;
-            const float dy = obj->pos.y - pPL->pos.y;
-            const float dz = obj->pos.z - pPL->pos.z;
+            // room): the anchors are the scenery objects nearest where the player stands (pG->pl_pos, the
+            // cached position the game itself places the partner from at a room's start, sce_sys.cpp:82 --
+            // pPL is only forward-declared here, so its fields are not ours to read)
+            struct AnchorDist { int o; long d2; };
+            AnchorDist near[16];
+            for (int o = 0; o < objNum; o++) {
+                cObj* obj = SmdGetObjPtr((u32) o);
+                if (obj == 0) {
+                    continue;
+                }
+                const float dx = obj->pos.x - pG->pl_pos.x;
+                const float dy = obj->pos.y - pG->pl_pos.y;
+                const float dz = obj->pos.z - pG->pl_pos.z;
             const long d2 = (long) (dx * dx + dy * dy + dz * dz);
             int k = na < 16 ? na++ : 15;
             while (k > 0 && near[k - 1].d2 > d2) {
