@@ -2727,6 +2727,10 @@ void configure()
     }
     // the cheat menu's switches and buttons in every game frame (runtime/cheats.cpp)
     re4_cheats_install();
+    // 0.99.17 (the owner's wish of 17.11.2026, after a week of "which build is on the phone?"): the build
+    // stamp, always. The first line of every session names the commit it was built from and whether the
+    // compiler is the CI one, so a pasted log can never be read as a different build.
+    re4_log("core: build %s (compiled %s, %s)", RE4_BUILD_STAMP, __DATE__, __TIME__);
     const char* cheats = getenv("RE4_TEST_CHEATS");
     if (cheats && strncmp(cheats, "free+", 5) == 0) {
         char* end = 0;

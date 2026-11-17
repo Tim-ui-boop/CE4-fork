@@ -97,9 +97,13 @@ namespace {
 
 enum { kHealth = 1, kAmmo = 2, kOneHit = 4, kAutoQte = 8, kExtras = 16, kCharShift = 5, kChar = 7 << kCharShift,
        kCostume = 256, kInvisible = 512, kItemRandom = 1024, kSeedShift = 11, kSeedMask = 0xFFFFF << kSeedShift,
-       kAll = 31 | kChar | kCostume | kInvisible | kItemRandom | kSeedMask };
+       // 0.99.17 (the owner's wish of 17.11.2026): the randomizer's in-depth log. A cheat bit rather than
+       // an environment variable, so it can be switched on from a phone; runtime/re4_diag.cpp reads it.
+       kDiag = 1 << 31,
+       kAll = 31 | kChar | kCostume | kInvisible | kItemRandom | kSeedMask | kDiag };
 
-std::atomic<int> gWanted(-1);  // the app's switches, -1 before RE4_CHEATS was read
+std::atomic<int> gWanted(0);   // the app's switches (bit 31 is diagnostics, so the value may be negative)
+std::atomic<bool> gWantedRead(false);  // RE4_CHEATS read once (the sign of gWanted can no longer say it)
 int gApplied;                  // what the game frames have set so far
 std::atomic<int> gQueued(0);   // a button pressed while the game ran (the hook does it)
 int gHooked;
@@ -481,11 +485,13 @@ void switchNow();
 void hook(unsigned)
 {
     int wanted = gWanted.load(std::memory_order_acquire);
-    if (wanted < 0) {
+    if (!gWantedRead.load(std::memory_order_acquire)) {
         const char* v = getenv("RE4_CHEATS");
-        wanted = v ? (int) strtol(v, 0, 0) & kAll : 0;
-        int expected = -1;
-        gWanted.compare_exchange_strong(expected, wanted);
+        const int fromEnv = v ? (int) strtol(v, 0, 0) & kAll : 0;
+        bool expected = false;
+        if (gWantedRead.compare_exchange_strong(expected, true)) {
+            gWanted.store(fromEnv, std::memory_order_release);  // only the first reader sets it
+        }
         wanted = gWanted.load(std::memory_order_acquire);
     }
     apply(wanted);
@@ -559,7 +565,7 @@ int gCostumeGiven;      // 1 while the cheat gave the special costume (game_cost
 int wantedBits()
 {
     int wanted = gWanted.load(std::memory_order_acquire);
-    if (wanted < 0) {
+    if (!gWantedRead.load(std::memory_order_acquire)) {
         const char* v = getenv("RE4_CHEATS");
         wanted = v ? (int) strtol(v, 0, 0) & kAll : 0;
     }
@@ -1283,18 +1289,29 @@ extern "C" {
 int re4_invisible(void)
 {
     const int wanted = gWanted.load(std::memory_order_relaxed);
-    return wanted > 0 && (wanted & kInvisible) ? 1 : 0;
+    return wanted != 0 && (wanted & kInvisible) ? 1 : 0;
 }
 
 void re4_cheats_set(int bits)
 {
+    gWantedRead.store(true, std::memory_order_release);
     gWanted.store(bits & kAll, std::memory_order_release);
+}
+
+// 1 with the randomizer's diagnostics on (runtime/re4_diag.cpp asks; any thread).
+int re4_diag_cheat(void)
+{
+    const int w = gWanted.load(std::memory_order_acquire);
+    return w != 0 && (w & kDiag) ? 1 : 0;
 }
 
 int re4_cheats_wanted(void)
 {
-    int w = gWanted.load(std::memory_order_acquire);
-    return w < 0 ? 0 : w;
+    if (!gWantedRead.load(std::memory_order_acquire)) {
+        const char* v = getenv("RE4_CHEATS");
+        return v ? (int) strtol(v, 0, 0) & kAll : 0;
+    }
+    return gWanted.load(std::memory_order_acquire);
 }
 
 // A button while the game runs: done by the next game frame (returns 3 = queued).

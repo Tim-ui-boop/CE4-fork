@@ -128,6 +128,11 @@ static bool roomEntryCenter(int room, float out[3])
 extern GLOBAL_WK* pG;
 
 extern "C" void re4_log(const char* fmt, ...);
+// runtime/re4_diag.cpp: the randomizer's in-depth log (the app's Diagnostics switch). Every
+// question this feature was debugged through -- why an entry stayed as it was, where a chosen
+// place sits -- becomes one line with it on, and costs nothing with it off.
+extern "C" void re4_diag(const char* fmt, ...);
+extern "C" int re4_diag_on(void);
 extern "C" void re4_core_set_enemy_random(int seed);
 extern "C" void re4_core_set_enemy_options(int pool, int ratios);
 extern "C" void re4_enemy_random_room(void);
@@ -356,6 +361,9 @@ struct Plan {
 };
 Plan gPlan;
 unsigned gLines;
+// 0.99.17 (the owner's wish of 17.11.2026): 300 lines for a whole session went silent in a long test
+// exactly when the log was needed. 4000 fits a playthrough and still bounds a runaway loop.
+const unsigned kLogLines = 4000;
 int gTestSeed = -1;  // RE4_ENEMY_RANDOM (the PC check)
 // RE4_ENEMY_RANDOM_CHECK=1 (the PC check): the list as EmSetFromList found it, compared at its end: the randomizer
 // writes no entry (the game itself sets be_flag of what it created; a copy's death bit is no part of the list)
@@ -517,7 +525,7 @@ Place placeOf(const EM_LIST& e)
 
 void logLine(const char* fmt, const char* a, const char* b)
 {
-    if (gLines < 300) {
+    if (gLines < kLogLines) {
         gLines++;
         re4_log(fmt, a, b);
     }
@@ -677,10 +685,25 @@ void manifestBuild()
             subBossLeft--;
         }
     }
-    if (gLines < 300) {
+    if (gLines < kLogLines) {
         gLines++;
         re4_log("enemies: manifest list %d (seed %u): %d rooms planned, %d with a sub-boss kind",
                 m.list, m.seed, m.rooms, m.subBosses);
+    }
+    if (re4_diag_on()) {
+        // the whole plan, room by room: the table the owner can read back when a room misbehaves
+        for (int i = 0; i < m.rooms; i++) {
+            const RoomPlan& rp = m.plan[i];
+            char kinds[96];
+            int len = 0;
+            kinds[0] = 0;
+            for (int k = 0; k < rp.rolledCount && len < (int) sizeof(kinds) - 12; k++) {
+                len += snprintf(kinds + len, sizeof(kinds) - len, " 0x%02x/%d", kPoolKinds[rp.rolledKind[k]].id,
+                                kPoolKinds[rp.rolledKind[k]].type);
+            }
+            re4_diag("diag manifest r%03x: room kind %d%s, %d kind(s)%s", rp.room, rp.kind,
+                     rp.subBoss ? " sub-boss" : "", rp.rolledCount, kinds);
+        }
     }
 }
 
@@ -815,7 +838,7 @@ extern "C" int re4_enemy_random_seed_list(void)
         d->Guard_r = 1000;
         d->be_flag = 1 | 2;  // alive (bit 0: what the loop needs) and set (bit 1: what the room's own code reads)
         seeded++;
-        if (gLines < 300) {
+        if (gLines < kLogLines) {
             gLines++;
             re4_log("enemies: random enemies r%03x: entry 0x%02x seeded with id 0x%02x type %d at (%d, %d, %d)",
                     p.room, k, to.id, to.type, at.pos[0], at.pos[1], at.pos[2]);
@@ -908,7 +931,7 @@ extern "C" void re4_enemy_random_room(void)
     }
     p.movers = nm;
     p.spots = ns;
-    if (nm == 0 && gLines < 300) {
+    if (nm == 0 && gLines < kLogLines) {
         gLines++;
         // 0.99.17: the plan stays alive anyway -- a room whose enemies all come as the script's waves (the farm,
         // the village raid) rolls kinds for them; before, this return left the wave changer dead in those rooms
@@ -935,7 +958,7 @@ extern "C" void re4_enemy_random_room(void)
         for (int i = 0; i < mp->rolledCount; i++) {
             p.rolledKind[i] = mp->rolledKind[i];
         }
-    } else if (gLines < 300) {
+    } else if (gLines < kLogLines) {
         gLines++;
         re4_log("enemies: random enemies r%03x: no plan of its own in this list (the kinds stay)", p.room);
     }
@@ -959,7 +982,7 @@ extern "C" void re4_enemy_random_room(void)
             for (int i = 0; i < p.rolledCount; i++) {
                 p.rolledKind[i] = local.rolledKind[i];
             }
-            if (gLines < 300 && p.rolledCount > 0) {
+            if (gLines < kLogLines && p.rolledCount > 0) {
                 gLines++;
                 re4_log("enemies: random enemies r%03x: %d kinds rolled for a room no list names", p.room,
                         p.rolledCount);
@@ -1003,6 +1026,24 @@ extern "C" void re4_enemy_random_room(void)
                 p.swapKind[no] = p.rolledKind[pick];
                 p.kindSwaps++;
             }
+        }
+        if (re4_diag_on()) {
+            // one line an entry: what stands here, what the plan did with it, and every protection
+            // that had a say -- the questions that took days of guessing (is it named? does an area
+            // wait for it? was its kind loaded? did it move?) answered in the log itself
+            const EM_LIST& e = pG->Em_list[no];
+            const int kindNow = p.swapKind[no];
+            char what[96];
+            if (kindNow >= 0) {
+                const Kind& to = kPoolKinds[kindNow];
+                snprintf(what, sizeof(what), "becomes id 0x%02x type %d", to.id, to.type);
+            } else {
+                snprintf(what, sizeof(what), "stays as it is");
+            }
+            re4_diag("diag r%03x entry 0x%02x id 0x%02x type %d set %d flag 0x%08x hp %d: %s;%s%s %s",
+                     p.room, no, e.id, e.type, e.set, (unsigned) e.flag, e.hp, what,
+                     namedIn(row, no) ? " named" : "", waited[no] ? " area-waited" : "",
+                     p.moved[no] ? " moved" : " unmoved");
         }
         // 0.99.17: the animals roll in their own pass below (a Crow or Cow is never a mover, so this place never
         // saw them; the owner's wish of 17.11.2026 kept: the sub-boss odds, only in a fully open room)
@@ -1194,12 +1235,12 @@ extern "C" void re4_enemy_random_room(void)
             refY[nr] = spawn[1];
             refZ[nr] = spawn[2];
             nr++;
-            if (gLines < 300) {
+            if (gLines < kLogLines) {
                 gLines++;
                 re4_log("enemies: random enemies r%03x: the room's centre (%.0f, %.0f, %.0f)", p.room, spawn[0],
                         spawn[1], spawn[2]);
             }
-        } else if (gLines < 300) {
+        } else if (gLines < kLogLines) {
             gLines++;
             re4_log("enemies: random enemies r%03x: no entries to centre on, anchoring on the player's place", p.room);
         }
@@ -1318,8 +1359,23 @@ extern "C" void re4_enemy_random_room(void)
                 avoidAdd(avoid, at.pos);
                 Plan::Add& ad = p.adds[p.addCount++];
                 ad.kind = kind;
+                if (re4_diag_on()) {
+                    // the proof the owner's test needed: how far the chosen place sits from the room's
+                    // centre (a game unit is a centimetre, so this is metres) and from the player cache
+                    const float cx = at.pos[0] * 10.0f, cy = at.pos[1] * 10.0f, cz = at.pos[2] * 10.0f;
+                    float dx = cx - refX[0], dy = cy - refY[0], dz = cz - refZ[0];
+                    const float fromCentre = sqrtf(dx * dx + dy * dy + dz * dz);
+                    dx = cx - pG->pl_pos.x;
+                    dy = cy - pG->pl_pos.y;
+                    dz = cz - pG->pl_pos.z;
+                    const float fromPlayer = sqrtf(dx * dx + dy * dy + dz * dz);
+                    re4_diag("diag r%03x add %d: id 0x%02x type %d at (%.0f, %.0f, %.0f) cm: %.0f cm from the "
+                             "room's centre, %.0f cm from the cached player place",
+                             p.room, p.addCount - 1, kPoolKinds[kind].id, kPoolKinds[kind].type, cx, cy, cz,
+                             fromCentre, fromPlayer);
+                }
                 ad.at = at;
-                if (gLines < 300) {
+                if (gLines < kLogLines) {
                     gLines++;
                     const Kind& to = kPoolKinds[kind];
                     re4_log("enemies: random enemies r%03x: an added id 0x%02x type %d at (%d, %d, %d)",
@@ -1330,7 +1386,7 @@ extern "C" void re4_enemy_random_room(void)
                 }
             }
         }
-        if (gLines < 300 && (p.addCount > 0 || p.addRefused[0])) {
+        if (gLines < kLogLines && (p.addCount > 0 || p.addRefused[0])) {
             gLines++;
             re4_log("enemies: random enemies r%03x: %d added from the scenery%s%s", p.room, p.addCount,
                     p.addRefused[0] ? ", some not: " : "", p.addRefused[0] ? p.addRefused : "");
@@ -1340,7 +1396,7 @@ extern "C" void re4_enemy_random_room(void)
         memcpy(gBefore, pG->Em_list, sizeof(gBefore));
         gChecking = true;
     }
-    if (gLines < 300 && p.kindSwaps > 0) {
+    if (gLines < kLogLines && p.kindSwaps > 0) {
         gLines++;
         re4_log("enemies: random enemies r%03x: %d kinds planned (%d of %d entries change kind)", p.room,
                 p.rolledCount, p.kindSwaps, p.movers);
@@ -1479,7 +1535,7 @@ extern "C" int re4_enemy_random_wave(int no, EM_LIST* out)
             }
         }
         (void) roll2;
-        if (changed && gLines < 300) {
+        if (changed && gLines < kLogLines) {
             gLines++;
             re4_log("enemies: random enemies r%03x: the named wave's 0x%02x wears a costume (flag 0x%08x)",
                     p.room, no, dressed->flag);
@@ -1514,7 +1570,7 @@ extern "C" int re4_enemy_random_wave(int no, EM_LIST* out)
         out->flag = 0;
         out->Character = 0;
         if (to.minHp > out->hp) out->hp = to.minHp;
-        if (gLines < 300) {
+        if (gLines < kLogLines) {
             gLines++;
             re4_log("enemies: random enemies r%03x: the wave's 0x%02x (id 0x%02x) becomes id 0x%02x type %d",
                     p.room, no, e.id, to.id, to.type);
@@ -1554,7 +1610,7 @@ extern "C" int re4_enemy_random_extra(EM_LIST* out)
         checkList();
         return -1;
     }
-    if (p.copyNext == 0 && gLines < 300) {
+    if (p.copyNext == 0 && gLines < kLogLines) {
         gLines++;
         char count[160] = "";
         int len = 0;
@@ -1661,7 +1717,7 @@ extern "C" void re4_enemy_random_extra_made(int ok)
     }
     if (p.addPhase) {
         p.addsFailed++;
-        if (gLines < 300) {
+        if (gLines < kLogLines) {
             gLines++;
             re4_log("enemies: random enemies in r%03x: an added enemy did not come (dead before, there already or the room full)",
                     p.room);
@@ -1669,7 +1725,7 @@ extern "C" void re4_enemy_random_extra_made(int ok)
         return;
     }
     p.copiesFailed++;
-    if (gLines < 300) {
+    if (gLines < kLogLines) {
         gLines++;
         re4_log("enemies: random enemies in r%03x: an added enemy did not come (dead before, there already or the room full)",
                 p.room);

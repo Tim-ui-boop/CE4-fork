@@ -141,6 +141,17 @@ string(JSON RE4_MAIN_COUNT LENGTH "${RE4_PLAN}" main)
 string(JSON RE4_MODULE_COUNT LENGTH "${RE4_PLAN}" modules)
 set(RE4_TREE "${RE4_PREPARED}/tree")
 
+# The build stamp (0.99.17, the owner's wish of 17.11.2026, after a week of "which build is on the
+# phone?"): the commit CI built from, or a local marker. state_trace.cpp logs it as the session's first
+# line, so a pasted log names its own build instead of being identified by guesswork.
+if(DEFINED ENV{RE4_BUILD_STAMP} AND NOT "$ENV{RE4_BUILD_STAMP}" STREQUAL "")
+    set(RE4_STAMP "$ENV{RE4_BUILD_STAMP}")
+    message(STATUS "re4: build stamp ${RE4_STAMP}")
+else()
+    set(RE4_STAMP "local")
+endif()
+add_compile_definitions(RE4_BUILD_STAMP="${RE4_STAMP}")
+
 # --- compile settings of original game code ------------------------------------
 add_library(re4_game_flags INTERFACE)
 target_include_directories(re4_game_flags BEFORE INTERFACE
@@ -289,7 +300,7 @@ add_library(re4_gamehooks_obj OBJECT runtime/state_trace.cpp runtime/core_bridge
     runtime/gx_owner.cpp runtime/potato.cpp runtime/aim_options.cpp
     runtime/sound_volume.cpp runtime/minimap.cpp runtime/laser_colour.cpp runtime/benchmark.cpp
     runtime/glow_check.cpp runtime/view_distance.cpp runtime/cpu_skip.cpp runtime/wheel_zoom.cpp
-    runtime/enemy_random.cpp runtime/merchant_random.cpp)
+    runtime/enemy_random.cpp runtime/merchant_random.cpp runtime/re4_diag.cpp)
 target_link_libraries(re4_gamehooks_obj PRIVATE re4_game_flags)
 target_include_directories(re4_gamehooks_obj PRIVATE runtime)
 string(APPEND RE4_LINK_OBJECTS "main=$<TARGET_OBJECTS:re4_gamehooks_obj>\n")

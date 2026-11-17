@@ -97,6 +97,10 @@ jobs:
 
       - name: Build native game core for ARM32 and ARM64
         shell: bash
+        env:
+          # The build stamp the core logs as its first line (0.99.17, the owner's wish of 17.11.2026):
+          # a pasted log then names its own build instead of being identified by guesswork.
+          RE4_BUILD_STAMP: ${{ github.sha }}
         run: |
           chmod +x port/tools/whole_build_android.sh
           port/tools/whole_build_android.sh --ndk "$ANDROID_HOME/ndk/28.2.13676358" --abi all
