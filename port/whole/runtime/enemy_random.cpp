@@ -60,34 +60,63 @@
 #include "sce_at.h"
 #include "atari.h"
 #include "scroll.h"
-#include "room_jmp.h"
 
-extern void* roomInfoAddr;  // game/main.cpp: the room info table (debug spawn points per room)
-
-// Where the player stands in this room: the room's own spawn record (CRoomInfo, room_jmp.cpp -- the
-// table title.cpp itself places Leon from), not a player cache. pG->pl_pos at room-plan time is the
-// position of the room you just left (the game's first room never ran the door move at all), so an
-// add anchored on it landed off the path: this is what the owner's debug-disc run of 17.11.2026
-// proved, the farm's dogs standing where he never walks. The entry of the spawn record for this
-// room (the game's own getRoomIdx picks the first one), or, if a table has no record, the first
-// record of the stage -- and when there is no table at all, the caller keeps its old references.
-static bool roomSpawnPlace(int room, float out[3])
+// The room's reference point for placing things: the median of the room's own list entry positions.
+//
+// Why not the debug spawn table: reading it from here shipped a real bug (commit 320cd53b). The
+// CRoomInfo the core compiles is not the CRoomInfo on the disc -- fixed_form.json turns its string
+// pointers into 32-bit ones (four bytes each, 0x20 per record), while the plain header has real
+// pointers (eight bytes each, 0x24 on LP64). The helper indexed a 0x24 stride through a 0x20 table,
+// read the wrong bytes and produced (0, 0, 0) for the farm and garbage elsewhere; its constructor
+// also wrote string offsets into that table at the wrong places. The record that mattered was empty
+// anyway: r120's spawn is a placeholder.
+//
+// The list entries themselves cannot lie. They are the places the room's own enemies stand, which is
+// by definition where the player walks, and their median leans to the room's centre rather than to
+// any one far corner. A room with no entries of its own (the retail disc's r120, whose enemies the
+// game seeds) leaves it to the caller, which falls back to the game's cached player position.
+static bool roomEntryCenter(int room, float out[3])
 {
-    if (!roomInfoAddr) {
-        return false;
+    float xs[64], ys[64], zs[64];
+    int n = 0;
+    for (int i = 0; i < 256 && n < 64; i++) {
+        const EM_LIST& e = pG->Em_list[i];
+        if (e.id == 0 || e.room != (u16) room) {
+            continue;
+        }
+        xs[n] = e.pos[0] * 10.0f;
+        ys[n] = e.pos[1] * 10.0f;
+        zs[n] = e.pos[2] * 10.0f;
+        n++;
     }
-    cRoomJmp jmp(roomInfoAddr);
-    const int stage = room >> 8;
-    const int idx = jmp.getRoomIdx(stage, room & 0xFF);
-    CRoomInfo* info = jmp.getRoomInfo(stage, idx);
-    // getRoomIdx answers 0 for "not found" as well as for "the first record": only a record that names
-    // this very room is this room's spawn point (otherwise the anchor would be a stranger's place)
-    if (!info || info->roomNo != (u16) room || !(info->flag & 1)) {
-        return false;
+    if (n < 2) {
+        return false;  // a single entry is one spot, not the room's middle
     }
-    out[0] = info->pos.x;
-    out[1] = info->pos.y;
-    out[2] = info->pos.z;
+    // the median of each component (at most 64 floats, inserted in order)
+    for (int a = 1; a < n; a++) {
+        for (int b = a; b > 0 && xs[b - 1] > xs[b]; b--) {
+            const float t = xs[b];
+            xs[b] = xs[b - 1];
+            xs[b - 1] = t;
+        }
+    }
+    for (int a = 1; a < n; a++) {
+        for (int b = a; b > 0 && ys[b - 1] > ys[b]; b--) {
+            const float t = ys[b];
+            ys[b] = ys[b - 1];
+            ys[b - 1] = t;
+        }
+    }
+    for (int a = 1; a < n; a++) {
+        for (int b = a; b > 0 && zs[b - 1] > zs[b]; b--) {
+            const float t = zs[b];
+            zs[b] = zs[b - 1];
+            zs[b - 1] = t;
+        }
+    }
+    out[0] = xs[n / 2];
+    out[1] = ys[n / 2];
+    out[2] = zs[n / 2];
     return true;
 }
 
@@ -696,12 +725,12 @@ extern "C" int re4_enemy_random_seed_list(void)
         }
     }
     // the scenery anchors (a seeded enemy must stand where the player walks, never in a far corner):
-    // nearest the room's own spawn point first, then the rest -- the same rule the adds' pass uses
+    // nearest the room's centre first, then the rest -- the same rule the adds' pass uses
     int anchor[16];
     int na = 0;
     const int objNum = SmdGetObjNum();
     float spawn[3];
-    const bool haveSpawn = roomSpawnPlace(p.room, spawn);
+    const bool haveSpawn = roomEntryCenter(p.room, spawn);
     if (haveSpawn && objNum > 0) {
         struct AnchorDist { int o; long d2; };
         AnchorDist near[16];
@@ -1156,26 +1185,24 @@ extern "C" void re4_enemy_random_room(void)
         // become the anchors.
         float refX[8], refY[8], refZ[8];
         int nr = 0;
-        // first reference: the room's own spawn point, from the room info table the game places the
-        // player from -- never a stale player cache (the debug-disc dogs stood where nobody walks)
+        // first reference: the room's centre, the median of its own entries -- never a stale player cache
+        // (the debug-disc dogs stood where nobody walks) and never the debug spawn table (its record for the
+        // farm is a placeholder, and its layout in the core is not the disc's)
         float spawn[3];
-        bool haveSpawnHere = false;
-        if (roomSpawnPlace(p.room, spawn) && nr < 7) {
+        if (roomEntryCenter(p.room, spawn) && nr < 7) {
             refX[nr] = spawn[0];
             refY[nr] = spawn[1];
             refZ[nr] = spawn[2];
             nr++;
-            haveSpawnHere = true;
             if (gLines < 300) {
                 gLines++;
-                re4_log("enemies: random enemies r%03x: the room's own spawn point (%.0f, %.0f, %.0f)", p.room,
-                        spawn[0], spawn[1], spawn[2]);
+                re4_log("enemies: random enemies r%03x: the room's centre (%.0f, %.0f, %.0f)", p.room, spawn[0],
+                        spawn[1], spawn[2]);
             }
         } else if (gLines < 300) {
             gLines++;
-            re4_log("enemies: random enemies r%03x: no spawn record for this room, anchoring on its entries", p.room);
+            re4_log("enemies: random enemies r%03x: no entries to centre on, anchoring on the player's place", p.room);
         }
-        (void) haveSpawnHere;
         for (int i = 0; i < 256 && nr < 7; i++) {
             const EM_LIST& e = pG->Em_list[i];
             if (e.id != 0 && e.room == (u16) p.room) {
