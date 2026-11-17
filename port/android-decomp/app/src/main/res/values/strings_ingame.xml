@@ -540,4 +540,10 @@
     <string name="randomizer_diag_hint">Writes an in-depth log of the randomizer\'s decisions for this run, for tracking down bugs. It changes nothing in the game. The log goes into the app\'s folder under logs.</string>
     <string name="randomizer_diag_on">Diagnostics log on: the run logs every decision.</string>
     <string name="randomizer_diag_off">Diagnostics log off.</string>
+    <string name="randomizer_esl_patch">Patch enemy data</string>
+    <string name="randomizer_esl_restore">Restore enemy data</string>
+    <string name="randomizer_esl_hint">Debug test: rewrites the imported enemy list itself, the way a PC randomizer rewrites an ISO. The opening valley (r120) gets one enemy in the list\'s spare slot, and the first village room (r100) has its enemies replaced with randomizer kinds. Start a new game or reload the room to see it. The original is kept, so Restore puts it back.</string>
+    <string name="randomizer_esl_patched">Enemy data patched (%1$s), seed %2$d. Start or reload the room to see it.</string>
+    <string name="randomizer_esl_restored">Enemy data restored to the original.</string>
+    <string name="randomizer_esl_no_backup">No original was kept yet: patch once first.</string>
 </resources>

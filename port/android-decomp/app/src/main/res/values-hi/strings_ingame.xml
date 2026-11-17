@@ -525,4 +525,10 @@
     <string name="randomizer_diag_hint">इस रन के लिए रैंडमाइज़र के फैसलों का विस्तृत लॉग लिखता है, ताकि बग ढूँढे जा सकें। खेल में कुछ नहीं बदलता। लॉग ऐप के फ़ोल्डर में logs के अंदर जाता है।</string>
     <string name="randomizer_diag_on">डायग्नोस्टिक्स लॉग चालू: यह रन हर फैसला लिखता है।</string>
     <string name="randomizer_diag_off">डायग्नोस्टिक्स लॉग बंद।</string>
+    <string name="randomizer_esl_patch">दुश्मन डेटा पैच करें</string>
+    <string name="randomizer_esl_restore">दुश्मन डेटा बहाल करें</string>
+    <string name="randomizer_esl_hint">डीबग टेस्ट: आयातित दुश्मन सूची को ही फिर से लिखता है, जैसे पीसी रैंडमाइज़र ISO को फिर से लिखता है। शुरुआती घाटी (r120) को सूची के खाली स्थान में एक दुश्मन मिलता है, और गाँव के पहले कमरे (r100) में दुश्मन रैंडमाइज़र के प्रकारों से बदल दिए जाते हैं। देखने के लिए नया खेल शुरू करें या कमरा फिर से लोड करें। मूल सुरक्षित रहता है, इसलिए बहाल करें उसे वापस लाता है।</string>
+    <string name="randomizer_esl_patched">दुश्मन डेटा पैच हुआ (%1$s), सीड %2$d। देखने के लिए कमरा शुरू करें या फिर से लोड करें।</string>
+    <string name="randomizer_esl_restored">दुश्मन डेटा मूल पर बहाल हुआ।</string>
+    <string name="randomizer_esl_no_backup">अभी कोई मूल सुरक्षित नहीं: पहले एक बार पैच करें।</string>
 </resources>

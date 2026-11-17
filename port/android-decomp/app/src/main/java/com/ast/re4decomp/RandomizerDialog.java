@@ -162,7 +162,49 @@ final class RandomizerDialog extends Dialog {
     hint.setTextSize(11);
     hint.setPadding(dp(34), 0, 0, 0);
     group.addView(hint);
+
+    // ---- the debug data patch (proof of concept, 17.11.2026) ------------------------------------------------
+    // Two buttons that rewrite the imported enemy list itself, the way a PC randomizer rewrites an ISO: the run then
+    // plays out of the patched data. Small text, because they are a test tool and not part of the randomizer.
+    LinearLayout patchRow = new LinearLayout(context);
+    patchRow.setGravity(Gravity.CENTER_VERTICAL);
+    patchRow.setPadding(dp(34), dp(6), 0, 0);
+    patchRow.addView(compactButton(context, R.string.randomizer_esl_patch, v -> patchEsl()));
+    patchRow.addView(compactButton(context, R.string.randomizer_esl_restore, v -> restoreEsl()));
+    group.addView(patchRow);
+
+    TextView patchHint = new TextView(context);
+    patchHint.setText(R.string.randomizer_esl_hint);
+    patchHint.setTextSize(11);
+    patchHint.setPadding(dp(34), 0, 0, 0);
+    group.addView(patchHint);
     return group;
+  }
+
+  /**
+   * Rewrites the enemy list of the imported data: r100's Ganado spots take a randomizer kind and r120 gets the list's
+   * spare slot. Works on the file, so the patch survives a restart and needs no running game; the app's own start of
+   * the core reads the file on the next room change.
+   */
+  private void patchEsl() {
+    try {
+      final int seed = run.seed == 0 ? RandomizerConfig.freshSeed() : run.seed;
+      EslRandomizer.Result result = EslRandomizer.patch(getContext(), seed);
+      status.setText(getContext().getString(R.string.randomizer_esl_patched, result.summary(), seed));
+      for (String line : result.lines) android.util.Log.i("EslRandomizer", line);
+    } catch (java.io.IOException e) {
+      status.setText(e.getMessage());
+    }
+  }
+
+  /** Puts the list the game shipped with back, so the test can be repeated from a clean file. */
+  private void restoreEsl() {
+    try {
+      boolean done = EslRandomizer.restore(getContext());
+      status.setText(getContext().getString(done ? R.string.randomizer_esl_restored : R.string.randomizer_esl_no_backup));
+    } catch (java.io.IOException e) {
+      status.setText(e.getMessage());
+    }
   }
 
   /** A small button, so a row of them fits beside a label on a phone. */
