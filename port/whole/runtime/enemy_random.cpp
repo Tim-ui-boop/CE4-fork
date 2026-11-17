@@ -636,6 +636,106 @@ bool manifestStale()
 }
 
 // Patch 0231, EmSetFromList's start: the room's plan.
+// Patch 0236, EmSetFromList's start (after the room's plan, before the game's loop): a room whose list the
+// game never fills -- the farm at the game's start, r120, has scenery only -- gets a few of its empty entries
+// switched on and filled, so the room randomizes like every other one (the owner's decision of 17.11.2026,
+// his standing rule: a game restriction is fixed in the decompiled code). Each seeded entry is a pool kind
+// the room may use, at a safe place near the room's scenery (the same place test the copies use), marked
+// alive (be_flag bit 0, what the loop needs) and "set" (bit 1, what the room's own code reads). Only the
+// room's own in-memory list: a save never sees it, and a room the plan left alone (a boss room, a narrow
+// count, another game's part) is never touched. Returns how many entries it seeded.
+extern "C" int re4_enemy_random_seed_list(void)
+{
+    Plan& p = gPlan;
+    if (!p.on || !pG) {
+        return 0;
+    }
+    const RoomRow* row = rowOf(p.room);
+    if (!row || row->boss || p.kind == kCountsNarrow) {
+        return 0;  // a boss or a narrow-counting room keeps its list exactly as the game made it
+    }
+    const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
+    if (!pool || p.rolledCount <= 0) {
+        return 0;  // no kinds to hand out
+    }
+    // the room's own entries: a room the game already fills keeps its list untouched
+    for (int i = 0; i < 256; i++) {
+        const EM_LIST& e = pG->Em_list[i];
+        if (e.id != 0 && e.room == (u16) p.room) {
+            return 0;
+        }
+    }
+    // the scenery anchors (a seeded enemy must stand where the player walks, never in a far corner)
+    int anchor[16];
+    int na = 0;
+    const int objNum = SmdGetObjNum();
+    for (int o = 0; o < objNum && na < 16; o++) {
+        cObj* obj = SmdGetObjPtr((u32) o);
+        if (obj != 0) {
+            anchor[na++] = o;
+        }
+    }
+    if (na == 0) {
+        return 0;  // no scenery to stand at
+    }
+    Avoid avoid;
+    avoid.n = 0;
+    const int room_allow = 3;  // a room without entries of its own gets a few strangers, not a crowd
+    int seeded = 0;
+    for (int k = 255; k >= 0 && seeded < room_allow; k--) {
+        EM_LIST* d = &pG->Em_list[k];
+        if (d->id != 0) {
+            continue;
+        }
+        const int kind = p.rolledKind[hashOf(p.seed, (u32) p.list, (u32) p.room, 0x8A0u + (u32) k)
+                                      % (u32) p.rolledCount];
+        if (kind <= 2 || kind >= 10) {
+            continue;  // a sub-boss never seeds a list: it would make a boss fight out of nothing
+        }
+        if (!kindLoaded(kPoolKinds[kind])) {
+            continue;  // its module must load (never evict one the room needs)
+        }
+        cObj* obj = SmdGetObjPtr((u32) anchor[(hashOf(p.seed, (u32) p.list, (u32) p.room, 0x8B0u + (u32) k))
+                                              % (u32) na]);
+        if (obj == 0) {
+            continue;
+        }
+        Place anchorPlace;
+        anchorPlace.pos[0] = (s16) lroundf(obj->pos.x / 10.0f);
+        anchorPlace.pos[1] = (s16) lroundf(obj->pos.y / 10.0f);
+        anchorPlace.pos[2] = (s16) lroundf(obj->pos.z / 10.0f);
+        anchorPlace.rot[0] = 0;
+        anchorPlace.rot[1] = 0;
+        anchorPlace.rot[2] = 0;
+        Place at;
+        if (!nearSpot(anchorPlace, hashOf(p.seed, (u32) p.list, (u32) p.room, 0x8C0u + (u32) k), avoid, &at)) {
+            continue;
+        }
+        avoidAdd(avoid, at.pos);
+        const Kind& to = kPoolKinds[kind];
+        memset(d, 0, sizeof(*d));
+        d->id = to.id;
+        d->type = to.type;
+        d->set = to.set;
+        d->flag = 0;
+        d->Character = 0;
+        d->hp = to.minHp ? to.minHp : 1000;
+        d->room = (u16) p.room;
+        memcpy(d->pos, at.pos, sizeof(d->pos));
+        memcpy(d->rot, at.rot, sizeof(d->rot));
+        d->Guard_r = 1000;
+        d->be_flag = 1 | 2;  // alive (bit 0: what the loop needs) and set (bit 1: what the room's own code reads)
+        seeded++;
+        if (gLines < 300) {
+            gLines++;
+            re4_log("enemies: random enemies r%03x: entry 0x%02x seeded with id 0x%02x type %d at (%d, %d, %d)",
+                    p.room, k, to.id, to.type, at.pos[0], at.pos[1], at.pos[2]);
+        }
+    }
+    return seeded;
+}
+
+// Patch 0231, EmSetFromList's start: the room's plan.
 extern "C" void re4_enemy_random_room(void)
 {
     Plan& p = gPlan;
@@ -928,8 +1028,21 @@ extern "C" void re4_enemy_random_room(void)
     p.addsMade = 0;
     p.addsFailed = 0;
     p.addRefused[0] = 0;
-    if (p.kind == kOpen) {
-        int wanted = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x7A0u) % (u32) (kMaxAdds + 1));
+    // 0.99.17, the open planner (the owner's decision of 17.11.2026: "let's go with the open planner thing",
+    // and his standing rule that a game restriction gets fixed in the decompiled code, not worked around):
+    // a room unsafe mode opened (kOpenCautioned, formerly "untouched") takes adds too, and a counting room
+    // takes them under unsafe mode as well -- its script counts its own cast, and an added enemy is a work of
+    // its own, not one of the counted entries, so the count still reaches zero. The full-open rooms keep the
+    // larger allowance (the adds are the room's own randomization there); the opened ones take fewer, so a
+    // script that names its cast still has room around it.
+    bool addsHere = p.kind == kOpen;
+    int room_allow = kMaxAdds;
+    if (!addsHere && unsafeOn() && p.kind == kOpenCautioned) {
+        addsHere = true;
+        room_allow = 2;  // an opened cautious room: a couple of strangers, not a parade
+    }
+    if (addsHere) {
+        int wanted = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x7A0u) % (u32) (room_allow + 1));
         if (p.ganados >= 10) {
             wanted /= 2;  // a room already thick with Ganados takes fewer extra
         }
@@ -938,25 +1051,55 @@ extern "C" void re4_enemy_random_room(void)
         if (nm == 0 && wanted == 0) {
             wanted = 1;
         }
-        // the room's scenery objects as anchor candidates (object order, capped)
+        // 0.99.17 (the owner's report of 17.11.2026: the whole farm walked past and nothing new stood out):
+        // the adds are the room's randomization where its list is empty, so a fully open room takes at least
+        // two of them -- one lone stranger in a big outdoor room reads as nothing at all
+        if (p.kind == kOpen && wanted < 2 && room_allow >= 2) {
+            wanted = 2;
+        }
+        // the room's scenery objects as anchor candidates
         int anchor[16];
         int na = 0;
         const int objNum = SmdGetObjNum();
-        // near Leon first (the owner sees nothing when the add lands in a far corner of a big outdoor
-            // room): the anchors are the scenery objects nearest where the player stands (pG->pl_pos, the
-            // cached position the game itself places the partner from at a room's start, sce_sys.cpp:82 --
-            // pPL is only forward-declared here, so its fields are not ours to read)
-            struct AnchorDist { int o; long d2; };
-            AnchorDist near[16];
-            for (int o = 0; o < objNum; o++) {
-                cObj* obj = SmdGetObjPtr((u32) o);
-                if (obj == 0) {
-                    continue;
+        // "Near where the player starts", measured against the positions the room itself uses: the room's own
+        // list entries (the same place the room's enemies would stand) and the cached player position. A new
+        // game's first room never ran the door move, so pG->pl_pos can be stale there -- the list entries never
+        // are, and the room's enemies always stand where the player will walk (the owner saw an add land at a
+        // stale spot on the farm and never found it). The nearest 16 objects to the closest of those positions
+        // become the anchors.
+        float refX[8], refY[8], refZ[8];
+        int nr = 0;
+        for (int i = 0; i < 256 && nr < 7; i++) {
+            const EM_LIST& e = pG->Em_list[i];
+            if (e.id != 0 && e.room == (u16) p.room) {
+                refX[nr] = e.pos[0] * 10.0f;
+                refY[nr] = e.pos[1] * 10.0f;
+                refZ[nr] = e.pos[2] * 10.0f;
+                nr++;
+            }
+        }
+        refX[nr] = pG->pl_pos.x;  // (always one more: a room without entries falls back to the player cache)
+        refY[nr] = pG->pl_pos.y;
+        refZ[nr] = pG->pl_pos.z;
+        nr++;
+        struct AnchorDist { int o; long d2; };
+        AnchorDist near[16];
+        for (int o = 0; o < objNum; o++) {
+            cObj* obj = SmdGetObjPtr((u32) o);
+            if (obj == 0) {
+                continue;
+            }
+            // the object's distance to its nearest reference point
+            long d2 = 0x7FFFFFFF;
+            for (int r = 0; r < nr; r++) {
+                const float dx = obj->pos.x - refX[r];
+                const float dy = obj->pos.y - refY[r];
+                const float dz = obj->pos.z - refZ[r];
+                const long d = (long) (dx * dx + dy * dy + dz * dz);
+                if (d < d2) {
+                    d2 = d;
                 }
-                const float dx = obj->pos.x - pG->pl_pos.x;
-                const float dy = obj->pos.y - pG->pl_pos.y;
-                const float dz = obj->pos.z - pG->pl_pos.z;
-            const long d2 = (long) (dx * dx + dy * dy + dz * dz);
+            }
             int k = na < 16 ? na++ : 15;
             while (k > 0 && near[k - 1].d2 > d2) {
                 if (k < 16) {
@@ -987,7 +1130,7 @@ extern "C" void re4_enemy_random_room(void)
             margin = (int) EmMgr.getArrayNum() - margin - 4;
             const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
             int subBossAdds = 0;
-            for (int a = 0; a < wanted && p.addCount < kMaxAdds; a++) {
+            for (int a = 0; a < wanted && p.addCount < room_allow; a++) {
                 if (margin - p.addCount <= 0) {
                     snprintf(p.addRefused, sizeof(p.addRefused), "the room's enemy works full");
                     break;

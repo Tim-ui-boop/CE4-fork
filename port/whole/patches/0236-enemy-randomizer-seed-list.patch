@@ -1,0 +1,36 @@
+# Port patch (0.99.17, the owner's decision of 17.11.2026 -- his standing rule: a game restriction gets
+# fixed in the decompiled code rather than worked around; "let's go with the open planner thing"). Applied
+# after patch 0231 (it extends that patch's hook in EmSetFromList).
+#
+# A room whose enemy list the game itself never fills -- the farm at the game's start (r120) has scenery
+# only, its list slice is empty -- could never randomize: EmSetFromList skips every entry whose be_flag
+# bit 0 is clear, and the room owns no entries at all. The randomizer now switches on a few of the room's
+# empty entries before the loop runs (re4_enemy_random_seed_list, runtime/enemy_random.cpp): a seeded
+# entry gets the aliveness bit the loop needs, the "set" toggle bit the room's own code reads, an enemy id
+# and a place the randomizer picked from the room's scenery, so the room plans and populates like any other.
+# The list is the room's own copy in memory, never written into a save; the room's script keeps its cast,
+# its named and area-waited entries untouched, and the seeding refuses rooms outside the story's Leon part,
+# the extra games and boss rooms.
+--- a/src/game/em_set.cpp
++++ b/src/game/em_set.cpp
+@@ -15,6 +15,10 @@
+ 
+ /* port (patch 0231): the cheat "Random enemies" (runtime/enemy_random.cpp) */
+ extern "C" void re4_enemy_random_room(void);
++/* port (patch 0236): switches on a few of the room's empty entries before EmSetFromList's loop, so a room
++   whose list the game never fills (the farm at the game's start) still hands the randomizer entries to plan
++   around; answers how many it switched on */
++extern "C" int re4_enemy_random_seed_list(void);
+ extern "C" int re4_enemy_random_entry(int no, EM_LIST* out);
+ extern "C" int re4_enemy_random_extra(EM_LIST* out);
+ extern "C" void re4_enemy_random_extra_made(int ok);
+@@ -146,6 +150,9 @@
+ 
+     /* port (patch 0231): the cheat "Random enemies" plans the room's start */
+     re4_enemy_random_room();
++    /* port (patch 0236): the randomizer switches on a few of the room's empty entries first, so a room
++       without entries of its own (scenery only) still has places and entries to plan around */
++    re4_enemy_random_seed_list();
+     for (i = 0; i < 256; i++) {
+         EM_LIST* d = &pG->Em_list[i];
+         cEm* em;
