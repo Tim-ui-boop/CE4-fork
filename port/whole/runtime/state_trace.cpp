@@ -1559,6 +1559,77 @@ void sndLog(unsigned n, GLOBAL_WK* g)
     g_sndPeak = 0;
 }
 
+// --- the room heap's headroom (research for a larger enemy-module budget, 17.11.2026) ---
+//
+// A room's enemy modules (em/*.drs) are loaded into heap 4, the room heap, and each one costs about 0.70 of its
+// file size there. A room that wants more kinds than the heap holds gets "heap: no room" and the enemy is left
+// out -- the crash of 17.11.2026 came from that failure reaching a script that does not check. Raising the heap's
+// end (SysMem.Heap_end_addr) is possible, but only by as much as the room never needs itself, so this measures it:
+// the room heap's free bytes right after its setup, the lowest they ever get in the room, and the size the heap
+// is. RE4_HEAP_REPORT=1 on a PC, or the app's diagnostics switch, turns the per-room line on.
+static unsigned g_roomHeapPeak;    // lowest free bytes seen in this room
+static unsigned g_roomHeapStart;   // free bytes right after the room's setup
+static unsigned g_roomHeapRoom;    // the room the two above belong to
+static unsigned g_roomHeapLargestDrain;  // the biggest single drop between two samples
+static bool g_heapMapLogged;
+
+static long heapFree(int h)
+{
+    return (Heap[h].handle < 0 || Heap[h].status != 0) ? -1 : (long) OSCheckHeap(Heap[h].handle);
+}
+
+// The heaps once: where each sits, how big it is and how much of it was free at boot (the map a bigger
+// Heap_end_addr would change).
+static void heapMapOnce(void)
+{
+    if (g_heapMapLogged) {
+        return;
+    }
+    g_heapMapLogged = true;
+    re4_log("heap: map: heap 4 (the room heap) is created by MemReplaceHeap(3,4) at every room start and ends at "
+            "SysMem.Heap_end_addr (src/game/main_mem.cpp SystemMemInit; 0x817F4000 on the GameCube map, 1 MB higher "
+            "on 64 bit, see runtime/re4_runtime.h RE4_MEM1_LP64_HEAP_EXTRA)");
+    for (int h = 0; h < MEM_HEAP_NUM; h++) {
+        if (Heap[h].handle < 0) {
+            continue;
+        }
+        const long size = (long) ((u8*) Heap[h].end - (u8*) Heap[h].start);
+        const long freeNow = (long) OSCheckHeap(Heap[h].handle);
+        re4_log("heap: heap %d 0x%08x..0x%08x size %ld (%ld KB) free %ld (%ld KB)%s", h,
+                (unsigned) (unsigned long) Heap[h].start, (unsigned) (unsigned long) Heap[h].end,
+                size, size / 1024, freeNow, freeNow / 1024, Heap[h].status != 0 ? " (suspended)" : "");
+    }
+}
+
+// Every 600 frames of a room: what the room heap had at setup, what it never drops below, so the headroom a
+// bigger module budget may claim is a measured number rather than a guess.
+void roomHeapReport(unsigned n, GLOBAL_WK* g)
+{
+    heapMapOnce();
+    const int h = 4;
+    const long freeNow = heapFree(h);
+    if (freeNow < 0) {
+        return;
+    }
+    const unsigned room = (unsigned) g->stage_no << 8 | (unsigned) g->room_no;
+    if (room != g_roomHeapRoom) {
+        g_roomHeapRoom = room;
+        g_roomHeapStart = (unsigned) freeNow;
+        g_roomHeapPeak = (unsigned) freeNow;
+        g_roomHeapLargestDrain = 0;
+    } else if ((unsigned) freeNow < g_roomHeapPeak) {
+        g_roomHeapLargestDrain = g_roomHeapPeak - (unsigned) freeNow > g_roomHeapLargestDrain
+            ? g_roomHeapPeak - (unsigned) freeNow : g_roomHeapLargestDrain;
+        g_roomHeapPeak = (unsigned) freeNow;
+    }
+    const long size = (long) ((u8*) Heap[h].end - (u8*) Heap[h].start);
+    re4_log("heap: r%03x room heap %ld KB (top 0x%08x); %d KB free at setup, lowest %u KB in the room, biggest "
+            "single drop %u KB",
+            room, size / 1024, (unsigned) (unsigned long) Heap[h].end,
+            (int) (g_roomHeapStart / 1024), g_roomHeapPeak / 1024, g_roomHeapLargestDrain / 1024);
+    (void) n;
+}
+
 // --- the sections of a frame (patch 0108; all the marks since 0.99.8) ---
 //
 //   frame: 600 frames in r103: logic 0.5 ms, drawing 3.3 ms (render 2.7, models 0.6), rest 0.0 ms, frame end
@@ -1619,6 +1690,8 @@ void sectionLog(unsigned n, GLOBAL_WK* g)
         return;
     }
     const unsigned left = re4_cpu_skip_window();
+    // the room heap's headroom for a bigger enemy-module budget (17.11.2026): measured, not guessed
+    roomHeapReport(n, g);
     if (g_runWindow.take(n, kRunWindowLines, "run")) {
         const double f = s.frames;
         re4_log("frame: %u frames in r%03x: logic %.1f ms, drawing %.1f ms (render %.1f, models %.1f), rest %.1f ms, "
