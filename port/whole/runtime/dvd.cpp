@@ -357,7 +357,48 @@ Disc* current()
     return gCurrent >= 0 ? &gDiscs[gCurrent] : 0;
 }
 
+// Is there a randomizer sidecar beside this path (".re4" appended)? Asked on every disc read, so
+// the answer is kept per path: a room change reads many files, and the sidecars only appear when the
+// player asks for a patched run.
+static bool sidecarExists(const char* path)
+{
+    static char asked[64][256];
+    static bool answer[64];
+    static int next;
+    const size_t len = strlen(path);
+    if (len >= sizeof(asked[0])) {
+        // a path too long to remember: ask the file system directly rather than guess
+        char probe[2048];
+        if (len + 5 > sizeof(probe)) return false;
+        snprintf(probe, sizeof(probe), "%s.re4", path);
+        FILE* f = fopen(probe, "rb");
+        if (!f) return false;
+        fclose(f);
+        return true;
+    }
+    for (int i = 0; i < 64; i++) {
+        if (asked[i][0] && strcmp(asked[i], path) == 0) {
+            return answer[i];
+        }
+    }
+    char probe[2048];
+    snprintf(probe, sizeof(probe), "%s.re4", path);
+    FILE* f = fopen(probe, "rb");
+    bool found = f != NULL;
+    if (f) fclose(f);
+    const int slot = next++ & 63;
+    snprintf(asked[slot], sizeof(asked[slot]), "%s", path);
+    answer[slot] = found;
+    return found;
+}
+
 // Full path of entry i below files/.
+//
+// A randomizer's patched copy (the owner's choice of 18.11.2026) lives beside the disc's own file
+// as the same name with ".re4" appended: files/etc/emleon00.esl.re4 next to
+// files/etc/emleon00.esl. When the sidecar is there it is what the game reads, so the disc's file
+// stays byte-identical (the app's hash check keeps passing) and deleting the sidecar restores the
+// original with no backup and no defaults file.
 void entryPath(const Disc& d, u32 i, char* out, size_t outSize)
 {
     u32 chain[64];
@@ -368,6 +409,9 @@ void entryPath(const Disc& d, u32 i, char* out, size_t outSize)
     size_t len = (size_t) snprintf(out, outSize, "%s/files", d.root);
     while (n > 0 && len < outSize) {
         len += (size_t) snprintf(out + len, outSize - len, "/%s", entryName(d, chain[--n]));
+    }
+    if (len + 4 < outSize && sidecarExists(out)) {
+        memcpy(out + len, ".re4", 5);   // the terminator included
     }
 }
 
