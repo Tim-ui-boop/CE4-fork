@@ -850,6 +850,33 @@ extern "C" void re4_enemy_random_room(void)
         gLines++;
         re4_log("enemies: random enemies r%03x: no plan of its own in this list (the kinds stay)", p.room);
     }
+    // 0.99.17 (the owner's report of 17.11.2026: "nothing changes, like nothing"): the manifest only plans
+    // rooms the game's list names, and a room the list never fills (the farm at the game's start, r120) is in
+    // no list at all -- so this room arrived here with no plan and no kinds, and every later step (the
+    // seeding of its empty entries above all) had nothing to work with. Such a room rolls its kinds right
+    // here instead: the same section rules the manifest uses (the pool, the variety cap, no sub-boss for a
+    // room this empty), the same per-room hash, so the same seed still gives the same room.
+    if (!mp && p.rolledCount == 0) {
+        const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
+        const bool kindsMayChange = p.kind == kOpen
+            || (unsafe && (p.kind == kCountsFamily || p.kind == kOpenCautioned));
+        if (pool && kindsMayChange) {
+            RoomPlan local;
+            memset(&local, 0, sizeof(local));
+            local.room = (u16) p.room;
+            const bool familyOnly = p.kind == kCountsFamily || p.kind == kOpenCautioned;
+            manifestRollKinds(&local, p.seed, p.list, pool, familyOnly, varietyCap(), false);
+            p.rolledCount = local.rolledCount;
+            for (int i = 0; i < p.rolledCount; i++) {
+                p.rolledKind[i] = local.rolledKind[i];
+            }
+            if (gLines < 300 && p.rolledCount > 0) {
+                gLines++;
+                re4_log("enemies: random enemies r%03x: %d kinds rolled for a room no list names", p.room,
+                        p.rolledCount);
+            }
+        }
+    }
     // the spots shuffled (Fisher-Yates from the seed), the k-th mover takes the k-th; from there a safe place nearby
     for (int k = ns - 1; k > 0; k--) {
         const int j = (int) (hashOf(p.seed, (u32) p.list, (u32) p.room, 0x100u + (u32) k) % (u32) (k + 1));
@@ -1321,20 +1348,27 @@ extern "C" int re4_enemy_random_wave(int no, EM_LIST* out)
             }
         }
         if (id <= 0x17) {
-            // a villager's weapon costume (t_emlist.cpp's own flag table: bit 8 hat, bit 9 hat2, bit 11 torch,
+            // a villager's costume (t_emlist.cpp's own flag table: bit 8 hat, bit 9 hat2, bit 11 torch,
             // bit 16 mugen, bit 17 bomb, bit 27 sickle, bit 29 axe, bit 30 bucket, bit 31 suki): clothes and
-            // tools of the same body, so the scene's villager animations still fit. The hats always (pure
-            // looks), the tools only with Unsafe mode (a torch in a scene's hands changes the beat), and
-            // the plaga deliberately left out (a scene's scripted death and a plaga head are not friends).
+            // tools of the same body, so the scene's villager animations still fit. A HAT (bit 8) is pure
+            // looks and is given to every village cast member that does not already wear one -- the owner
+            // looked for the hat on the game's first house zombie and found none, because the odds used to
+            // gate it; the tools stay with Unsafe mode (a torch in a scene's hands changes the beat), and
+            // the plaga is deliberately left out (a scene's scripted death and a plaga head are not friends).
             const u32 pick = hashOf(p.seed, (u32) p.list, (u32) p.room, 0x795u + (u32) no);
-            static const u8 bits[] = {8, 9, 11, 16, 17, 27, 29, 30, 31};
-            const int which = (int) (pick % (u32) (sizeof(bits) / sizeof(bits[0])));
-            const bool tool = bits[which] >= 16 || bits[which] == 11;
-            const u32 bit = 1u << bits[which];
-            if ((e.flag & bit) == 0 && (!tool || unsafeOn())
-                && ratioHit(ratios, 8, pick >> 4)) {
-                dressed->flag |= bit;
+            static const u8 toolBits[] = {11, 16, 17, 27, 29, 30, 31};
+            const u32 hat = 1u << 8;
+            if ((e.flag & hat) == 0) {
+                dressed->flag |= hat;  // every villager of a scene's cast, always
                 changed = true;
+            }
+            if (unsafeOn()) {
+                const int which = (int) (pick % (u32) (sizeof(toolBits) / sizeof(toolBits[0])));
+                const u32 bit = 1u << toolBits[which];
+                if ((e.flag & bit) == 0 && ratioHit(ratios, 8, pick >> 4)) {
+                    dressed->flag |= bit;
+                    changed = true;
+                }
             }
         }
         (void) roll2;
