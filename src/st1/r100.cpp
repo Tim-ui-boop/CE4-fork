@@ -920,11 +920,21 @@ static void r100_Sce_zombi_dead(cEm* em)
     }
     zero = 0;
     SysFlagOn(pG, SYS_SCREEN_STOP);
-    W->ems[0]->setNoSuspend(0);
-    W->ems[1]->setNoSuspend(0);
-    W->ems[2]->setNoSuspend(0);
-    W->ems[1]->flag |= 1;
-    W->ems[2]->flag |= 1;
+    /* port (the crash of 17.11.2026): r100_em_set's EmSetFromList2 leaves errEm (0) when an entry's enemy
+       module could not be loaded -- a full room heap with a randomizer's extra kinds, read.cpp readEmData. The
+       guards below are what the file already does everywhere else (see the RsfCheck(G_ROOM_ID, 10) block
+       above); without them the ambush read flag at address 0x4 and the game stopped in the first cutscene. */
+    if (W->ems[0] != errEm) {
+        W->ems[0]->setNoSuspend(0);
+    }
+    if (W->ems[1] != errEm) {
+        W->ems[1]->setNoSuspend(0);
+        W->ems[1]->flag |= 1;
+    }
+    if (W->ems[2] != errEm) {
+        W->ems[2]->setNoSuspend(0);
+        W->ems[2]->flag |= 1;
+    }
     l = &pG->Em_list[4];
     l->set = 0;
     l = &pG->Em_list[5];
@@ -1257,8 +1267,14 @@ void Evt_R100S20_Func(Event* e, u32)
         case 2:
             if (e->GetNowFrame() == 0) {
                 if (!DbgFlagChk(pG, DBG_EVENT_TOOL)) {
-                    W->ems[1]->setNoSuspend(1);
-                    W->ems[2]->setNoSuspend(1);
+                    /* port (the crash of 17.11.2026): the same missing check as in r100_EmSet's guards --
+                       an enemy whose module did not load is errEm (0) */
+                    if (W->ems[1] != errEm) {
+                        W->ems[1]->setNoSuspend(1);
+                    }
+                    if (W->ems[2] != errEm) {
+                        W->ems[2]->setNoSuspend(1);
+                    }
                 }
             }
             break;
