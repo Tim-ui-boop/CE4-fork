@@ -517,6 +517,9 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       // the run unrandomized.
       final RandomizerConfig run = seedStore().current();
       if (run.anyEnabled()) Log.i(TAG, "seed: " + run.seed + " (" + run.summary() + ")");
+      // the randomizer page's "Diagnostics log" switch is a cheat bit: put it into the bits above (a saved seed's
+      // "diag on" would otherwise only reach the core once that page was opened)
+      run.applyDiagToCore(getSharedPreferences(GAME_PREFS, MODE_PRIVATE));
       run.applyToCore();
       main.postDelayed(run::applyToCore, 1500);
     }

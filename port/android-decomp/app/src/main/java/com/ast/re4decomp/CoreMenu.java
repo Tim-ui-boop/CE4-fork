@@ -181,6 +181,10 @@ final class CoreMenu extends Dialog {
   /** "Random items" in the cheat switches (wish of the project owner, 07.11.2026, GitHub issue #161; runtime/cheats.cpp)
    *  and its seed in bits 11..30, a new one each time the switch goes on (the rooms dealt alike until then). */
   static final int RANDOM_ITEMS_BIT = 1024, SEED_SHIFT = 11, SEED_BITS = 0xFFFFF << SEED_SHIFT;
+  /** "Diagnostics log" on the randomizer page (wish of the project owner, 17.11.2026): the highest cheat bit, so it
+   *  touches none of the switches below it. runtime/cheats.cpp `kDiag` reads it, runtime/re4_diag.cpp prints the
+   *  randomizer's in-depth decisions on it. See {@link #withDiag}. */
+  static final int DIAG_BIT = 1 << 31;
   private static final int PANEL = 0xff191f1c, SURFACE = 0xff222a25, BORDER = 0xff414b41;
   private static final int INK = 0xfff0eee5, MUTED = 0xffa6afa3, GOLD = 0xffd7bc7d, ACTIVE = 0xff45432e;
   private final Host host;
@@ -1831,6 +1835,13 @@ final class CoreMenu extends Dialog {
   static int withRandomItems(int bits, boolean on, int seed) {
     bits &= ~(RANDOM_ITEMS_BIT | SEED_BITS);
     return on ? bits | RANDOM_ITEMS_BIT | ((seed << SEED_SHIFT) & SEED_BITS) : bits;
+  }
+  /** The cheat bits with "Diagnostics log" on (`on`) or off, every other bit left as it is.
+   *  The core takes the whole int (runtime/core_api.cpp re4_core_set_cheats passes it to re4_cheats_set, which masks
+   *  it with kAll), so the highest bit travels like any other; only IngameSettings' own `& 3` would drop it, and that
+   *  path belongs to the classic flavour's minimal cheat menu, not to the randomizer page. */
+  static int withDiag(int bits, boolean on) {
+    return on ? bits | DIAG_BIT : bits & ~DIAG_BIT;
   }
   private MenuLayout.Buttons cheatRow(int columns) {
     MenuLayout.Buttons row = new MenuLayout.Buttons(getContext(), columns);

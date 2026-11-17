@@ -527,4 +527,8 @@
     <string name="randomizer_enemy_variety">· Макс. типы врагов в комнате</string>
     <string name="randomizer_one_in">1 из %1$d</string>
     <string name="randomizer_enemy_unsafe">Небезопасный режим: и осторожные комнаты</string>
+    <string name="randomizer_diag">Журнал диагностики</string>
+    <string name="randomizer_diag_hint">Пишет подробный журнал решений рандомайзера для этого прохождения, чтобы искать ошибки. В игре ничего не меняет. Журнал попадает в папку приложения, в logs.</string>
+    <string name="randomizer_diag_on">Журнал диагностики включён: прохождение записывает каждое решение.</string>
+    <string name="randomizer_diag_off">Журнал диагностики выключен.</string>
 </resources>

@@ -526,4 +526,8 @@
     <string name="randomizer_enemy_variety">· Max. types d\'ennemis par pièce</string>
     <string name="randomizer_one_in">1 sur %1$d</string>
     <string name="randomizer_enemy_unsafe">Mode non sûr : aussi les pièces prudentes</string>
+    <string name="randomizer_diag">Journal de diagnostic</string>
+    <string name="randomizer_diag_hint">Écrit un journal détaillé des décisions de l\'aléatoire pour cette partie, pour retrouver les bugs. Cela ne change rien au jeu. Le journal va dans le dossier de l\'appli, sous logs.</string>
+    <string name="randomizer_diag_on">Journal de diagnostic activé : la partie note chaque décision.</string>
+    <string name="randomizer_diag_off">Journal de diagnostic désactivé.</string>
 </resources>

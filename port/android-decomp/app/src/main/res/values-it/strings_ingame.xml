@@ -524,4 +524,8 @@
     <string name="randomizer_enemy_variety">· Max. tipi di nemici per stanza</string>
     <string name="randomizer_one_in">1 su %1$d</string>
     <string name="randomizer_enemy_unsafe">Modalità non sicura: anche le stanze caute</string>
+    <string name="randomizer_diag">Registro di diagnostica</string>
+    <string name="randomizer_diag_hint">Scrive un registro dettagliato delle decisioni del casuale per questa partita, per trovare i bug. Non cambia nulla nel gioco. Il registro finisce nella cartella dell\'app, sotto logs.</string>
+    <string name="randomizer_diag_on">Registro di diagnostica attivo: la partita registra ogni decisione.</string>
+    <string name="randomizer_diag_off">Registro di diagnostica disattivato.</string>
 </resources>

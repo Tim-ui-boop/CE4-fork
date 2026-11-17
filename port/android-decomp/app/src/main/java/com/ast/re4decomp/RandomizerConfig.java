@@ -143,6 +143,14 @@ final class RandomizerConfig {
   String name = "";
 
   /**
+   * "Diagnostics log" of the randomizer page (wish of the project owner, 17.11.2026): keeps the in-depth log of the
+   * randomizer's decisions (runtime/re4_diag.cpp) on for this run. Not a randomizer: it changes nothing in the game,
+   * so it stays out of {@link #features} (it would count as one in {@link #summary}), and it is saved in the seed file
+   * as one more key, which an older build ignores.
+   */
+  boolean diag;
+
+  /**
    * The randomizers, in the order the page lists them. Adding a randomizer later means one entry here plus its
    * native setter in {@link RandomizerConfig#applyToCore()} (phase 1) and one row on the page (phase 2).
    * The ids are the file keys and must stay stable once a seed may exist on a player's device.
@@ -187,6 +195,7 @@ final class RandomizerConfig {
       mine.pool = theirs.pool;
       mine.ratios = theirs.ratios;
     }
+    diag = other.diag;
   }
 
   /** A new seed for a new run, 1..SEED_MAX (0 means "off" in the core, so it is never handed out). */
@@ -218,6 +227,7 @@ final class RandomizerConfig {
     out.append("re4seed ").append(FORMAT).append('\n');
     out.append("seed ").append(seed).append('\n');
     if (!name.isEmpty()) out.append("name ").append(name).append('\n');
+    if (diag) out.append("diag on\n");
     for (Feature f : features.values()) {
       out.append(f.id).append(' ').append(f.on ? "on" : "off");
       if (f.hasChance() && f.chance != 100) out.append(' ').append(f.chance);
@@ -246,6 +256,9 @@ final class RandomizerConfig {
       } else if (key.equals("name")) {
         int at = line.indexOf(' ');
         c.name = at < 0 ? "" : line.substring(at + 1).trim();
+      } else if (key.equals("diag")) {
+        // a file from a build before this key simply has no line here: the switch stays off
+        c.diag = part.length > 1 && (part[1].equalsIgnoreCase("on") || part[1].equals("1"));
       } else {
         Feature f = c.features.get(key);
         if (f == null) continue;  // a setting of a newer version: keep it out of the way rather than fail
@@ -314,5 +327,20 @@ final class RandomizerConfig {
     // 0.99.16: the enemies' pool and ratios (the PC randomizer's "Enemy settings"); sent also while the switch
     // is off, so a core that keeps running stops swapping kinds from the next room on
     CoreBridge.setEnemyOptions(enemies.pool, enemies.ratios);
+  }
+
+  /**
+   * The "Diagnostics log" switch as a cheat bit, the way the core hears it: bit 31 (CoreMenu.DIAG_BIT) is what
+   * runtime/re4_diag.cpp asks for through re4_diag_cheat. `prefs` is CoreActivity's GAME_PREFS, which holds the bits
+   * for the next core start, so this works both before a core runs and while one does. Called by
+   * {@link SeedStore#setCurrent} when the switch is turned and by CoreActivity when the core starts (a saved seed's
+   * "diag on" would otherwise only reach a core once the page had been opened).
+   */
+  void applyDiagToCore(android.content.SharedPreferences prefs) {
+    if (prefs == null) return;
+    final int bits = prefs.getInt(CoreActivity.CHEATS, 0);
+    final int wanted = CoreMenu.withDiag(bits, diag);
+    if (wanted != bits) prefs.edit().putInt(CoreActivity.CHEATS, wanted).apply();
+    CoreBridge.setCheats(wanted);
   }
 }

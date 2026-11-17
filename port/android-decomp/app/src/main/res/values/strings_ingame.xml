@@ -536,4 +536,8 @@
     <string name="randomizer_enemy_variety">· Max. enemy types per room</string>
     <string name="randomizer_one_in">1 in %1$d</string>
     <string name="randomizer_enemy_unsafe">Unsafe mode: also randomize the cautious rooms</string>
+    <string name="randomizer_diag">Diagnostics log</string>
+    <string name="randomizer_diag_hint">Writes an in-depth log of the randomizer\'s decisions for this run, for tracking down bugs. It changes nothing in the game. The log goes into the app\'s folder under logs.</string>
+    <string name="randomizer_diag_on">Diagnostics log on: the run logs every decision.</string>
+    <string name="randomizer_diag_off">Diagnostics log off.</string>
 </resources>

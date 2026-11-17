@@ -126,6 +126,7 @@ final class SeedStore {
     }
     RandomizerConfig config = new RandomizerConfig();
     config.seed = prefs.getInt(PREF_CURRENT, 0);
+    config.diag = prefs.getBoolean("seedDiag", false);
     boolean migrated = false;
     final String shapeKey = "enemyRatiosShape";
     final boolean oldShape = prefs.getInt(shapeKey, 1) == 1;
@@ -168,6 +169,7 @@ final class SeedStore {
     android.content.SharedPreferences.Editor edit = prefs.edit();
     edit.putString(PREF_ACTIVE, activeFile == null ? "" : activeFile);
     edit.putInt(PREF_CURRENT, config.seed);
+    edit.putBoolean("seedDiag", config.diag);
     boolean any = false;
     for (RandomizerConfig.Feature f : config.features.values()) {
       edit.putBoolean("seedOn_" + f.id, f.on);
@@ -186,9 +188,15 @@ final class SeedStore {
     final boolean items = config.feature("items").on && config.seed != 0;
     final int bits = prefs.getInt(CoreActivity.CHEATS, 0);
     final int withItems = CoreMenu.withRandomItems(bits, items, config.seed);
-    if (withItems != bits) edit.putInt(CoreActivity.CHEATS, withItems);
+    // "Diagnostics log" of the randomizer page (bit 31, wish of the project owner 17.11.2026): also a cheat bit, so
+    // the core hears it the way it hears the item randomizer. Every other bit is kept as it is, and the core is told
+    // at once when one is running, else CoreActivity hands the bits over when it starts the core.
+    final int wanted = CoreMenu.withDiag(withItems, config.diag);
+    if (wanted != bits) edit.putInt(CoreActivity.CHEATS, wanted);
     edit.apply();
-    // hand it to the running core too; before the core starts this is remembered by CoreActivity
+    // hand it to the running core too (and keep the bits for the next start); before the core starts this is
+    // remembered by CoreActivity
+    config.applyDiagToCore(prefs);
     config.applyToCore();
   }
 

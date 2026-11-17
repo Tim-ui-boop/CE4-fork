@@ -517,4 +517,8 @@
     <string name="randomizer_enemy_variety">· Maks. jenis musuh per bilik</string>
     <string name="randomizer_one_in">1 daripada %1$d</string>
     <string name="randomizer_enemy_unsafe">Modus tidak selamat: juga bilik berjaga-jaga</string>
+    <string name="randomizer_diag">Log diagnostik</string>
+    <string name="randomizer_diag_hint">Menulis log terperinci tentang keputusan pengacak untuk larian ini, untuk mencari pepijat. Ia tidak mengubah apa-apa dalam permainan. Log disimpan dalam folder aplikasi di bawah logs.</string>
+    <string name="randomizer_diag_on">Log diagnostik hidup: larian merekod setiap keputusan.</string>
+    <string name="randomizer_diag_off">Log diagnostik mati.</string>
 </resources>

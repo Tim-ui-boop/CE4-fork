@@ -33,6 +33,8 @@ final class RandomizerDialog extends Dialog {
   private boolean silent;
   /** The switch of each randomizer, by feature id. */
   private final java.util.Map<String, CheckBox> boxes = new java.util.HashMap<>();
+  /** The "Diagnostics log" switch: not a randomizer, so it is kept out of {@link #boxes}. */
+  private CheckBox diagBox;
   /** The chance slider's label, so the row can show its value without a second redraw path. */
   private final java.util.Map<String, TextView> chanceLabels = new java.util.HashMap<>();
   /** The chance buttons as one group, so they can be switched off with the randomizer itself. */
@@ -90,6 +92,7 @@ final class RandomizerDialog extends Dialog {
     for (final RandomizerConfig.Feature f : run.features.values()) {
       body.addView(featureRow(context, f));
     }
+    body.addView(diagRow(context));
 
     // ---- saved seeds: one line each, with Load and Delete -----------------------------------------------------
     TextView savedHeading = new TextView(context);
@@ -129,6 +132,37 @@ final class RandomizerDialog extends Dialog {
     setContentView(page);
     refresh();
     hintNoneOn();
+  }
+
+  /**
+   * The "Diagnostics log" switch: sits after the randomizers because it is not one (it changes nothing in the game),
+   * and it keeps its own state with the run, so a saved seed brings it back. A line under it says what it does and
+   * where the log ends up, because the switch alone would not tell a tester where to look.
+   */
+  private View diagRow(Context context) {
+    LinearLayout group = new LinearLayout(context);
+    group.setOrientation(LinearLayout.VERTICAL);
+    group.setPadding(0, dp(10), 0, 0);
+
+    final CheckBox box = new CheckBox(context);
+    box.setText(R.string.randomizer_diag);
+    box.setTextSize(14);
+    box.setChecked(run.diag);
+    box.setOnCheckedChangeListener((v, on) -> {
+      if (silent) return;  // the redraw echoes the run's own state; only a tap reaches here
+      run.diag = on;
+      store.setCurrent(run, activeFile);  // keeps the bit with the run and tells a running core
+      status.setText(getContext().getString(on ? R.string.randomizer_diag_on : R.string.randomizer_diag_off));
+    });
+    group.addView(box);
+    diagBox = box;
+
+    TextView hint = new TextView(context);
+    hint.setText(R.string.randomizer_diag_hint);
+    hint.setTextSize(11);
+    hint.setPadding(dp(34), 0, 0, 0);
+    group.addView(hint);
+    return group;
   }
 
   /** A small button, so a row of them fits beside a label on a phone. */
@@ -416,6 +450,12 @@ final class RandomizerDialog extends Dialog {
         updateEnemyButton(f);
         setOptionsEnabled(enemyButtons.get(f.id), f.on);
       }
+    }
+    // the diagnostics switch belongs to the run too: a loaded seed turns it on or off with the rest
+    if (diagBox != null) {
+      silent = true;
+      diagBox.setChecked(run.diag);
+      silent = false;
     }
     rebuildSavedList();
   }

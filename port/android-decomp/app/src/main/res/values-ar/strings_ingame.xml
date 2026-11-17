@@ -538,4 +538,8 @@
     <string name="randomizer_enemy_variety">· حد أنواع الأعداء في الغرفة</string>
     <string name="randomizer_one_in">1 من %1$d</string>
     <string name="randomizer_enemy_unsafe">وضع غير آمن: عشوائية الغرف الحذرة أيضًا</string>
+    <string name="randomizer_diag">سجل التشخيص</string>
+    <string name="randomizer_diag_hint">يكتب سجلًا مفصلًا لقرارات العشوائية في هذه الجولة، لتتبع الأخطاء. لا يغيّر شيئًا في اللعبة. يُحفظ السجل في مجلد التطبيق داخل logs.</string>
+    <string name="randomizer_diag_on">سجل التشخيص مفعّل: تسجّل الجولة كل قرار.</string>
+    <string name="randomizer_diag_off">سجل التشخيص متوقف.</string>
 </resources>

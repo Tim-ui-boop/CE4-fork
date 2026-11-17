@@ -519,4 +519,8 @@
     <string name="randomizer_enemy_variety">· 每个房间的最大敼人种类</string>
     <string name="randomizer_one_in">1 在 %1$d</string>
     <string name="randomizer_enemy_unsafe">不安全ڢ1式或随机化谨慎的房间</string>
+    <string name="randomizer_diag">诊断日志</string>
+    <string name="randomizer_diag_hint">为这次游戏记录随机化每项决定的详细日志，便于查找问题。不会改变游戏内容。日志保存在应用文件夹的 logs 里。</string>
+    <string name="randomizer_diag_on">诊断日志已开启：这次游戏会记录每项决定。</string>
+    <string name="randomizer_diag_off">诊断日志已关闭。</string>
 </resources>

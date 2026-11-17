@@ -521,4 +521,8 @@
     <string name="randomizer_enemy_variety">· Höchstens Gegnerarten je Raum</string>
     <string name="randomizer_one_in">1 von %1$d</string>
     <string name="randomizer_enemy_unsafe">Unsicherer Modus: auch die vorsichtigen Räume</string>
+    <string name="randomizer_diag">Diagnose-Protokoll</string>
+    <string name="randomizer_diag_hint">Schreibt ein ausführliches Protokoll der Entscheidungen des Randomizers für diesen Durchlauf, um Fehler zu finden. Am Spiel ändert es nichts. Das Protokoll landet im Ordner der App unter logs.</string>
+    <string name="randomizer_diag_on">Diagnose-Protokoll an: der Durchlauf protokolliert jede Entscheidung.</string>
+    <string name="randomizer_diag_off">Diagnose-Protokoll aus.</string>
 </resources>

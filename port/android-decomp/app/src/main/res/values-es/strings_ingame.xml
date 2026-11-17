@@ -524,4 +524,8 @@
     <string name="randomizer_enemy_variety">· Máx. tipos de enemigos por habitación</string>
     <string name="randomizer_one_in">1 de %1$d</string>
     <string name="randomizer_enemy_unsafe">Modo inseguro: también las habitaciones cautelosas</string>
+    <string name="randomizer_diag">Registro de diagnóstico</string>
+    <string name="randomizer_diag_hint">Escribe un registro detallado de las decisiones del aleatorio para esta partida, para localizar fallos. No cambia nada en el juego. El registro va a la carpeta de la app, en logs.</string>
+    <string name="randomizer_diag_on">Registro de diagnóstico activado: la partida registra cada decisión.</string>
+    <string name="randomizer_diag_off">Registro de diagnóstico desactivado.</string>
 </resources>

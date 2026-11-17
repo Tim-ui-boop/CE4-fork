@@ -521,4 +521,8 @@
     <string name="randomizer_enemy_variety">· प्रति कमरे दुश्मन प्रकार</string>
     <string name="randomizer_one_in">1 मهं %1$d</string>
     <string name="randomizer_enemy_unsafe">असुरक्षित मोड: सावधान वाले कमरे भी</string>
+    <string name="randomizer_diag">डायग्नोस्टिक्स लॉग</string>
+    <string name="randomizer_diag_hint">इस रन के लिए रैंडमाइज़र के फैसलों का विस्तृत लॉग लिखता है, ताकि बग ढूँढे जा सकें। खेल में कुछ नहीं बदलता। लॉग ऐप के फ़ोल्डर में logs के अंदर जाता है।</string>
+    <string name="randomizer_diag_on">डायग्नोस्टिक्स लॉग चालू: यह रन हर फैसला लिखता है।</string>
+    <string name="randomizer_diag_off">डायग्नोस्टिक्स लॉग बंद।</string>
 </resources>
