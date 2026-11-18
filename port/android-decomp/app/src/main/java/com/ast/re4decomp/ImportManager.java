@@ -24,6 +24,13 @@ public final class ImportManager {
   private final AtomicBoolean cancelled = new AtomicBoolean();
   private Listener listener;
   public volatile boolean busy;
+  /**
+   * How far the import has got, for the progress bar (18.11.2026): `total` is 0 until the count is
+   * known, then the discs' files are counted as they are copied. The Compose import screen drew an
+   * indeterminate bar before because the manager only ever published a text status.
+   */
+  public volatile int progressDone;
+  public volatile int progressTotal;
   /** The status before anything happened (the core launcher shows its own heading instead). */
   public static final String PROMPT = "Select ISO/GCM/RVZ files of the debug build, the European, the US or the Japanese release. "
       + "RVZ files are unpacked first and need extra free storage (about 3 GB per disc).";
@@ -180,6 +187,10 @@ public final class ImportManager {
                 long now = System.nanoTime();
                 if (now - last > 200_000_000L) {
                   last = now;
+                  // the bar's numbers (18.11.2026): bytes of the file read so far against its size,
+                  // in KiB because a disc is 1.4 GB and an int of bytes would overflow
+                  progressTotal = (int) Math.min(total / 1024L, Integer.MAX_VALUE);
+                  progressDone = (int) Math.min(done / 1024L, Integer.MAX_VALUE);
                   status = "Reading disc: " + done / 1048576 + " MiB";
                   notifyUi();
                 }

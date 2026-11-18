@@ -67,6 +67,9 @@
         <!-- the randomizer screen before the game starts (RandomizerStart): the core app's way in, so the run's
              settings can be chosen before the core boots -->
         <activity android:name=".RandomizerStart" android:exported="false" />
+        <!-- The Compose front end (18.11.2026): the randomizer page and the disc import. -->
+        <activity android:name=".RandomizerActivity" android:exported="false" />
+        <activity android:name=".ImportActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true"
             android:configChanges="uiMode|keyboard|keyboardHidden|navigation">
             <meta-data android:name="distractionOptimized" android:value="false" />
