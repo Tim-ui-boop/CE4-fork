@@ -59,15 +59,27 @@ int re4_game_main(void);
  * Heap_end_addr, the same value). The works with pointers need more room in
  * them on 64 bit: the compare run of 18.10.2026 had 0x4EF40 bytes less free in
  * heap 4 (r100), and on a POCO X7 Pro em12 found no room in r107 (0x1F0E0 short).
- * 0 on ILP32: the GameCube map. */
+ * 0 on ILP32: the GameCube map.
+ *
+ * 0x120C000 since 18.11.2026 (the owner's wish: "is there really no way to just
+ * increase it across the board"): heap 4 is where a room's enemy modules load,
+ * and a module costs about 0.70 of its .drs size there, so the 14.5 MB it had
+ * held only two or three enemy kinds. Every 32/64-bit comparison had shown the
+ * room heap saturated (r100: 1.8 MB free at room start, and the engine's own
+ * "heap 4 full, load through ARAM instead" fallback fired), which is why a
+ * randomizer kind kept failing to load. The region above 0x82000000 was mapped
+ * and unused: MEM1 is reserved to 0x83000000 and the game's own pointer checks
+ * (VALID_PTR, 0x80000000..0x82FFFFFF) accept up to 0x82FFFFFF, so heap 4 now
+ * ends at 0x82A00000 -- 32.5 MB, twice what it had. The FST and the European
+ * releases' alternate placements moved up with it (below). */
 #if __SIZEOF_POINTER__ == 4
 #define RE4_MEM1_LP64_HEAP_EXTRA 0u
 #else
-#define RE4_MEM1_LP64_HEAP_EXTRA 0x00100000u
+#define RE4_MEM1_LP64_HEAP_EXTRA 0x0120C000u
 #endif
 /* The disc's file system table sits at the top of retail memory, above the
  * game's last heap (0x817F4000), as the IPL places it; on LP64 above the
- * higher heap end. */
+ * higher heap end (0x82A00000, then 0xC000 of table to 0x82A0C000). */
 #define RE4_MEM1_FST_ADDR (0x817F4000u + RE4_MEM1_LP64_HEAP_EXTRA)
 #define RE4_MEM1_FST_MAX 0x0000C000u
 /* Retail console: the development paths (SN host file I/O) stay off. */
@@ -154,13 +166,15 @@ int re4_disc_retail_kr(void);
  * result screens; patch 0120 ...). */
 int re4_disc_retail(void);
 /* A larger etc/core.das than the debug build's fixed place holds (the European release, patch
- * 0117): it is read here instead, in the development half of MEM1 that nothing else uses. */
-#define RE4_MEM1_CORE_ALT_ADDR 0x81C00000u
+ * 0117): it is read here instead, above the file system table and clear of the room heap, which
+ * grew to 0x82A00000 on 18.11.2026 (RE4_MEM1_LP64_HEAP_EXTRA). Both places still lie under the
+ * game's pointer ceiling (VALID_PTR, 0x82FFFFFF). */
+#define RE4_MEM1_CORE_ALT_ADDR 0x82B00000u
 #define RE4_MEM1_CORE_ALT_MAX 0x00300000u
 void* re4_core_data_place(const char* name, unsigned fixedMax);
 /* A larger SS/<lang>/option.dat than the debug build's fixed place holds (the European discs'
  * German, French, Spanish and Italian ones, patch 0121): behind the core's second place. */
-#define RE4_MEM1_OPTION_ALT_ADDR 0x81F00000u
+#define RE4_MEM1_OPTION_ALT_ADDR 0x82E00000u
 #define RE4_MEM1_OPTION_ALT_MAX 0x00100000u
 void* re4_option_data_place(const char* name, unsigned fixedMax);
 /* The start's reads without the frame pace (patch 0085): 1 while the next

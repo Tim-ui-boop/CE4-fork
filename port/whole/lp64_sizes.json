@@ -80,7 +80,7 @@
      "lp64": "__builtin_offsetof(SND_WORK, room_ok)", "count": 1,
      "why": "every room change clears the sound work from room_ok to its end: room_ok lies at 0x98 on LP64, the length cleared 8 bytes past Snd"},
     {"files": ["src/game/main_mem.cpp"], "text": "SysMem.Heap_end_addr = 0x817F4000;", "expr": "0x817F4000",
-     "lp64": "0x818F4000", "count": 1,
-     "why": "the end of the game's heaps (SystemMemInit: heap 0 ends there, and through MemReplaceHeap the room heap 4): 1 MB higher on LP64, as RE4_MEM1_LP64_HEAP_EXTRA (runtime/re4_runtime.h), which moves the FST above it (runtime test 'tasks' checks both agree). The pools and works with pointers take more of the heaps on 64 bit: compare run of 18.10.2026 heap 4 at least 0x115ac0 free on i686, 0xc6b80 on x86_64 (r100); tester report of 19.10.2026 (POCO X7 Pro, r107): 'alloc[3d2080]:free[3b2fa0] read.cpp(725)', em12.drs not loaded ('EmSetFromList() Em set failed, Id = 12'), 0x1F0E0 bytes short"}
+     "lp64": "0x82A00000", "count": 1,
+     "why": "the end of the game's heaps (SystemMemInit: heap 0 ends there, and through MemReplaceHeap the room heap 4): higher on LP64, as RE4_MEM1_LP64_HEAP_EXTRA (runtime/re4_runtime.h), which moves the FST above it (runtime test 'tasks' checks both agree). The pools and works with pointers take more of the heaps on 64 bit. 0x82A00000 since 18.11.2026 (the owner's wish of that day): heap 4 is where a room's enemy modules load (about 0.70 of the .drs size each) and every measurement had it saturated -- r100 with 1.8 MB free at room start, the engine's own 'heap 4 full, load through ARAM' fallback firing -- so it now ends at 0x82A00000, twice the 14.5 MB it had, still under the game's pointer ceiling (VALID_PTR, 0x82FFFFFF). The European releases' alternate core.das and option.dat places moved above it (RE4_MEM1_CORE_ALT_ADDR 0x82B00000, RE4_MEM1_OPTION_ALT_ADDR 0x82E00000)"}
   ]
 }
