@@ -569,19 +569,24 @@ void logLine(const char* fmt, const char* a, const char* b)
 // pool kind that IS a village form. With it off the scene keeps the villager it was written with.
 
 // The forms em12_set.cpp implements for id 0x12, in the order the roll walks them. `chainsaw` marks the entry that
-// only counts when the page's Chainsaw Man switch is on.
+// only counts when the page's Chainsaw Man switch is on. `weight` is how many of 16 rolls land here: the owner's
+// first report after patch 0237 was "no enemies randomized" because the equal four-way roll kept giving type 0 (the
+// form the script already had), so two of four outcomes looked identical. The default villager now takes a quarter
+// and the three visibly different forms take the rest.
 struct ScriptForm {
     u8 type;
     const char* name;
     bool chainsaw;
+    int weight;
 };
 const ScriptForm kScriptForms[] = {
-    {0, "villager", false},
-    {1, "young villager", false},
-    {3, "armed villager", false},
-    {4, "Chainsaw Man", true},  // pool bit 0 (kPoolKinds[0] is id 0x16 type 4, the same configuration)
+    {0, "villager", false, 4},
+    {1, "young villager", false, 4},
+    {3, "armed villager", false, 4},
+    {4, "Chainsaw Man", true, 4},  // pool bit 0 (kPoolKinds[0] is id 0x16 type 4, the same configuration)
 };
 constexpr int kScriptFormCount = (int) (sizeof(kScriptForms) / sizeof(kScriptForms[0]));
+constexpr int kScriptFormRolls = 16;  // the weights' denominator
 
 int scriptRoom(void)
 {
@@ -649,29 +654,44 @@ extern "C" int re4_enemy_random_script_kind(EM_LIST* d, int no)
     }
     // Which of the village forms may be rolled: all of them, except the chainsaw man when the page's Chainsaw Man
     // switch is off (that entry is the one pool kind this hand-built enemy can actually become).
-    int forms[kScriptFormCount];
-    int n = 0;
+    int weight[kScriptFormCount];
+    int total = 0;
     const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
     const int use = pool ? pool : kPoolDefault;
     for (int i = 0; i < kScriptFormCount; i++) {
-        if (kScriptForms[i].chainsaw && !(use & 1)) {  // pool bit 0 = Chainsaw Man
-            continue;
-        }
-        forms[n++] = i;
+        weight[i] = (!kScriptForms[i].chainsaw || (use & 1)) ? kScriptForms[i].weight : 0;
+        total += weight[i];
     }
-    if (n <= 0) {
+    if (total <= 0) {
         return 0;
     }
     const u32 h = hashOf((u32) seed, 0xFFu, (u32) room, 0x900u);
-    const int pick = forms[h % (u32) n];
-    const int from = (int) d->type;
-    const int to = (int) kScriptForms[pick].type;
-    // The form already there: the scene keeps what the script wrote.
-    if (from == to) {
-        if (re4_diag_on()) {
-            re4_diag("diag r%03x script enemy 0x%02x: the roll gave its own form %d, unchanged", room, d->id, from);
+    int pick = 0;
+    int roll = (int) (h % (u32) total);
+    for (int i = 0; i < kScriptFormCount; i++) {
+        if (roll < weight[i]) {
+            pick = i;
+            break;
         }
-        return 0;
+        roll -= weight[i];
+    }
+    const int from = (int) d->type;
+    int to = (int) kScriptForms[pick].type;
+    // The owner's report of 18.11.2026: "I see no enemies randomized". A roll that lands on the form the script
+    // already wrote is indistinguishable from a broken randomizer, so it walks on to the next form that differs.
+    // The result is still a pure function of the seed, so the same seed always gives the same enemy.
+    if (from == to) {
+        for (int i = 1; i <= kScriptFormCount; i++) {
+            const int k = (pick + i) % kScriptFormCount;
+            if (weight[k] > 0 && (int) kScriptForms[k].type != from) {
+                pick = k;
+                to = (int) kScriptForms[k].type;
+                break;
+            }
+        }
+    }
+    if (from == to) {
+        return 0;  // nothing else to offer (one form allowed, and it is the one already there)
     }
     d->type = (u8) to;
     if (re4_diag_on()) {

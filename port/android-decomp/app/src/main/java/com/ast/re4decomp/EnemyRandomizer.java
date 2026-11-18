@@ -94,6 +94,57 @@ final class EnemyRandomizer {
     }
   }
 
+  /**
+   * The enemy kinds a VILLAGER may become, and the only thing the first chapter needs. This is the same insight the
+   * r100 hook uses: every kind here is the same villager module with another variant checked, so a room can show a
+   * chainsaw man, a woman or an armed villager without loading one extra module, sound bank or ARAM region.
+   *
+   * `id` stays 0x12 (or whichever villager the entry already was) and only `type` changes, exactly like em10_set.cpp
+   * and em12_set.cpp switch their own villagers:
+   *
+   *   0  default male villager   1  young villager   3  armed villager   4  chainsaw man
+   *
+   * That is what made r100 crash-free while the module-swapping randomizer crashed: no new module is ever requested.
+   */
+  static final class Form {
+    final int type;
+    final String name;
+
+    Form(int type, String name) {
+      this.type = type;
+      this.name = name;
+    }
+  }
+
+  /**
+   * The forms em10_set.cpp and em12_set.cpp themselves switch on: the default villager, the young one, the armed one
+   * and the chainsaw man. Any other `type` is a special form a room's script picked on purpose (r101's siege uses
+   * type 11), and it is left exactly as the disc wrote it.
+   */
+  static boolean plainForm(int type) {
+    return type == 0 || type == 1 || type == 3 || type == 4;
+  }
+
+  /** The villager forms, in EM_LIST.type order (em10_set.cpp / em12_set.cpp). */
+  static final Form[] VILLAGER_FORMS = {
+      new Form(0, "villager"),
+      new Form(1, "young villager"),
+      new Form(3, "armed villager"),
+      new Form(4, "Chainsaw Man"),
+  };
+
+  /**
+   * Story rooms that may only become another kind of VILLAGER, never another enemy. The first chapter is one long
+   * scripted village: its rooms hold the crows Leon walks past, the first zombie at the house, the ambush and the
+   * bingo village, and every one of them is cut into events that expect a villager body. Loading a Garrador or a
+   * Regenerator into those rooms is what crashed r101 on 18.11.2026 -- the room ran out of enemy sound blocks
+   * (SndEmDataReadCheck: six) and module space, lost its own em15, and panicked in the sound driver. A villager
+   * variant costs nothing, so variety there is free.
+   */
+  static boolean villagersOnly(int room) {
+    return (room & 0xF00) == 0x100 && room >= 0x100 && room <= 0x11F;
+  }
+
   /** runtime/enemy_random.cpp kPoolKinds, with the heap cost measured from the modules themselves. */
   static final Kind[] POOL = {
       new Kind(0x16, 4, 0, 4048, "Chainsaw Man"),
@@ -109,13 +160,24 @@ final class EnemyRandomizer {
   };
 
   /**
-   * KB of new enemy modules a room may take. Heap 4 is 32.5 MB since 18.11.2026 (was 14.5 MB), where a
-   * kind costs about 0.70 of its .drs size; r100 measured 1.8 MB spare of the old 14.5 MB, so the
-   * bigger heap leaves it roughly 20 MB of room. 12000 KB keeps a wide margin for the rooms that use
-   * more of their heap than the first village does (event archives, bigger geometry) while letting a
-   * room hold several heavy kinds at once -- the point of the change.
+   * KB of new enemy modules a room may take in total. The r101 crash of 18.11.2026 came from 9 MB of extra modules
+   * (em1b Garrador 4589 KB + em36 Regenerator 4476 KB) whose sound banks and ARAM loads then took the room's own
+   * em15 down with them -- the log ends in "SND SEQ data error" / OSPanic in snd_seq2 right after the last bank.
+   * 6000 KB admits one heavy kind (a Garrador fits, two do not) and all the light ones at once.
    */
-  static final int BUDGET_KB = 12000;
+  static final int BUDGET_KB = 6000;
+
+  /**
+   * The engine's enemy module slots (port patch 0235: EmReadModule[8]). A room's own disc kinds hold their slots
+   * for the whole room, so a new kind may only take one of what is left.
+   */
+  static final int MODULE_SLOTS = 8;
+
+  /**
+   * New enemy kinds one room may receive. One keeps the room recognisable and leaves every remaining slot, sound
+   * bank and ARAM region to the enemies the disc put there. Two is what crashed r101.
+   */
+  static final int MAX_NEW_KINDS_PER_ROOM = 1;
 
   /**
    * The Story's list files. emleon00..07 are the chapters (stage.cpp checkEmListNo picks one by
@@ -194,9 +256,14 @@ final class EnemyRandomizer {
     final Map<String, Integer> perList = new TreeMap<>();
     int changed;
     int lists;
+    /** Records that became another villager form: the first chapter's change, and it costs no enemy module. */
+    int forms;
 
     String summary() {
-      return changed + " enemies over " + lists + (lists == 1 ? " list" : " lists");
+      final StringBuilder out = new StringBuilder();
+      out.append(changed).append(" enemies over ").append(lists).append(lists == 1 ? " list" : " lists");
+      if (forms > 0) out.append(", ").append(forms).append(" of them villager forms");
+      return out.toString();
     }
   }
 
@@ -236,13 +303,32 @@ final class EnemyRandomizer {
         roomKinds.computeIfAbsent(r.room, k -> new LinkedHashSet<>()).add(r.id);
       }
       final Map<Integer, Integer> roomSpend = new LinkedHashMap<>();
+      final Map<Integer, Integer> roomNewKinds = new LinkedHashMap<>();
       int changedHere = 0;
       ByteBuffer b = ByteBuffer.wrap(data).order(ByteOrder.BIG_ENDIAN);
       for (Record r : records) {
         Set<Integer> prot = protectedSlots(r.room);
         if (prot.contains(r.slot)) continue;   // the room's script spawns it by number
-        if (!r.alive()) continue;              // the script decides when it appears
         if (r.id == 0) continue;
+        final int o = r.slot * SIZE;
+        // The first chapter: another kind of VILLAGER, never another enemy module, and the alive-at-start rule does
+        // not apply here. The debug disc's first chapter has NO villager alive at room start -- r100's 12 villagers
+        // are be_flag 0 because every one of them is spawned by the script (slot 0 by EmSetEvent, slots 3-8 and the
+        // rest by EmSetFromList2) -- so requiring be_flag bit 0 left the village untouched. A form byte is only read
+        // when the script creates the enemy, so writing it early is exactly what the script would have done.
+        if (r.ganado() && villagersOnly(r.room)) {
+          // Only a PLAIN villager is re-rolled. A type outside 0/1/3/4 is a special form the script chose on purpose
+          // (r101's slot 21 is type 11, a villager with a weapon), and the bingo village's siege expects exactly
+          // those, so they keep the form the disc gave them.
+          if (!plainForm(r.type)) continue;
+          Form form = VILLAGER_FORMS[rng.nextInt(VILLAGER_FORMS.length)];
+          if (form.type == r.type) continue;   // the form it already has: no visible change
+          b.put(o + 2, (byte) form.type);
+          changedHere++;
+          result.forms++;
+          continue;
+        }
+        if (!r.alive()) continue;              // the script decides when it appears
         List<Kind> candidates = new ArrayList<>();
         if (r.ganado()) {
           for (int i = 0; i < POOL.length; i++) if (allowed[i]) candidates.add(POOL[i]);
@@ -255,16 +341,29 @@ final class EnemyRandomizer {
         }
         Set<Integer> loaded = roomKinds.getOrDefault(r.room, new LinkedHashSet<>());
         int spent = roomSpend.getOrDefault(r.room, 0);
+        int added = roomNewKinds.getOrDefault(r.room, 0);
+        // Everywhere else the entry takes another kind's module, so the room must be able to hold it: the engine has
+        // six enemy sound blocks (SndEmDataReadCheck) and eight module slots, and the room's own disc kinds come
+        // first -- the r101 crash happened when a Garrador and a Regenerator crowded em15 out.
         List<Kind> affordable = new ArrayList<>();
         for (Kind k : candidates) {
-          if (loaded.contains(k.id) || spent + k.costKb <= BUDGET_KB) affordable.add(k);
+          if (loaded.contains(k.id)) {
+            affordable.add(k);
+            continue;
+          }
+          if (added >= MAX_NEW_KINDS_PER_ROOM) continue;
+          if (loaded.size() + 1 >= MODULE_SLOTS) continue;
+          if (spent + k.costKb > BUDGET_KB) continue;
+          affordable.add(k);
         }
         if (affordable.isEmpty()) continue;
         Kind kind = affordable.get(rng.nextInt(affordable.size()));
-        if (!loaded.contains(kind.id)) roomSpend.put(r.room, spent + kind.costKb);
+        if (!loaded.contains(kind.id)) {
+          roomSpend.put(r.room, spent + kind.costKb);
+          roomNewKinds.put(r.room, added + 1);
+        }
         loaded.add(kind.id);
         if (kind.id == r.id && (kind.hp == 0 || kind.hp == r.hp)) continue;  // no change
-        final int o = r.slot * SIZE;
         b.put(o + 1, (byte) kind.id);
         b.put(o + 2, (byte) kind.type);
         if (kind.hp != 0) b.putShort(o + 8, (short) kind.hp);
