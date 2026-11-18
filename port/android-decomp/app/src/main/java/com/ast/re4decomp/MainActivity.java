@@ -35,6 +35,16 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     super.onCreate(state); startupShown=state!=null&&state.getBoolean("startupShown",false); imports = ((Re4Application)getApplication()).imports;
     if (getIntent().getBooleanExtra(SHOW_LAUNCHER, false)) startupShown = true;
     core = getResources().getBoolean(R.bool.core_mode);
+    // The core flavour starts at the main menu (18.11.2026, the owner's wish): one Compose screen with
+    // the disc import, the randomizer settings and Start game, instead of a launcher that opened a
+    // second menu that opened a page. MainActivity stays for the classic flavour and as the place the
+    // menu returns to (SHOW_LAUNCHER); a rotation during play is not a launch, so it does not bounce.
+    if (core && !startupShown && state == null) {
+      startupShown = true;
+      startActivity(new Intent(this, MainMenuActivity.class));
+      finish();
+      return;
+    }
     LinearLayout body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL);
     int p = dp(20); body.setPadding(p, core ? dp(12) : p, p, core ? dp(12) : p);
     if (core) {
