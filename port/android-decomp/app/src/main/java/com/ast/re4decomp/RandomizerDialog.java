@@ -183,14 +183,16 @@ final class RandomizerDialog extends Dialog {
   }
 
   /**
-   * Writes this run's enemy lists: the Story's lists take the seed's kinds, checked against each room's script and
-   * its heap. Takes effect on the next room load, so a run already in progress hears it too.
+   * Writes this run's enemy lists: the Story's lists take the seed's kinds, checked against each room's
+   * script and its heap, and only the kinds the page still allows. Takes effect on the next room load.
    */
   private void patchEsl() {
     try {
       final int seed = run.seed == 0 ? RandomizerConfig.freshSeed() : run.seed;
       if (run.seed == 0) run.seed = seed;
-      EnemyRandomizer.Result result = EnemyRandomizer.apply(getContext(), seed);
+      // the "enemies" feature's pool is the page's enemy-kind switch; 0 = the default set
+      final RandomizerConfig.Feature enemies = run.feature("enemies");
+      EnemyRandomizer.Result result = EnemyRandomizer.apply(getContext(), seed, enemies.pool, null);
       status.setText(getContext().getString(R.string.randomizer_esl_patched, result.summary(), seed));
     } catch (java.io.IOException e) {
       status.setText(e.getMessage());

@@ -205,13 +205,22 @@ final class EnemyRandomizer {
    * (tools/enemy_plan.py and enemy_write.py, measured against the debug disc: 274 records over 8
    * lists at seed 12345).
    *
+   * `pool` is the page's enemy-kind switch (RandomizerConfig.Feature.pool): a bit per entry of
+   * POOL, 0 meaning "the default set". Before 18.11.2026 this was ignored and every kind was dealt,
+   * which is why Cows kept appearing after the owner had switched them off.
+   *
    * The random generator is seeded once per run and walks the rooms in a fixed order, so the same
    * seed always writes the same files -- a randomizer seed must be reproducible.
    */
-  static Result apply(Context context, int seed) throws IOException {
+  static Result apply(Context context, int seed, int pool, Progress progress) throws IOException {
+    final boolean[] allowed = allowedKinds(pool);
     Result result = new Result();
     final Random rng = new Random(seed);
+    final int work = STORY_LISTS.length;
+    int done = 0;
     for (String name : STORY_LISTS) {
+      if (progress != null) progress.step(done, work, name);
+      done++;
       File src = listFile(context, name);
       if (!src.isFile()) continue;
       byte[] data = new byte[(int) src.length()];
@@ -235,12 +244,17 @@ final class EnemyRandomizer {
         if (r.id == 0) continue;
         List<Kind> candidates = new ArrayList<>();
         if (r.ganado()) {
-          for (Kind k : POOL) candidates.add(k);
+          for (int i = 0; i < POOL.length; i++) if (allowed[i]) candidates.add(POOL[i]);
         } else if (r.scenery()) {
-          for (Kind k : POOL) if (k.id == 0x23 || k.id == 0x26) candidates.add(k);
+          // Crow and Cow are scenery and are counted by scripts: only another scenery kind, and only
+          // if the page still allows it
+          for (int i = 0; i < POOL.length; i++) {
+            if (allowed[i] && (POOL[i].id == 0x23 || POOL[i].id == 0x26)) candidates.add(POOL[i]);
+          }
         } else {
           continue;                            // the room's own business
         }
+        if (candidates.isEmpty()) continue;
         Set<Integer> loaded = roomKinds.getOrDefault(r.room, new LinkedHashSet<>());
         int spent = roomSpend.getOrDefault(r.room, 0);
         List<Kind> affordable = new ArrayList<>();
@@ -265,8 +279,28 @@ final class EnemyRandomizer {
       result.changed += changedHere;
       result.lists++;
     }
-    Log.i(TAG, "seed " + seed + ": " + result.summary());
+    if (progress != null) progress.step(work, work, "");
+    Log.i(TAG, "seed " + seed + " pool 0x" + Integer.toHexString(pool) + ": " + result.summary());
     return result;
+  }
+
+  /** The page's enemy-kind switch as one boolean per POOL entry; an empty pool means the default set. */
+  static boolean[] allowedKinds(int pool) {
+    final boolean[] allowed = new boolean[POOL.length];
+    boolean any = false;
+    for (int i = 0; i < POOL.length; i++) {
+      allowed[i] = (pool & (1 << i)) != 0;
+      any |= allowed[i];
+    }
+    if (!any) {
+      for (int i = 0; i < POOL.length; i++) allowed[i] = true;
+    }
+    return allowed;
+  }
+
+  /** How far a write has got, for the page's progress bar. */
+  interface Progress {
+    void step(int done, int total, String what);
   }
 
   /** Writes a sidecar through a temp file: a half-written one must never be read. */
