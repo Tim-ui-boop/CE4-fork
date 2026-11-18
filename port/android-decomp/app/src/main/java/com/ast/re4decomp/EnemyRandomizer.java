@@ -180,23 +180,24 @@ final class EnemyRandomizer {
   static final int MAX_NEW_KINDS_PER_ROOM = 1;
 
   /**
-   * The first chapter may take TWO new kinds at most. Sending more is what crashed r100 on 19.11.2026: the run
-   * placed a Gatling Man (4404 KB), an Armadura (1598 KB) and a Garrador (4624 KB) in the village approach, the room
-   * heap fell from 19,274 KB free to 8,872 KB, and the game died right after the s03 Ganado died and the room began
-   * its next event ("MemorySwap", then the log stops). Two kinds still allows a heavy one beside a light one, which
-   * is the mixture the owner asked for.
+   * The first chapter may take TWO new kinds, but both must be LIGHT (`BUDGET_KB_EARLY`). Two proves enough variety
+   * (a Dog and an Armadura are visibly different) without approaching the spending that crashes the room.
    */
   static final int MAX_NEW_KINDS_EARLY = 2;
 
   /**
-   * The first chapter's heap allowance for NEW kinds, measured from the crash. r100 has 19,274 KB free at room
-   * setup; with 10,626 KB of extra modules it fell to 8,872 KB and the room's own event handling failed.
+   * The first chapter's heap allowance for NEW kinds, taken from three measured runs on build b2d4eec2:
    *
-   * 6000 KB therefore admits a heavy kind plus a light one (Gatling 4404 + Dog 1298 = 5702) but never two heavies
-   * (Garrador 4624 + Gatling 4404 = 9028). The earlier lesson still holds: it is the room's own scripted data that
-   * competes for this space, not just the enemies, which is why the budget has to stay well under what is free.
+   *   clean (no randomizer)   r100 free at room setup   19,274 KB   -> fine
+   *   one light kind (build59)                          17,986 KB   -> fine, played to the next chapter
+   *   Regenerator + Armadura                            13,509 KB   -> died loading r101's first event
+   *
+   * The cost is exact (19,274 - 5,871 = 13,403 against the logged 13,509), so the allowance is a straight
+   * subtraction. A pair is capped at this total, which admits every kind of the default pool on its own -- a
+   * Garrador, a Chainsaw, a Gatling Man, a Dog, an Armadura, a Regenerator -- but never two heavy ones together:
+   * Garrador + Dog is 5,922 KB and would leave r100 at 13,352 KB, past the point that crashed.
    */
-  static final int BUDGET_KB_EARLY = 6000;
+  static final int BUDGET_KB_EARLY = 5000;
 
   /**
    * Villager-form changes one chapter-1 room may make. A form costs no module, so this is generous -- it only exists
