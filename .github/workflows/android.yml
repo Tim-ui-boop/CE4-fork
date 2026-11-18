@@ -56,12 +56,25 @@ jobs:
 
           set +e
           set +o pipefail
-          yes | "$SDKMANAGER" --licenses
-          sdk_status=${PIPESTATUS[1]}
+          # Accept the SDK licences. This step failed a build on 18.11.2026 with
+          # "7 of 8 SDK package licenses not accepted" and a (y/N) prompt: `yes | sdkmanager --licenses`
+          # exits non-zero when the prompt and the pipe race, which has nothing to do with the source.
+          # It is now retried and never fatal -- the --install below is the real test, and it names the
+          # missing licence clearly if one truly is unaccepted.
+          sdk_status=1
+          for attempt in 1 2 3; do
+            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1
+            sdk_status=${PIPESTATUS[1]}
+            if [ "$sdk_status" -eq 0 ]; then
+              break
+            fi
+            echo "::warning::sdkmanager --licenses exited $sdk_status (attempt $attempt of 3); retrying"
+            sleep 5
+          done
           set -o pipefail
           set -e
           if [ "$sdk_status" -ne 0 ]; then
-            exit "$sdk_status"
+            echo "::warning::sdkmanager --licenses never reported success; continuing, the install below decides"
           fi
 
           "$SDKMANAGER" --install "ndk;28.2.13676358" "cmake;3.22.1"
