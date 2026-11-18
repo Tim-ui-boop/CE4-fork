@@ -18,13 +18,15 @@ import java.util.List;
  * opens the randomizer page, and starts the game; it appears once per app start and never during play, and a restored
  * activity (a rotation, a return from the game) skips straight through.
  *
- * The page itself is {@link RandomizerDialog}, the one the title screen of the classic flavour also opens; both act on
+ * The page itself is {@link RandomizerActivity} (Jetpack Compose since 18.11.2026), the one the title
+ * screen of the classic flavour also opens; both act on
  * the same {@link RandomizerConfig}, so there is one place the settings live whatever opened them.
  */
 public final class RandomizerStart extends Activity {
+  /** The request code for the Compose randomizer page (it reports back so this screen redraws). */
+  private static final int REQUEST_RANDOMIZER = 1;
   /** The page is already open (a configuration change while it showed): the new activity opens it again. */
   private static final String EXTRA_OPEN = "openRandomizer";
-  private RandomizerDialog page;
 
   @Override protected void onCreate(Bundle state) {
     super.onCreate(state);
@@ -141,15 +143,23 @@ public final class RandomizerStart extends Activity {
     return out.toString();
   }
 
+  /**
+   * Opens the randomizer page. Since 18.11.2026 that is the Compose screen (RandomizerActivity) rather
+   * than the Java dialog: the dialog's switches could say one thing and do another -- the enemy-kind
+   * pool was drawn and then ignored by the writer, which is why Cows kept appearing after they were
+   * switched off. RandomizerScreen draws one state object, so a switch cannot be shown without being
+   * read. The result comes back here so this screen redraws with the run as it was left.
+   */
   private void openPage() {
-    if (page != null) return;
-    page = new RandomizerDialog(this, store());
-    page.setOnDismissListener(d -> {
-      page = null;
+    startActivityForResult(new Intent(this, RandomizerActivity.class), REQUEST_RANDOMIZER);
+  }
+
+  @Override protected void onActivityResult(int request, int result, Intent data) {
+    super.onActivityResult(request, result, data);
+    if (request == REQUEST_RANDOMIZER) {
       // the page may have changed the run: draw this screen again from it
       setContentView(build());
-    });
-    page.show();
+    }
   }
 
   /** On to the game, which starts the core with the run's settings (CoreActivity.applyToCore). */
@@ -162,6 +172,8 @@ public final class RandomizerStart extends Activity {
 
   @Override protected void onSaveInstanceState(Bundle state) {
     super.onSaveInstanceState(state);
-    state.putBoolean(EXTRA_OPEN, page != null);
+    // the Compose page is its own activity now and restores itself; this screen has nothing open to
+    // remember, and the flag stays for older saves
+    state.putBoolean(EXTRA_OPEN, false);
   }
 }
