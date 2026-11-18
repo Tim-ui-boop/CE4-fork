@@ -1617,6 +1617,12 @@ void roomHeapReport(unsigned n, GLOBAL_WK* g)
         g_roomHeapStart = (unsigned) freeNow;
         g_roomHeapPeak = (unsigned) freeNow;
         g_roomHeapLargestDrain = 0;
+        // on entry as well: 600 frames never came in a run that moved rooms, and the room's headroom
+        // is the number a bigger enemy budget has to be judged against
+        const long size = (long) ((u8*) Heap[h].end - (u8*) Heap[h].start);
+        re4_log("heap: r%03x room heap %ld KB at its start (top 0x%08x), %d KB free",
+                room, size / 1024, (unsigned) (unsigned long) Heap[h].end, (int) (freeNow / 1024));
+        return;
     } else if ((unsigned) freeNow < g_roomHeapPeak) {
         g_roomHeapLargestDrain = g_roomHeapPeak - (unsigned) freeNow > g_roomHeapLargestDrain
             ? g_roomHeapPeak - (unsigned) freeNow : g_roomHeapLargestDrain;
