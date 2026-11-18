@@ -109,11 +109,13 @@ final class EnemyRandomizer {
   };
 
   /**
-   * KB of new enemy modules a room may take. 4200 is the cost of one heavy kind: at the 1536 the
-   * first village room actually had spare, only Dog, Crow and Cow ever fit, which is why the old
-   * randomizer kept failing on Garrador and Regenerator.
+   * KB of new enemy modules a room may take. Heap 4 is 32.5 MB since 18.11.2026 (was 14.5 MB), where a
+   * kind costs about 0.70 of its .drs size; r100 measured 1.8 MB spare of the old 14.5 MB, so the
+   * bigger heap leaves it roughly 20 MB of room. 12000 KB keeps a wide margin for the rooms that use
+   * more of their heap than the first village does (event archives, bigger geometry) while letting a
+   * room hold several heavy kinds at once -- the point of the change.
    */
-  static final int BUDGET_KB = 4200;
+  static final int BUDGET_KB = 12000;
 
   /**
    * The Story's list files. emleon00..07 are the chapters (stage.cpp checkEmListNo picks one by
