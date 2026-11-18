@@ -76,7 +76,7 @@ final class EnemyRandomizer {
     }
 
     boolean scenery() {
-      return id == 0x23 || id == 0x26;                 // Crow, Cow
+      return id == 0x23 || id == 0x26 || id == 0x28;    // Crow, Cow, Chicken (em28)
     }
   }
 
@@ -180,11 +180,25 @@ final class EnemyRandomizer {
   static final int MAX_NEW_KINDS_PER_ROOM = 1;
 
   /**
-   * What the first chapter's scenery (a Crow or a Cow) may become: only a light enemy. A dog (1298 KB) or an
-   * armoured villager (1598 KB) fits the scripted approach; a Garrador, a Regenerator or a Gatling man does not, and
-   * the crows Leon walks past are part of a cutscene the room was built around.
+   * The first chapter may take several new kinds. It holds a dozen small rooms plus the village's crows, cows and
+   * chickens, and with ONE kind allowed every one of them collapsed onto whichever light kind the pool permitted
+   * (Armadura, in the 19.11.2026 report) -- variety is the whole point of the feature. Four new kinds in a room is
+   * what the module slots leave once its own kinds are counted.
    */
-  static final int LIGHT_KIND_KB = 1600;
+  static final int MAX_NEW_KINDS_EARLY = 4;
+
+  /**
+   * The first chapter's heap allowance for NEW kinds, measured rather than guessed. The build-59 log reports r100
+   * with 17,986 KB and r101 with 17,032 KB free at room setup, and the room's own enemies use about a tenth of that
+   * during play ("lowest ... in the room"). 12 MB of new modules therefore fits, and it is enough for a Garrador
+   * (4,624 KB) plus a Chainsaw (4,048 KB) plus a Dog and an Armadura in one room -- the mixture a randomizer should
+   * produce.
+   *
+   * This is NOT what crashed r101 on 18.11.2026: that run logged 17 MB free as well and died in the sound driver
+   * ("SND SEQ data error" / OSPanic), with no "Em set failed" anywhere. The sound-block ceiling
+   * (SndEmDataReadCheck, six) is the real constraint there, and it is the module count below that guards it.
+   */
+  static final int BUDGET_KB_EARLY = 12000;
 
   /**
    * The Story's list files. emleon00..07 are the chapters (stage.cpp checkEmListNo picks one by
@@ -349,36 +363,42 @@ final class EnemyRandomizer {
         // three quarters of the game unchanged -- the reason whole chapters looked randomizer-free. Nothing here
         // asks the room to create anything; it only rewrites what the script would create anyway.
         List<Kind> candidates = new ArrayList<>();
-        if (r.ganado()) {
-          for (int i = 0; i < POOL.length; i++) if (allowed[i]) candidates.add(POOL[i]);
-        } else if (r.scenery()) {
-          // A Crow or a Cow may become a real enemy, as the PC randomizer does; the old code offered only Crow and
-          // Cow, both excluded by the default pool, so neither ever changed. In the first chapter the scenery stays
-          // lightweight on purpose: the approach is a scripted walk past those crows, and turning them into
-          // Garradors there would load modules a cutscene room cannot afford (the r101 crash).
-          for (int i = 0; i < POOL.length; i++) {
-            if (!allowed[i]) continue;
-            if (villagersOnly(r.room) && POOL[i].costKb > LIGHT_KIND_KB) continue;
-            candidates.add(POOL[i]);
-          }
-        } else {
-          continue;                            // the room's own business
+        // What an entry may become. A Ganado and a Crow/Cow are both "an enemy the room already has a body for",
+        // as long as the kind's module is loaded or can be loaded -- that is what the slot, sound-block and heap
+        // checks below decide. The old code limited scenery to Crow/Cow (which the default pool excludes, so it
+        // never changed) and then to a light kind in the first chapter, which left Armadura as the only option and
+        // turned every crow and cow in the village into an armoured knight.
+        final boolean scenery = r.scenery();
+        for (int i = 0; i < POOL.length; i++) {
+          if (!allowed[i]) continue;
+          // A chicken is scenery with its own tiny module and no combat purpose; it stays a chicken.
+          if (scenery && (POOL[i].id == 0x23 || POOL[i].id == 0x26)) continue;  // no Crow->Cow shuffling
+          candidates.add(POOL[i]);
         }
+        if (candidates.isEmpty()) continue;
         Set<Integer> loaded = roomKinds.getOrDefault(r.room, new LinkedHashSet<>());
         int spent = roomSpend.getOrDefault(r.room, 0);
         int added = roomNewKinds.getOrDefault(r.room, 0);
         // Everywhere else the entry takes another kind's module, so the room must be able to hold it: the engine has
         // six enemy sound blocks (SndEmDataReadCheck) and eight module slots, and the room's own disc kinds come
         // first -- the r101 crash happened when a Garrador and a Regenerator crowded em15 out.
+        //
+        // The first chapter gets a wider allowance on purpose. It used to be pinned to ONE new kind, and since the
+        // only light kind in the player's pool was Armadura every crow and cow in the village became an armoured
+        // knight. A chapter-1 room may now take up to three light kinds (a dog, an armoured villager, another heavy
+        // one only if the budget allows), which is what makes the variety visible without touching the modules the
+        // scripted rooms need.
         List<Kind> affordable = new ArrayList<>();
+        final boolean early = villagersOnly(r.room);
+        final int maxNew = early ? MAX_NEW_KINDS_EARLY : MAX_NEW_KINDS_PER_ROOM;
         for (Kind k : candidates) {
           if (loaded.contains(k.id)) {
             affordable.add(k);
             continue;
           }
-          if (added >= MAX_NEW_KINDS_PER_ROOM) continue;
+          if (added >= maxNew) continue;
           if (loaded.size() + 1 >= MODULE_SLOTS) continue;
-          if (spent + k.costKb > BUDGET_KB) continue;
+          if (spent + k.costKb > (early ? BUDGET_KB_EARLY : BUDGET_KB)) continue;
           affordable.add(k);
         }
         if (affordable.isEmpty()) continue;
