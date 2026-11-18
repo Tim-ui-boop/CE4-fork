@@ -17,6 +17,9 @@ public final class Re4Application extends Application {
       CoreBridge.load();
     }
     imports = new ImportManager(this);
+    // The randomizer's sidecar enemy lists follow the active run (ScriptSidecars): the app's context is taken once
+    // here, because applyToCore() runs from a screen and from a timer, neither of which should own storage logic.
+    ScriptSidecars.init(this);
   }
 
   /** This is the process ":restart" (manifest, LauncherRestartActivity). */

@@ -316,6 +316,9 @@ final class RandomizerConfig {
       CoreBridge.setEnemyRandom(0);
       CoreBridge.setEnemyScriptRandom(0);
       CoreBridge.setMerchantRandom(0);
+      // Switching the randomizer off puts the disc's own enemy lists back, so a sidecar from an earlier run cannot
+      // keep changing the game behind the player's back.
+      ScriptSidecars.syncOff();
       return;
     }
     final int s = seed == 0 ? 0 : seed;
@@ -331,6 +334,10 @@ final class RandomizerConfig {
     CoreBridge.setEnemyScriptRandom(enemies.on ? s : 0);
     // Its kind pool decides whether the Chainsaw Man may be rolled for such an enemy (pool bit 0).
     if (enemies.on) CoreBridge.setEnemyOptions(enemies.pool, enemies.ratios);
+    // The sidecar lists are the half of the randomizer that reaches ordinary enemies, and they used to depend on the
+    // player pressing "Write enemy data" -- which is why a whole run could show nothing but the one script-built
+    // Ganado. The active run now brings its own data with it.
+    ScriptSidecars.sync(enemies.on ? s : 0, enemies.pool);
     final Feature merchant = feature("merchant");
     CoreBridge.setMerchantRandom(merchant.on ? s : 0);
     // phase 5: how often a merchant deals anew, and which weapons he may hand out

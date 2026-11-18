@@ -180,6 +180,13 @@ final class EnemyRandomizer {
   static final int MAX_NEW_KINDS_PER_ROOM = 1;
 
   /**
+   * What the first chapter's scenery (a Crow or a Cow) may become: only a light enemy. A dog (1298 KB) or an
+   * armoured villager (1598 KB) fits the scripted approach; a Garrador, a Regenerator or a Gatling man does not, and
+   * the crows Leon walks past are part of a cutscene the room was built around.
+   */
+  static final int LIGHT_KIND_KB = 1600;
+
+  /**
    * The Story's list files. emleon00..07 are the chapters (stage.cpp checkEmListNo picks one by
    * progress); emleon08/09 and omake* belong to the bonus modes and are not this randomizer's
    * business (the owner's decision, 18.11.2026).
@@ -288,9 +295,18 @@ final class EnemyRandomizer {
     final boolean[] allowed = allowedKinds(pool);
     Result result = new Result();
     final Random rng = new Random(seed);
+    final File etc = new File(importRoot(context), "disc1/files/etc");
+    // A run that writes nothing used to look exactly like a run that worked: the page said "Enemies written" and the
+    // player saw no change. Fail loudly instead, and name the folder, because the three plausible causes (no import
+    // yet, disc 2 only, a different data folder) all show up here.
+    if (!etc.isDirectory()) {
+      throw new IOException("No imported disc at " + etc.getAbsolutePath() + " -- import the disc first.");
+    }
+    int found = 0;
     for (String name : STORY_LISTS) {
       File src = listFile(context, name);
       if (!src.isFile()) continue;
+      found++;
       byte[] data = new byte[(int) src.length()];
       try (RandomAccessFile in = new RandomAccessFile(src, "r")) {
         in.readFully(data);
@@ -328,13 +344,22 @@ final class EnemyRandomizer {
           result.forms++;
           continue;
         }
-        if (!r.alive()) continue;              // the script decides when it appears
+        // An enemy the room's script creates later (be_flag bit 0 clear) may change its kind too. It is not skipped
+        // any more: on the debug disc only 262 of 992 Ganados are alive at room start, so requiring that bit kept
+        // three quarters of the game unchanged -- the reason whole chapters looked randomizer-free. Nothing here
+        // asks the room to create anything; it only rewrites what the script would create anyway.
         List<Kind> candidates = new ArrayList<>();
         if (r.ganado()) {
           for (int i = 0; i < POOL.length; i++) if (allowed[i]) candidates.add(POOL[i]);
         } else if (r.scenery()) {
+          // A Crow or a Cow may become a real enemy, as the PC randomizer does; the old code offered only Crow and
+          // Cow, both excluded by the default pool, so neither ever changed. In the first chapter the scenery stays
+          // lightweight on purpose: the approach is a scripted walk past those crows, and turning them into
+          // Garradors there would load modules a cutscene room cannot afford (the r101 crash).
           for (int i = 0; i < POOL.length; i++) {
-            if (allowed[i] && (POOL[i].id == 0x23 || POOL[i].id == 0x26)) candidates.add(POOL[i]);
+            if (!allowed[i]) continue;
+            if (villagersOnly(r.room) && POOL[i].costKb > LIGHT_KIND_KB) continue;
+            candidates.add(POOL[i]);
           }
         } else {
           continue;                            // the room's own business
@@ -376,7 +401,11 @@ final class EnemyRandomizer {
       result.changed += changedHere;
       result.lists++;
     }
-    Log.i(TAG, "seed " + seed + ": " + result.summary());
+    if (found == 0) {
+      throw new IOException("No enemy lists in " + etc.getAbsolutePath() + " -- the import looks incomplete.");
+    }
+    Log.i(TAG, "seed " + seed + ", pool 0x" + Integer.toHexString(pool) + ", " + found + " list(s) read: "
+        + result.summary());
     return result;
   }
 
