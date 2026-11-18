@@ -180,25 +180,30 @@ final class EnemyRandomizer {
   static final int MAX_NEW_KINDS_PER_ROOM = 1;
 
   /**
-   * The first chapter may take several new kinds. It holds a dozen small rooms plus the village's crows, cows and
-   * chickens, and with ONE kind allowed every one of them collapsed onto whichever light kind the pool permitted
-   * (Armadura, in the 19.11.2026 report) -- variety is the whole point of the feature. Four new kinds in a room is
-   * what the module slots leave once its own kinds are counted.
+   * The first chapter may take TWO new kinds at most. Sending more is what crashed r100 on 19.11.2026: the run
+   * placed a Gatling Man (4404 KB), an Armadura (1598 KB) and a Garrador (4624 KB) in the village approach, the room
+   * heap fell from 19,274 KB free to 8,872 KB, and the game died right after the s03 Ganado died and the room began
+   * its next event ("MemorySwap", then the log stops). Two kinds still allows a heavy one beside a light one, which
+   * is the mixture the owner asked for.
    */
-  static final int MAX_NEW_KINDS_EARLY = 4;
+  static final int MAX_NEW_KINDS_EARLY = 2;
 
   /**
-   * The first chapter's heap allowance for NEW kinds, measured rather than guessed. The build-59 log reports r100
-   * with 17,986 KB and r101 with 17,032 KB free at room setup, and the room's own enemies use about a tenth of that
-   * during play ("lowest ... in the room"). 12 MB of new modules therefore fits, and it is enough for a Garrador
-   * (4,624 KB) plus a Chainsaw (4,048 KB) plus a Dog and an Armadura in one room -- the mixture a randomizer should
-   * produce.
+   * The first chapter's heap allowance for NEW kinds, measured from the crash. r100 has 19,274 KB free at room
+   * setup; with 10,626 KB of extra modules it fell to 8,872 KB and the room's own event handling failed.
    *
-   * This is NOT what crashed r101 on 18.11.2026: that run logged 17 MB free as well and died in the sound driver
-   * ("SND SEQ data error" / OSPanic), with no "Em set failed" anywhere. The sound-block ceiling
-   * (SndEmDataReadCheck, six) is the real constraint there, and it is the module count below that guards it.
+   * 6000 KB therefore admits a heavy kind plus a light one (Gatling 4404 + Dog 1298 = 5702) but never two heavies
+   * (Garrador 4624 + Gatling 4404 = 9028). The earlier lesson still holds: it is the room's own scripted data that
+   * competes for this space, not just the enemies, which is why the budget has to stay well under what is free.
    */
-  static final int BUDGET_KB_EARLY = 12000;
+  static final int BUDGET_KB_EARLY = 6000;
+
+  /**
+   * Villager-form changes one chapter-1 room may make. A form costs no module, so this is generous -- it only exists
+   * so a single room cannot become a parade of Chainsaw Men. The owner's wish is variety, and the four forms of
+   * em10/em12 are all the same body model.
+   */
+  static final int MAX_VILLAGER_FORMS = 6;
 
   /**
    * The Story's list files. emleon00..07 are the chapters (stage.cpp checkEmListNo picks one by
@@ -326,37 +331,48 @@ final class EnemyRandomizer {
         in.readFully(data);
       }
       final List<Record> records = read(src);
-      // what this room already loads decides what a new kind costs
+      // What this room already loads decides what a new kind costs. Count EVERY record that names an enemy, not only
+      // the ones alive at room start: the scripts spawn the rest later (r100's six villa kinds are mostly be_flag 0),
+      // and undercounting them is how three heavy modules slipped into a room that could not hold them.
       final Map<Integer, Set<Integer>> roomKinds = new LinkedHashMap<>();
       for (Record r : records) {
-        if (!r.alive()) continue;
+        if (r.id == 0) continue;
         roomKinds.computeIfAbsent(r.room, k -> new LinkedHashSet<>()).add(r.id);
       }
       final Map<Integer, Integer> roomSpend = new LinkedHashMap<>();
       final Map<Integer, Integer> roomNewKinds = new LinkedHashMap<>();
       int changedHere = 0;
+      // Villager-form changes this list has made for one room. Forms are free, so the village gets a generous count
+      // per room; it is the module-sized kinds that must stay rare there.
+      final Map<Integer, Integer> roomForms = new LinkedHashMap<>();
       ByteBuffer b = ByteBuffer.wrap(data).order(ByteOrder.BIG_ENDIAN);
       for (Record r : records) {
         Set<Integer> prot = protectedSlots(r.room);
         if (prot.contains(r.slot)) continue;   // the room's script spawns it by number
         if (r.id == 0) continue;
         final int o = r.slot * SIZE;
-        // The first chapter: another kind of VILLAGER, never another enemy module, and the alive-at-start rule does
-        // not apply here. The debug disc's first chapter has NO villager alive at room start -- r100's 12 villagers
-        // are be_flag 0 because every one of them is spawned by the script (slot 0 by EmSetEvent, slots 3-8 and the
-        // rest by EmSetFromList2) -- so requiring be_flag bit 0 left the village untouched. A form byte is only read
-        // when the script creates the enemy, so writing it early is exactly what the script would have done.
+        final int villagerForms = roomForms.getOrDefault(r.room, 0);
+        // The first chapter is a scripted walk-through whose rooms also run events, cutscenes and the s03 death
+        // sequence. The 19.11.2026 crash showed what happens when three heavy modules are forced into r100: the
+        // heap went from 19,274 KB to 8,872 KB free and the room died as the next event began. So the village gets
+        // its variety from FORMS, which cost no module at all, and may add exactly ONE module-sized kind.
         if (r.ganado() && villagersOnly(r.room)) {
           // Only a PLAIN villager is re-rolled. A type outside 0/1/3/4 is a special form the script chose on purpose
           // (r101's slot 21 is type 11, a villager with a weapon), and the bingo village's siege expects exactly
           // those, so they keep the form the disc gave them.
-          if (!plainForm(r.type)) continue;
-          Form form = VILLAGER_FORMS[rng.nextInt(VILLAGER_FORMS.length)];
-          if (form.type == r.type) continue;   // the form it already has: no visible change
-          b.put(o + 2, (byte) form.type);
-          changedHere++;
-          result.forms++;
-          continue;
+          if (villagerForms < MAX_VILLAGER_FORMS && plainForm(r.type)) {
+            Form form = VILLAGER_FORMS[rng.nextInt(VILLAGER_FORMS.length)];
+            if (form.type != r.type) {
+              b.put(o + 2, (byte) form.type);
+              roomForms.put(r.room, villagerForms + 1);
+              changedHere++;
+              result.forms++;
+              continue;
+            }
+          }
+          // Scenery in the village (the crows Leon walks past, the chickens) may still become a real enemy, but it
+          // spends the one module-sized kind the room is allowed, and only a light one at that.
+          if (!r.scenery()) continue;
         }
         // An enemy the room's script creates later (be_flag bit 0 clear) may change its kind too. It is not skipped
         // any more: on the debug disc only 262 of 992 Ganados are alive at room start, so requiring that bit kept
