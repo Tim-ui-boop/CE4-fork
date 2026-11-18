@@ -119,6 +119,7 @@ struct CoreApi {
   void (*aimTurn)(float, float){};  // optional (cores since 29.10.2026): swipe aiming
   void (*zoom)(int){};            // optional (cores since 12.11.2026, 0.99.12): the mouse wheel zooms
   void (*setEnemyRandom)(int){};  // optional (cores since 12.11.2026, 0.99.12): the cheat "Random enemies"
+  void (*setEnemyScriptRandom)(int){};  // optional (port patch 0237): the enemies a room script builds by hand
   void (*setMerchantRandom)(int){};  // optional (cores since this build): the cheat "Random merchant stock"
   void (*setMerchantOptions)(int, unsigned){};  // optional: its chance and weapon pool
   void (*setEnemyOptions)(int, int){};  // optional (cores since 0.99.16): "Random enemies" pool and ratios
@@ -474,6 +475,8 @@ void loadCore(JNIEnv *env) {
   api.aimTurn = reinterpret_cast<void (*)(float, float)>(dlsym(api.main, "re4_core_aim_turn"));
   api.zoom = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_zoom"));
   api.setEnemyRandom = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_set_enemy_random"));
+  api.setEnemyScriptRandom =
+      reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_set_enemy_script_random"));
   api.setMerchantRandom = reinterpret_cast<void (*)(int)>(dlsym(api.main, "re4_core_set_merchant_random"));
   api.setMerchantOptions = reinterpret_cast<void (*)(int, unsigned)>(dlsym(api.main, "re4_core_set_merchant_options"));
   api.setEnemyOptions = reinterpret_cast<void (*)(int, int)>(dlsym(api.main, "re4_core_set_enemy_options"));
@@ -3106,6 +3109,7 @@ void useCoreProcess(const std::string &why) {
   api.aimTurn = re4ipc_aim_turn;
   api.zoom = re4ipc_zoom;
   api.setEnemyRandom = re4ipc_set_enemy_random;
+  api.setEnemyScriptRandom = re4ipc_set_enemy_script_random;
   api.setGentleQte = re4ipc_set_gentle_qte;
   api.setMerchantRandom = re4ipc_set_merchant_random;
   api.setMerchantOptions = re4ipc_set_merchant_options;
@@ -3855,6 +3859,11 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setGentleQte
 
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setEnemyRandom(JNIEnv *, jclass, jint seed) {
   if (api.setEnemyRandom) api.setEnemyRandom(seed);
+}
+
+// Port patch 0237: the seed for the enemies a room script builds by hand (r100's s03 Ganado), 0 off.
+extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setEnemyScriptRandom(JNIEnv *, jclass, jint seed) {
+  if (api.setEnemyScriptRandom) api.setEnemyScriptRandom(seed);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_ast_re4decomp_CoreBridge_setMerchantRandom(JNIEnv *, jclass, jint seed) {

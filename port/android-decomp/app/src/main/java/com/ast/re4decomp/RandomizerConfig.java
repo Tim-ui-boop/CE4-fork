@@ -314,14 +314,23 @@ final class RandomizerConfig {
   void applyToCore() {
     if (!anyEnabled()) {
       CoreBridge.setEnemyRandom(0);
+      CoreBridge.setEnemyScriptRandom(0);
       CoreBridge.setMerchantRandom(0);
       return;
     }
     final int s = seed == 0 ? 0 : seed;
-    // The enemy randomizer is a data rewrite since 18.11.2026 (EslRandomizer/EnemyRandomizer): one seed writes
-    // patched enemy lists the loader prefers over the disc's own, so there is nothing to tell a running core.
-    // The play-time swap (CoreBridge.setEnemyRandom) is retired in runtime/enemy_random.cpp -- it takes every
+    // The enemy randomizer is a data rewrite since 18.11.2026 (EnemyRandomizer): one seed writes patched enemy
+    // lists the loader prefers over the disc's own, so there is nothing to tell a running core for those.
+    // The play-time swap (CoreBridge.setEnemyRandom) stays retired in runtime/enemy_random.cpp -- it takes every
     // seed as 0 and plans nothing.
+    final Feature enemies = feature("enemies");
+    // Port patch 0237: the enemy a room script builds by hand cannot come from a sidecar list, so the core gets its
+    // own seed for it (r100's s03 Ganado, the first encounter before the bingo village). Only a form byte changes,
+    // never a module, so this cannot bring the crash of 17.11.2026 back; with the switch off the core is told 0 and
+    // the scripts keep the enemies they build themselves.
+    CoreBridge.setEnemyScriptRandom(enemies.on ? s : 0);
+    // Its kind pool decides whether the Chainsaw Man may be rolled for such an enemy (pool bit 0).
+    if (enemies.on) CoreBridge.setEnemyOptions(enemies.pool, enemies.ratios);
     final Feature merchant = feature("merchant");
     CoreBridge.setMerchantRandom(merchant.on ? s : 0);
     // phase 5: how often a merchant deals anew, and which weapons he may hand out

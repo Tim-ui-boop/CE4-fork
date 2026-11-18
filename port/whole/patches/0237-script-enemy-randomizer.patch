@@ -1,0 +1,45 @@
+# Port patch (port patch 0237, 18.11.2026 -- the owner's report: "the randomizer doesn't randomize enemies
+# at the start of the game where you encounter the first zombies, before entering the bingo village").
+#
+# The enemy randomizer is a data rewrite since 18.11.2026: it writes patched chapter enemy lists
+# (emleon0X.esl.re4) and the loader prefers them (runtime/dvd.cpp entryPath). That can never reach an
+# enemy a room's own C++ builds by hand, and r100 -- the village approach, the first playable encounter --
+# is exactly that case: R100Init fills an EM_LIST literal (`d.id = 0x12`, `d.set = 0x13`) and hands it to
+# EmSetEvent, so the opening Ganado at the police car comes from code, not from the list.
+#
+# The hook answers "does the randomizer own this entry?" and, when it does, writes the randomized morphed
+# form into the entry's `type` before EmCreate runs. Everything else the script depends on is left alone:
+# the id (0x12 keeps the model and the s03 event camera's subject), the position, the set, the hp, and the
+# EM_LIST* the script passes. The play-time swap inside EmSetFromList/EmSetFromList2 stays retired -- this
+# hook changes one form byte and never asks the room's heap for another enemy module.
+#
+# `no` is the entry's position in the loaded list, 0xFF when the script built it outside the list (what
+# EmSetEvent does); only 0xFF is offered to the hook, so a list entry the rewrite already decided is never
+# changed behind the player's back. With the randomizer off (seed 0) the hook returns 0 and the entry is
+# created exactly as the script wrote it.
+#
+# Generated against the tree as patches 0231, 0234 and 0236 leave it, so its context cannot drift.
+--- a/src/game/em_set.cpp
++++ b/src/game/em_set.cpp
+@@ -22,6 +22,9 @@
+    whose list the game never fills (the farm at the game's start) still hands the randomizer entries to plan
+    around; answers how many it switched on */
+ extern "C" int re4_enemy_random_seed_list(void);
++/* port (patch 0237): the randomizer's answer for an enemy a room script builds by hand (r100's s03 Ganado);
++   answers 1 when it changed the entry's morphed form (EM_LIST.type) */
++extern "C" int re4_enemy_random_script_kind(EM_LIST* d, int no);
+ extern "C" int re4_enemy_random_entry(int no, EM_LIST* out);
+ extern "C" int re4_enemy_random_extra(EM_LIST* out);
+ extern "C" void re4_enemy_random_extra_made(int ok);
+@@ -300,6 +303,11 @@
+ {
+     cEm* em;
+ 
++    /* port (patch 0237): an enemy the room's own script builds by hand -- the data rewrite cannot reach it, so
++       the randomizer may change its morphed form here; the id, the model, the place and `d` itself stay, because
++       the script that built it keeps the pointer (r100: s03 positions it, its death is linked to it) */
++    re4_enemy_random_script_kind(d, 0xFF);
++
+     if (EM_SET_ID_NG(d->id)) {
+         return errEm;
+     }

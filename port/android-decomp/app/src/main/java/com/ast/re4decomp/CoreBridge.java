@@ -325,6 +325,14 @@ public final class CoreBridge {
   public static native void zoom(int notches);
   /** The cheat "Random enemies" (CoreMenu, 0.99.12): its seed (20 bits), 0 off; from the next room on. */
   public static native void setEnemyRandom(int seed);
+  /**
+   * The enemies a ROOM SCRIPT builds by hand (port patch 0237): the seed (20 bits, 0 off), from the next room on.
+   * r100's first Ganado -- the one before the bingo village -- is built by R100Init from a literal EM_LIST, so the
+   * data rewrite's sidecar lists never reach it. This changes only that enemy's morphed form (EM_LIST.type: the
+   * villager, the young villager, the armed villager, the Chainsaw Man -- the forms em12_set.cpp implements for id
+   * 0x12), never its id, model, place or module. Cores without it ignore it.
+   */
+  public static native void setEnemyScriptRandom(int seed);
   /** The cheat "Random merchant stock" (CoreMenu): its seed (20 bits), 0 off; from the next room on. The
    *  merchant then sells from one shared pool (runtime/merchant_random.cpp, patch 0233); cores without it
    *  leave it out. */

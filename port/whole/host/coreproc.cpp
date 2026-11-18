@@ -125,6 +125,7 @@ struct Core {
     void (*aimTurn)(float, float);
     void (*zoom)(int);  // optional (cores since 12.11.2026): the mouse wheel
     void (*setEnemyRandom)(int);  // optional (cores since 12.11.2026): "Random enemies"
+    void (*setEnemyScriptRandom)(int);  // optional (port patch 0237): the enemies a room script builds by hand
     void (*setGentleQte)(int);    // optional (cores since 14.11.2026, 0.99.15): "Gentler QTEs"
     void (*setMerchantRandom)(int);  // optional (cores since this build): "Random merchant stock"
     void (*setMerchantOptions)(int, unsigned);  // optional: its chance and weapon pool
@@ -804,6 +805,7 @@ bool loadCore(std::string& problem)
     bind(core.aimTurn, "re4_core_aim_turn");
     bind(core.zoom, "re4_core_zoom", false);
     bind(core.setEnemyRandom, "re4_core_set_enemy_random", false);
+    bind(core.setEnemyScriptRandom, "re4_core_set_enemy_script_random", false);
     bind(core.setGentleQte, "re4_core_set_gentle_qte", false);
     bind(core.setMerchantRandom, "re4_core_set_merchant_random", false);
     bind(core.setMerchantOptions, "re4_core_set_merchant_options", false);
@@ -983,6 +985,9 @@ void serve()
             break;
         case kSetEnemyRandom:
             if (core.setEnemyRandom) core.setEnemyRandom(h.a);
+            break;
+        case kSetEnemyScriptRandom:
+            if (core.setEnemyScriptRandom) core.setEnemyScriptRandom(h.a);
             break;
         case kSetGentleQte:
             if (core.setGentleQte) core.setGentleQte(h.a);

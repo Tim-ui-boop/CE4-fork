@@ -190,7 +190,7 @@ final class RandomizerDialog extends Dialog {
     try {
       final int seed = run.seed == 0 ? RandomizerConfig.freshSeed() : run.seed;
       if (run.seed == 0) run.seed = seed;
-      EnemyRandomizer.Result result = EnemyRandomizer.apply(getContext(), seed);
+      EnemyRandomizer.Result result = EnemyRandomizer.apply(getContext(), seed, run.feature("enemies").pool);
       status.setText(getContext().getString(R.string.randomizer_esl_patched, result.summary(), seed));
     } catch (java.io.IOException e) {
       status.setText(e.getMessage());

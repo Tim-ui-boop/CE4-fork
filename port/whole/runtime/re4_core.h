@@ -365,6 +365,13 @@ void re4_core_zoom(int notches);
 /* The cheat "Random enemies" (cores since 12.11.2026, 0.99.12; runtime/enemy_random.cpp, patch 0231): its seed
  * (20 bits), 0 off; from the next room on. Any thread. */
 void re4_core_set_enemy_random(int seed);
+/* The enemies a ROOM SCRIPT builds by hand (cores since 18.11.2026; runtime/enemy_random.cpp, patch 0237): its seed
+ * (20 bits), 0 off; from the next room on. r100's first Ganado -- the one before the bingo village -- is built by
+ * R100Init from a literal EM_LIST, so the data rewrite's sidecar lists can never reach it. This seed changes only
+ * that enemy's morphed form (EM_LIST.type: the villager, the young villager, the armed villager, the Chainsaw Man --
+ * the four forms em12_set.cpp implements for id 0x12), never its id, model, place or module. A seed of its own, not
+ * the retired play-time randomizer's, so no swap path can come back through it. Any thread. */
+void re4_core_set_enemy_script_random(int seed);
 /* The cheat "Random merchant stock" (runtime/merchant_random.cpp, patch 0233): its seed (20 bits), 0 off; from the
  * next room on. The merchant then sells items drawn from one shared pool (weapons, ammunition, grenades, recovery,
  * pesetas, treasures, weapon parts), so a late or cleared-game weapon can stand at the first merchant. Any thread. */

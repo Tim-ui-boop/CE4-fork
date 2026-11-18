@@ -1047,6 +1047,12 @@ void re4ipc_set_enemy_random(int seed)
     post(kSetEnemyRandom, seed, 0, 0);
 }
 
+// Port patch 0237: the seed for the enemies a room script builds by hand (r100's s03 Ganado), 0 off.
+void re4ipc_set_enemy_script_random(int seed)
+{
+    post(kSetEnemyScriptRandom, seed, 0, 0);
+}
+
 void re4ipc_set_gentle_qte(int on)
 {
     post(kSetGentleQte, on ? 1 : 0, 0, 0);

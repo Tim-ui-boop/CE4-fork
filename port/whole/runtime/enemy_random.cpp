@@ -157,6 +157,12 @@ const RoomRow kRooms[] = {
 
 volatile int gSeed;  // 20 bits, 0 off (the app's switch)
 
+// The script-created enemies of port patch 0237 (r100's s03 Ganado). A seed of its own, deliberately NOT gSeed:
+// gSeed also drives the retired play-time randomizer in this file, so handing this feature gSeed would quietly
+// switch every swap path back on -- exactly the code that crashed on 17.11.2026. Anything that touches only
+// EM_LIST.type of a hand-built enemy uses this one instead.
+volatile int gScriptSeed;  // 20 bits, 0 off
+
 // The enemy options of the app (re4_core_set_enemy_options, 0.99.16: a port of the PC randomizer's "Enemy
 // settings"). `gPool`: a bit per kind of kPoolKinds that may replace an ordinary Ganado. `gRatios` the mix, one
 // nibble per chance (0 never .. 15 most of them): bits 0..3 plaga, 4..7 helmet, 8..11 shield, 12..15 sub-boss
@@ -187,6 +193,10 @@ const Kind kPoolKinds[] = {
     {0x39, 2, 0, 2500},  // b11: Krauser, the mutated arm (em39 type 2, the final battle's form)
 };
 constexpr int kPoolCount = 12;
+// The pool the app hands over as 0 -- its documented default (RandomizerConfig.ENEMY_POOL_DEFAULT): Chainsaw Man,
+// Gatling Man, Garrador, Dog, Armadura, Regenerator, Iron Maiden. The two Krausers and the Novistador/Crow/Cow stay
+// out, as in the PC randomizer's own help text.
+constexpr int kPoolDefault = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 4) | (1 << 7) | (1 << 8) | (1 << 9);
 
 u32 mix(u32 x)
 {
@@ -531,15 +541,64 @@ void logLine(const char* fmt, const char* a, const char* b)
     }
 }
 
+// ---- script-created enemies (port patch 0237) ------------------------------------------------------------------
+//
+// A room whose own C++ builds an enemy by hand instead of reading it from the chapter's list -- r100's first
+// Ganado, the one at the police car -- never saw the data rewrite: a sidecar list is only read where the game
+// loads a list, and that enemy is a literal EM_LIST in the script. The owner's report of 18.11.2026: the first
+// enemies before the bingo village never change. This hook covers exactly those spots.
+//
+// The r100 case needs care, and it is why this hook changes EM_LIST.type and nothing else. R100Init stores the
+// created enemy in W->em, r100_Sce_look starts the s03 scene and afterwards positions THAT pointer, and
+// r100_Sce_zombi_dead is linked to its death. Changing the id would change the model the s03 camera was cut for.
+//
+// What `type` means for this enemy: em12 (the village module that owns id 0x12) switches on it and every value it
+// does not know falls into the default villager. The real choices are the ones em12_set.cpp implements:
+//
+//   0  the default male villager
+//   1  the young villager
+//   3  the armed villager (a different body, its own voice set)
+//   4  the CHAINSAW MAN -- the same module, its own motions, voice set 3, the real saw (EM12_BIN_WEAPON_SET_...)
+//
+// So a randomizer can make the first enemy of the game a chainsaw villager without loading a single extra enemy
+// module: no heap cost, no fifth module, nothing for the s03 scene to lose. That is the whole point -- the
+// play-time randomizer of 17.11.2026 crashed exactly because it asked a room for modules it could not hold.
+//
+// The pool switches of the page cannot be honoured literally here (a Dog or a Regenerator is another enemy module
+// and another model, which this hand-built entry cannot become). What it honours is the Chainsaw Man switch: the one
+// pool kind that IS a village form. With it off the scene keeps the villager it was written with.
+
+// The forms em12_set.cpp implements for id 0x12, in the order the roll walks them. `chainsaw` marks the entry that
+// only counts when the page's Chainsaw Man switch is on.
+struct ScriptForm {
+    u8 type;
+    const char* name;
+    bool chainsaw;
+};
+const ScriptForm kScriptForms[] = {
+    {0, "villager", false},
+    {1, "young villager", false},
+    {3, "armed villager", false},
+    {4, "Chainsaw Man", true},  // pool bit 0 (kPoolKinds[0] is id 0x16 type 4, the same configuration)
+};
+constexpr int kScriptFormCount = (int) (sizeof(kScriptForms) / sizeof(kScriptForms[0]));
+
+int scriptRoom(void)
+{
+    if (!pG) {
+        return 0;
+    }
+    return (int) G_ROOM_ID;  // stage << 8 | room, the same value the rest of the plan uses
+}
+
 }  // namespace
 
 // The app (CoreBridge.setEnemyRandom): the switch's seed, 0 off; from the next room on. Any thread.
-// RETIRED (18.11.2026): the enemy randomizer is now a data rewrite (EslRandomizer/EnemyRandomizer in
-// the app: one seed writes patched enemy lists the loader prefers over the disc's own), not a
-// play-time swap. This file stays only so the IPC symbols keep linking; the seed is always taken as
-// 0, which turns every path in it off -- no room is planned, no entry is moved and no kind is
-// swapped. See port/tools/enemy_plan.py for why the swap could not be made safe: a room's heap holds
-// only so many enemy modules and a script that loses one uses the missing pointer (the crash of
+// RETIRED (18.11.2026): the enemy randomizer is now a data rewrite (EnemyRandomizer in the app: one seed writes
+// patched enemy lists the loader prefers over the disc's own), not a play-time swap. This file stays only so the
+// IPC symbols keep linking; the seed is always taken as 0, which turns every path in it off -- no room is planned,
+// no entry is moved and no kind is swapped. See port/tools/enemy_plan.py for why the swap could not be made safe: a
+// room's heap holds only so many enemy modules and a script that loses one uses the missing pointer (the crash of
 // 17.11.2026), which a rewrite never risks because the game loads exactly what the plan wrote.
 extern "C" void re4_core_set_enemy_random(int seed)
 {
@@ -547,6 +606,81 @@ extern "C" void re4_core_set_enemy_random(int seed)
     if (__atomic_exchange_n(&gSeed, 0, __ATOMIC_RELAXED) != 0) {
         re4_log("core: random enemies retired (the enemy randomizer is a data rewrite now)");
     }
+}
+
+// The app (CoreBridge.setEnemyScriptRandom, patch 0237): the seed for the enemies a ROOM SCRIPT builds by hand --
+// r100's s03 Ganado before the bingo village, the one encounter the data rewrite cannot reach. 20 bits, 0 off; from
+// the next room on. Its own seed, not gSeed, so the retired swap paths above stay off: this hook changes only the
+// morphed form (EM_LIST.type) of one hand-built enemy and never asks the room's heap for another module. Any thread.
+extern "C" void re4_core_set_enemy_script_random(int seed)
+{
+    seed &= 0xFFFFF;
+    if (__atomic_exchange_n(&gScriptSeed, seed, __ATOMIC_RELAXED) != seed) {
+        re4_log(seed ? "core: script enemies seed %d (r100's s03 Ganado follows it)"
+                     : "core: script enemies off (the scripts' own enemies stay as they build them)",
+                seed);
+    }
+}
+
+// Patch 0237, EmSetEvent (src/game/em_set.cpp): a script-built enemy. `d` is the EM_LIST the room's own code
+// filled in, `no` its position in the loaded list (0xFF when the script built it outside the list). Answers
+// whether this hook owns the entry; when it does, the morphed form is written into `d->type` before the game
+// creates the enemy, so the model, the animations, the position and every pointer the script holds stay as the
+// scene was made for them. Called from a game thread, once per script-built enemy.
+extern "C" int re4_enemy_random_script_kind(EM_LIST* d, int no)
+{
+    if (!d || !pG) {
+        return 0;
+    }
+    const int room = scriptRoom();
+    // Only the hand-built enemies that live outside the chapter list: r100's s03 Ganado is EmSetEvent(d), never a
+    // list slot. An entry that came out of the list is the data rewrite's business (a sidecar already decided it),
+    // and changing it here would undo a decision the player could see in the files.
+    if (no != 0xFF) {
+        return 0;
+    }
+    // The one site as of 18.11.2026: r100's s03 Ganado (r100.cpp R100Init, `d.id = 0x12`).
+    if (room != 0x100 || d->id != 0x12) {
+        return 0;
+    }
+    const int seed = __atomic_load_n(&gScriptSeed, __ATOMIC_RELAXED);
+    if (!seed) {
+        return 0;
+    }
+    // Which of the village forms may be rolled: all of them, except the chainsaw man when the page's Chainsaw Man
+    // switch is off (that entry is the one pool kind this hand-built enemy can actually become).
+    int forms[kScriptFormCount];
+    int n = 0;
+    const int pool = __atomic_load_n(&gPool, __ATOMIC_RELAXED);
+    const int use = pool ? pool : kPoolDefault;
+    for (int i = 0; i < kScriptFormCount; i++) {
+        if (kScriptForms[i].chainsaw && !(use & 1)) {  // pool bit 0 = Chainsaw Man
+            continue;
+        }
+        forms[n++] = i;
+    }
+    if (n <= 0) {
+        return 0;
+    }
+    const u32 h = hashOf((u32) seed, 0xFFu, (u32) room, 0x900u);
+    const int pick = forms[h % (u32) n];
+    const int from = (int) d->type;
+    const int to = (int) kScriptForms[pick].type;
+    // The form already there: the scene keeps what the script wrote.
+    if (from == to) {
+        if (re4_diag_on()) {
+            re4_diag("diag r%03x script enemy 0x%02x: the roll gave its own form %d, unchanged", room, d->id, from);
+        }
+        return 0;
+    }
+    d->type = (u8) to;
+    if (re4_diag_on()) {
+        re4_diag("diag r%03x script enemy 0x%02x (seed %d): form %d -> %d (%s; id, model and place kept)", room,
+                 d->id, seed, from, to, kScriptForms[pick].name);
+    }
+    re4_log("enemies: r%03x script enemy 0x%02x: form %d -> %d (%s, seed %d)", room, d->id, from, to,
+            kScriptForms[pick].name, seed);
+    return 1;
 }
 
 // The app (CoreBridge.setEnemyOptions, 0.99.16): the pool of kinds that may replace an ordinary Ganado and the mix

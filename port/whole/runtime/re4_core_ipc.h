@@ -87,6 +87,8 @@ enum MsgType : uint32_t {
     kSetMerchantRandom = 46,  // a = the seed of "Random merchant stock", 0 off (no reply; re4_core_set_merchant_random)
     kSetMerchantOptions = 47, // a = percent of merchants that deal anew, b = weapon bits (no reply; re4_core_set_merchant_options)
     kSetEnemyOptions = 48,    // a = enemy-kind pool bits, b = ratios packed (no reply; re4_core_set_enemy_options, 0.99.16)
+    kSetEnemyScriptRandom = 49,  // a = the seed of the script-created enemy randomizer, 0 off (no reply;
+                                 // re4_core_set_enemy_script_random, port patch 0237)
 };
 
 struct MsgHeader {

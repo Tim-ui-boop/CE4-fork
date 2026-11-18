@@ -209,6 +209,16 @@ final class EnemyRandomizer {
    * seed always writes the same files -- a randomizer seed must be reproducible.
    */
   static Result apply(Context context, int seed) throws IOException {
+    return apply(context, seed, RandomizerConfig.ENEMY_POOL_DEFAULT);
+  }
+
+  /**
+   * The same write, restricted to the kinds the player's enemy-kind switches allow (`pool`, a bit per entry of
+   * {@link #POOL}; 0 means the default set). Before this the switch was drawn on the page and then ignored here,
+   * which is why Cows kept appearing after the owner had switched them off.
+   */
+  static Result apply(Context context, int seed, int pool) throws IOException {
+    final boolean[] allowed = allowedKinds(pool);
     Result result = new Result();
     final Random rng = new Random(seed);
     for (String name : STORY_LISTS) {
@@ -235,9 +245,11 @@ final class EnemyRandomizer {
         if (r.id == 0) continue;
         List<Kind> candidates = new ArrayList<>();
         if (r.ganado()) {
-          for (Kind k : POOL) candidates.add(k);
+          for (int i = 0; i < POOL.length; i++) if (allowed[i]) candidates.add(POOL[i]);
         } else if (r.scenery()) {
-          for (Kind k : POOL) if (k.id == 0x23 || k.id == 0x26) candidates.add(k);
+          for (int i = 0; i < POOL.length; i++) {
+            if (allowed[i] && (POOL[i].id == 0x23 || POOL[i].id == 0x26)) candidates.add(POOL[i]);
+          }
         } else {
           continue;                            // the room's own business
         }
@@ -280,6 +292,14 @@ final class EnemyRandomizer {
       if (!tmp.delete()) Log.w(TAG, "cannot remove " + tmp);
       throw new IOException("Could not write " + dst.getName());
     }
+  }
+
+  /** The pool mask as one boolean per entry of {@link #POOL}; 0 means the default set. */
+  static boolean[] allowedKinds(int pool) {
+    final int mask = pool == 0 ? RandomizerConfig.ENEMY_POOL_DEFAULT : pool;
+    final boolean[] out = new boolean[POOL.length];
+    for (int i = 0; i < POOL.length; i++) out[i] = (mask >> i & 1) != 0;
+    return out;
   }
 
   /** Removes every sidecar, which restores the disc's own lists. Returns how many were removed. */
