@@ -75,9 +75,9 @@ public final class RoomTourActivity extends Activity {
       } catch (NumberFormatException e) {
         continue;
       }
-      String id = row[1].substring(4, 8);
+      String id = path.substring(4, 8);
       int stage = Integer.parseInt(id.substring(1, 2));
-      list.add(new Room(disc, row[1], stage, id));
+      list.add(new Room(disc, path, stage, id));
     }
     return list;
   }
