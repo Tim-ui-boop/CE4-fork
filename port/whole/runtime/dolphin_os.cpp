@@ -14,6 +14,8 @@ void OSSetArenaLo(void* lo);
 void OSSetArenaHi(void* hi);
 }
 
+extern "C" const char* re4_data_dir(void);
+
 namespace {
 
 typedef long long OSTime;
@@ -339,6 +341,34 @@ void DCStoreRangeNoSync(void*, unsigned) {}
 void LCEnable(void) {}
 void PPCSync(void) {}
 
+// The offline randomizer's tour (branch feature/offline-randomizer): the app
+// cannot set RE4_START_ROOM for an in-process core on Android, so the room can
+// also be asked for in <data>/room-start.on (one hex room, stage << 8 | room,
+// as RE4_START_ROOM has it). The collector writes that file, starts the core,
+// the room loads and its decoded archive lands beside the .das
+// (runtime/room_raw.cpp), then the next room. Absent, the game starts as usual.
+static unsigned long roomStartFile()
+{
+    const char* dir = re4_data_dir();
+    char path[1200];
+    FILE* f;
+    unsigned long room = 0;
+
+    if (dir == 0 || *dir == 0) {
+        return 0;
+    }
+    snprintf(path, sizeof(path), "%s/room-start.on", dir);
+    f = fopen(path, "r");
+    if (f == 0) {
+        return 0;
+    }
+    if (fscanf(f, "%lx", &room) != 1) {
+        room = 0;
+    }
+    fclose(f);
+    return room >= 0x100 && room < 0x600 ? room : 0;
+}
+
 // RE4_START_ROOM: room the original debug start menu preselects (stage << 8 |
 // room, hex). With it the title menu starts on "new game" (patch 0026), so a
 // test script only presses A: new game, then the debug start menu jumps there.
@@ -346,6 +376,10 @@ static unsigned long debugStartRoom()
 {
     const char* v = getenv("RE4_START_ROOM");
     unsigned long room = v && *v ? strtoul(v, 0, 16) : 0;
+
+    if (room < 0x100 || room >= 0x600) {
+        room = roomStartFile();
+    }
     return room >= 0x100 && room < 0x600 ? room : 0;
 }
 
@@ -368,6 +402,10 @@ int re4_title_room_menu(int open)
     if (shown < 0) {
         const char* v = getenv("RE4_ROOM_MENU");
         shown = !(v && v[0] == '0');
+        // the randomizer's tour booted a room from room-start.on: straight in, no input
+        if (shown && roomStartFile() != 0) {
+            shown = 0;
+        }
     }
     open = open && shown;
     if (open != g_roomMenuOpen) {
