@@ -287,6 +287,13 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
     // the camera's side); the touch controls cover all of it, their layouts keep their spots (Cutout, TouchFrame)
     Cutout.extend(getWindow());
     ImportManager imports = ((Re4Application) getApplication()).imports;
+    // the randomizer's room tour ends the game's process once a room is collected (RoomTourActivity)
+    if (imports.root != null) {
+      try (java.io.FileWriter w = new java.io.FileWriter(new java.io.File(imports.root, "game.pid"))) {
+        w.write(Integer.toString(android.os.Process.myPid()));
+      } catch (Exception ignored) {
+      }
+    }
     // test switches of the core (port/scripts/test-core-app.ps1 passes them)
     settings = getIntent().getStringExtra("coreSettings");
     if (settings == null) settings = "";

@@ -48,7 +48,12 @@
         <activity android:name=".LauncherRestartActivity" android:exported="false" android:process=":restart"
             android:taskAffinity="${applicationId}.restart" android:excludeFromRecents="true" android:noHistory="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-        <!-- a texture pack handed over by the CubeEvil4 Texture Packer app (its "Import into CubeEvil4",
+        <!-- the randomizer's room collection (branch feature/offline-randomizer): starts the game once per room
+             and lets it decode that room, so the decoded archives can be patched offline; a process of its own,
+             because the core cannot be restarted inside the process that ran it -->
+        <activity android:name=".RoomTourActivity" android:exported="false" android:process=":tour"
+            android:taskAffinity="${applicationId}.tour" android:excludeFromRecents="true" android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" /> (its "Import into CubeEvil4",
              port/docs/textur-packer-android-plan.md): asks, then imports it into the textures folder -->
         <activity android:name=".TextureImportActivity" android:exported="true" android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"

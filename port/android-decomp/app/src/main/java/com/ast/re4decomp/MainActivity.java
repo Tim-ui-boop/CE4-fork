@@ -68,6 +68,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     roomNote = new TextView(this); roomNote.setPadding(0, dp(8), 0, dp(8)); roomBrowser.addView(roomNote);
     open = button(roomBrowser, getString(R.string.room_open_selected), this::openSelected);
     status = new TextView(this); status.setPadding(0, dp(8), 0, dp(8)); body.addView(status);
+    button(body, "Collect rooms for the randomizer", this::startRoomTour);
     // the menu's only entry in the core mode was the disc import, which its launcher shows anyway
     if (!core) button(body, getString(R.string.browser_menu), this::showMenu);
     importPanel = new LinearLayout(this); importPanel.setOrientation(LinearLayout.VERTICAL);
@@ -93,6 +94,11 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     findViewById(android.R.id.content).setOnApplyWindowInsetsListener((v, insets) -> {
       v.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(), insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom()); return insets;
     });
+  }
+  /** The randomizer's room collection (branch feature/offline-randomizer): one room per game start. */
+  private void startRoomTour() {
+    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
+    startActivity(new Intent(this, RoomTourActivity.class));
   }
   private void startOriginalTitle(){if(!loading&&!imports.busy&&gameReady()){startupShown=true;Intent start=new Intent(this,core?CoreActivity.class:StartupActivity.class);if(core)start.putExtra("coreSettings",getIntent().getStringExtra("coreSettings"));startActivity(start);}else importPanel.setVisibility(View.VISIBLE);}
   @Override protected void onSaveInstanceState(Bundle state){state.putBoolean("startupShown",startupShown);super.onSaveInstanceState(state);}
