@@ -12,9 +12,11 @@ import java.util.List;
  *
  * A decoded room archive is a small table of sub-files (src/game/read.cpp GetDataExt): a count at 0x00, an offset
  * table at 0x10 (count u32 entries, relative to the archive start) and a 4-byte tag per entry right after it. The
- * items of the room are the "ITA" sub-file: the 4 bytes "ITA", a u16 version, a u16 count, then one record of
- * 0x9C bytes per item area (include/sce_at.h, SCE_AT_ITEM); item id at +0x78 and its count at +0x7C, both big endian
- * as the GameCube has them (the port converts them when it loads the room).
+ * The items of the room are the "ITA" sub-file: the 4 bytes "ITA", a u16 version (0x105), a u16 count at +0x06, two
+ * more words, then one record of 0x9C bytes per item area, the FIRST ONE at ITA+0x10 (src/game/sce_at.cpp SceAtInit:
+ * pItemWork = pHeader_i + 0x10; include/sce_at.h SCE_AT_ITEM); item id at +0x78 and its count at +0x7C, both big
+ * endian as the GameCube has them. The sidecar is that original big-endian archive: the port converts a copy in
+ * memory when it loads the room, the file itself stays as the decoder wrote it.
  *
  * Two items of the same room are exchanged, which keeps every model available: each item that appears is one the
  * room already showed. That is the safe way round the model limit until a merged model pack exists.
@@ -23,6 +25,8 @@ public final class SidecarSwap {
   private static final String TAG = "SidecarSwap";
   /** One ITA item area (include/sce_at.h: SCE_AT_ITEM, 0x9C bytes). */
   private static final int RECORD = 0x9C;
+  /** The records of an ITA block start after its 0x10-byte header (sce_at.cpp SceAtInit). */
+  private static final int ITA_RECORDS = 0x10;
   private static final int ITEM_ID = 0x78;
   private static final int ITEM_NUM = 0x7C;
 
@@ -63,12 +67,12 @@ public final class SidecarSwap {
   /** The item areas of the room as archive offsets, empty when the ITA block does not look right. */
   private static List<Integer> areas(byte[] b, int ita) {
     List<Integer> list = new ArrayList<>();
-    if (ita + 8 > b.length) return list;
+    if (ita + ITA_RECORDS > b.length) return list;
     if (!(b[ita] == 'I' && b[ita + 1] == 'T' && b[ita + 2] == 'A')) return list;
     int count = be16(b, ita + 6);
     if (count <= 0 || count > 512) return list;
-    if (ita + 8 + count * RECORD > b.length) return list;
-    for (int i = 0; i < count; i++) list.add(ita + 8 + i * RECORD);
+    if (ita + ITA_RECORDS + count * RECORD > b.length) return list;
+    for (int i = 0; i < count; i++) list.add(ita + ITA_RECORDS + i * RECORD);
     return list;
   }
 
@@ -97,6 +101,13 @@ public final class SidecarSwap {
       }
     }
     t.append(", first ITA in the bytes at ").append(found);
+    // the table's own ITA entry comes before the block, so ask the parser for the block it uses
+    int ita = itaOffset(b);
+    t.append(", the archive's ITA at ").append(ita);
+    if (ita >= 0 && ita + 8 <= b.length) {
+      t.append(" (version 0x").append(String.format("%04x", be16(b, ita + 4)))
+          .append(", count ").append(be16(b, ita + 6)).append(')');
+    }
     Log.i(TAG, t.toString());
     // the app's own parser, on the same file: if it reads this as a room archive, the bytes are sound
     try {
