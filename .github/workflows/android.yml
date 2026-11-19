@@ -89,16 +89,22 @@ jobs:
           echo "RE4_VERSION_NAME=0.99.18-rc-${branch}-${short}" >> "$GITHUB_ENV"
           echo "the APK names itself: ${RE4_VERSION_NAME:-0.99.18-rc-${branch}-${short}}"
 
-      - name: The signing key of this build
+      - name: Make or reuse the APK's signing key
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f "$HOME/.android/debug.keystore" ]; then
-            keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android \
-              | grep -E "Owner|SHA256:" | sed 's/^/  /' || true
+          ks="$HOME/.android/debug.keystore"
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$ks" ]; then
+            echo "  making the key this and every later build signs with"
+            keytool -genkeypair -keystore "$ks" -storetype PKCS12 -storepass android \
+              -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 \
+              -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           else
-            echo "  no key yet: this build makes the one every later build reuses"
+            echo "  reusing the key the cache kept"
           fi
+          keytool -list -v -keystore "$ks" -storepass android \
+            | grep -E "Owner|SHA256:" | sed 's/^/  /' || true
 
       - name: Assemble core APK
         working-directory: port/android-decomp
