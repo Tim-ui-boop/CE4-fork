@@ -92,8 +92,9 @@ final class BenchmarkFlow {
 
   /** The first start's benchmark is to come (FIRST_PENDING) and was not offered in this run yet. */
   boolean firstDue() {
-    return state == IDLE && !offeredThisRun
-        && host.graphics().getInt(PerfProfile.FIRST, PerfProfile.FIRST_NONE) == PerfProfile.FIRST_PENDING;
+    // the randomizer branch: never. The first start's benchmark held the title's menu with a popup that could not be
+    // declined; the benchmark itself stays in the menu under Display -> GRAPHICS.
+    return false;
   }
 
   private String s(int id) { return host.activity().getString(id); }

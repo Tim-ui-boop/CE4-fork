@@ -2461,10 +2461,12 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
         CoreMenu.DYN_CAP_30, CoreMenu.DOF_LEVEL, "dof", "minimap", "fps"};
     boolean fresh = true;
     for (String k : mine) if (g.contains(k)) { fresh = false; break; }
-    g.edit().putInt(PerfProfile.FIRST, fresh ? PerfProfile.FIRST_PENDING : PerfProfile.FIRST_ASK)
+    /* the randomizer branch: no benchmark on the first start. It held the title's menu with a popup that could not
+       be declined; the benchmark stays where it is asked for, Display -> GRAPHICS. */
+    g.edit().putInt(PerfProfile.FIRST, PerfProfile.FIRST_NONE)
         .putInt(PerfProfile.ACTIVE, PerfProfile.CUSTOM).apply();
-    Log.i(TAG, "performance profiles: " + (fresh ? "a new installation, the benchmark comes once the title's menu waits"
-        : "an update, the menu asks once"));
+    Log.i(TAG, "performance profiles: first start, no benchmark (the randomizer branch starts with Custom"
+        + " and the settings as they are)");
   }
 
   /** What the app knows of this device (the renderer's text once it is there). */
