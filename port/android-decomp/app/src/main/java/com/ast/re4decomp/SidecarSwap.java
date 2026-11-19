@@ -72,6 +72,34 @@ public final class SidecarSwap {
     return list;
   }
 
+  /** What the first file holds, so a wrong assumption is named instead of guessed at. */
+  private static void diagnose(File file, byte[] b) {
+    StringBuilder t = new StringBuilder();
+    t.append(file.getName()).append(": ").append(b.length).append(" bytes, starts");
+    for (int i = 0; i < Math.min(16, b.length); i++) t.append(' ').append(String.format("%02x", b[i] & 0xFF));
+    t.append(", count at 0x00 ").append(be32(b, 0));
+    if (b.length >= 0x14) {
+      int num = be32(b, 0);
+      if (num > 0 && num <= 128 && 0x10 + num * 8 <= b.length) {
+        t.append(", tags");
+        for (int i = 0; i < num; i++) {
+          int at = 0x10 + num * 4 + i * 4;
+          String tag = new String(new byte[]{b[at], b[at + 1], b[at + 2], b[at + 3]});
+          t.append(' ').append(tag.isEmpty() ? "?" : tag);
+        }
+      }
+    }
+    int found = -1;
+    for (int i = 0; i + 2 < b.length && i < 200000; i++) {
+      if (b[i] == 'I' && b[i + 1] == 'T' && b[i + 2] == 'A') {
+        found = i;
+        break;
+      }
+    }
+    t.append(", first ITA in the bytes at ").append(found);
+    Log.i(TAG, t.toString());
+  }
+
   /**
    * Exchanges the items of every collected room in pairs and writes the sidecars back. Returns how many rooms
    * changed and how many item pairs were exchanged.
@@ -80,12 +108,21 @@ public final class SidecarSwap {
     File folder = new File(root, "randomizer");
     String[] stages = {"st1", "st2", "st3", "st4"};
     int rooms = 0, swaps = 0, skipped = 0;
+    boolean described = false;
     for (String stage : stages) {
       File[] files = new File(folder, stage).listFiles();
       if (files == null) continue;
       for (File file : files) {
         if (!file.getName().endsWith(".das.raw")) continue;
         try {
+          if (!described) {
+            described = true;
+            byte[] head = new byte[(int) Math.min(file.length(), 64L * 1024 * 1024)];
+            try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
+              in.read(head);
+            }
+            diagnose(file, head);
+          }
           int n = swap(file);
           if (n < 0) skipped++;
           else if (n == 0) skipped++;
