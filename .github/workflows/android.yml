@@ -73,6 +73,12 @@ jobs:
           chmod +x port/tools/whole_build_android.sh
           port/tools/whole_build_android.sh --ndk "$ANDROID_HOME/ndk/28.2.13676358" --abi all
 
+      - name: Keep the APK's signing key stable between builds
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: re4-debug-keystore-v1
+
       - name: Name this build after its branch and commit
         shell: bash
         run: |
@@ -82,6 +88,17 @@ jobs:
           short="${GITHUB_SHA::7}"
           echo "RE4_VERSION_NAME=0.99.18-rc-${branch}-${short}" >> "$GITHUB_ENV"
           echo "the APK names itself: ${RE4_VERSION_NAME:-0.99.18-rc-${branch}-${short}}"
+
+      - name: The signing key of this build
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f "$HOME/.android/debug.keystore" ]; then
+            keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android \
+              | grep -E "Owner|SHA256:" | sed 's/^/  /' || true
+          else
+            echo "  no key yet: this build makes the one every later build reuses"
+          fi
 
       - name: Assemble core APK
         working-directory: port/android-decomp
