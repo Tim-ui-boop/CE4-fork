@@ -1,41 +1,26 @@
 # Port patch (branch feature/offline-randomizer): the offline randomizer's decoded room sidecar.
-# A room archive (files/stN/rNNN.das) is Yz2, an adaptive arithmetic coder (game/yz2code.cpp, yz2asm.cpp),
-# so a patcher cannot rebuild one offline without a bit-exact encoder. Instead of touching the .das, the
-# game writes the archive it decoded beside the original as <name>.raw during the one tour that collects
-# the rooms (marker <data>/room-dump.on or RE4_ROOM_DUMP=1, runtime/room_raw.cpp); from then on
-# ReadAreaData loads that sidecar, so the patcher edits plain bytes and the disc file keeps its bytes and
-# its hash. The sidecar is read straight into pG->pRoom because a decoded archive is larger than the read
-# buffer READ_BUFF_OFS. Without a sidecar nothing changes: the room is read and decoded as the disc has it.
+# A room archive (files/StN/rNNN.das) is Yz2, an adaptive arithmetic coder (game/yz2code.cpp, yz2asm.cpp),
+# so a patcher cannot rebuild one offline. Instead the decoded archive is written into the app's own folder
+# randomizer/stN/rNNN.das.raw (the app's native room decoder, NativeBridge.decodeRoom, which is checked
+# against the original decoder's fingerprints) and ReadAreaData loads that sidecar in place of the room when
+# it exists (runtime/room_raw.cpp). The disc file keeps its bytes and its hash, the sidecar survives a new
+# import, and deleting that folder plays the disc as it is. The sidecar is read straight into pG->pRoom
+# because a decoded archive is larger than the read buffer READ_BUFF_OFS. Without a sidecar nothing changes:
+# the room is read and decoded as the disc has it.
 --- a/src/game/read.cpp
 +++ b/src/game/read.cpp
-@@ -116,6 +116,11 @@ static inline int BitChk16(u16& f, u16 b) { return f & b; }
+@@ -116,6 +116,10 @@ static inline int BitChk16(u16& f, u16 b) { return f & b; }
  // iTask body of ReadAreaData: decompresses (Yz2) the room archive read into the top of the heap
  // into a fresh pG->pRoom allocation sized to the output (at least the room budget ROOM_ARC_SIZE
  // minus what the font already uses); HALTs when it would overlap the read buffer.
 +/* port (patch 0238): the offline randomizer's decoded room sidecar (runtime/room_raw.cpp) */
 +extern "C" int re4_room_raw_size(const char* name);
 +extern "C" int re4_room_raw_load(const char* name, void* dst, int size);
-+extern "C" void re4_room_raw_dump(const char* name, const void* src, unsigned size);
 +
  void decodeData()
  {
      char buf[64];
-@@ -142,6 +147,14 @@ void decodeData()
-         HALT();
-     }
-     Yz2DecodeExec(pG->pRoom);
-+    /* port (patch 0238): the tour that collects every room before a seed is generated keeps this decoded
-+       archive beside the .das (runtime/room_raw.cpp; only while the dump is asked for) */
-+    {
-+        char rawName[64];
-+
-+        sprintf(rawName, "st%x/r%03x.das", pG->stage_no, pG->room_id);
-+        re4_room_raw_dump(rawName, pG->pRoom, out_data_size);
-+    }
-     iTaskExit();
- }
- 
-@@ -156,6 +169,23 @@ void ReadAreaData()
+@@ -156,6 +160,23 @@ void ReadAreaData()
      u32 decodeTime;
  
      sprintf(name, "st%x/r%03x.das", pG->stage_no, pG->room_id);
