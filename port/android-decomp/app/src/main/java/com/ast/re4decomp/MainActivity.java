@@ -73,6 +73,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     open = button(roomBrowser, getString(R.string.room_open_selected), this::openSelected);
     status = new TextView(this); status.setPadding(0, dp(8), 0, dp(8)); body.addView(status);
     button(body, "Collect rooms for the randomizer", this::startRoomTour);
+    button(body, "Swap room items (test the patching)", this::swapRoomItems);
     // the menu's only entry in the core mode was the disc import, which its launcher shows anyway
     if (!core) button(body, getString(R.string.browser_menu), this::showMenu);
     importPanel = new LinearLayout(this); importPanel.setOrientation(LinearLayout.VERTICAL);
@@ -100,6 +101,15 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     });
   }
   /** The randomizer's room collection (branch feature/offline-randomizer): one room per game start. */
+  /** The randomizer's first patch (branch feature/offline-randomizer): exchange the items lying in the rooms. */
+  private void swapRoomItems() {
+    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
+    final java.io.File root = imports.root;
+    new Thread(() -> {
+      final String result = SidecarSwap.swapAll(root);
+      runOnUiThread(() -> android.widget.Toast.makeText(this, result, android.widget.Toast.LENGTH_LONG).show());
+    }, "sidecar-swap").start();
+  }
   private void startRoomTour() {
     if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
     startActivity(new Intent(this, RoomTourActivity.class));
