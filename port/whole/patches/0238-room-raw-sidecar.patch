@@ -1,20 +1,21 @@
 # Port patch (branch feature/offline-randomizer): the offline randomizer's decoded room sidecar.
 # A room archive (files/StN/rNNN.das) is Yz2, an adaptive arithmetic coder (game/yz2code.cpp, yz2asm.cpp),
 # so a patcher cannot rebuild one offline. Instead the decoded archive is written into the app's own folder
-# randomizer/stN/rNNN.das.raw (the app's native room decoder, NativeBridge.decodeRoom, which is checked
-# against the original decoder's fingerprints) and decodeData loads it in place of the decoder's output
-# (runtime/room_raw.cpp). Allocating and filling there keeps the vanilla path's heap bookkeeping, its
-# out_data_size and its iTask; only the decode itself is skipped. A missing or unreadable sidecar falls back
-# to Yz2DecodeExec. The disc file keeps its bytes and its hash, and deleting that folder plays the disc as it is.
+# randomizer/stN/rNNN.das.raw (the app's native room decoder, NativeBridge.decodeRoom) and decodeData loads
+# it in place of the decoder's output (runtime/room_raw.cpp). Allocating and filling there keeps the vanilla
+# path's heap bookkeeping, its out_data_size and its iTask; only the decode itself is skipped. The sidecar is
+# used only when it starts like a room archive (re4_room_raw_looks_like_room); otherwise, and when it is
+# missing or unreadable, Yz2DecodeExec runs and the disc is played as it is — a wrong sidecar cannot crash.
 --- a/src/game/read.cpp
 +++ b/src/game/read.cpp
-@@ -116,12 +116,27 @@ static inline int BitChk16(u16& f, u16 b) { return f & b; }
+@@ -116,12 +116,28 @@ static inline int BitChk16(u16& f, u16 b) { return f & b; }
  // iTask body of ReadAreaData: decompresses (Yz2) the room archive read into the top of the heap
  // into a fresh pG->pRoom allocation sized to the output (at least the room budget ROOM_ARC_SIZE
  // minus what the font already uses); HALTs when it would overlap the read buffer.
 +/* port (patch 0238): the offline randomizer's decoded room sidecar (runtime/room_raw.cpp) */
 +extern "C" int re4_room_raw_size(const char* name);
 +extern "C" int re4_room_raw_load(const char* name, void* dst, int size);
++extern "C" int re4_room_raw_looks_like_room(const void* data);
 +
  void decodeData()
  {
@@ -36,12 +37,12 @@
  #line 59 "D:/Bio4/Prog/read.cpp"
      (pG->pRoom = MEM_ALLOC(ROOM_ARC_SIZE, 1, 0xD));
      used = (u32) pG->pRoom - (u32) pG->pStFnt;
-@@ -141,7 +156,11 @@ void decodeData()
+@@ -141,7 +157,11 @@ void decodeData()
  #line 82 "D:/Bio4/Prog/read.cpp"
          HALT();
      }
 -    Yz2DecodeExec(pG->pRoom);
-+    if (rawSize > 0 && re4_room_raw_load(rawName, pG->pRoom, rawSize) == 1) {
++    if (rawSize > 0 && re4_room_raw_load(rawName, pG->pRoom, rawSize) == 1 && re4_room_raw_looks_like_room(pG->pRoom)) {
 +        /* port (patch 0238): the patched room, taken as it is (the sidecar is the decoder's own output) */
 +    } else {
 +        Yz2DecodeExec(pG->pRoom);

@@ -86,3 +86,21 @@ extern "C" int re4_room_raw_load(const char* name, void* dst, int size)
     re4_log("randomizer: %s from its sidecar (%d bytes)", name, size);
     return 1;
 }
+
+/* Whether `data` starts like a room archive (the count of its sub-files, big endian, at 0x00). A sidecar that
+ * fails this is not used: the room is decoded as the disc has it, so a wrong sidecar can never crash the game. */
+extern "C" int re4_room_raw_looks_like_room(const void* data)
+{
+    const unsigned char* p = (const unsigned char*) data;
+    unsigned count;
+
+    if (p == 0) {
+        return 0;
+    }
+    count = ((unsigned) p[0] << 24) | ((unsigned) p[1] << 16) | ((unsigned) p[2] << 8) | (unsigned) p[3];
+    if (count < 1 || count > 128) {
+        re4_log("randomizer: a sidecar does not start like a room archive (%u sub-files): decoding the disc", count);
+        return 0;
+    }
+    return 1;
+}

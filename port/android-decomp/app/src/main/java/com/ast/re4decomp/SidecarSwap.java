@@ -98,6 +98,13 @@ public final class SidecarSwap {
     }
     t.append(", first ITA in the bytes at ").append(found);
     Log.i(TAG, t.toString());
+    // the app's own parser, on the same file: if it reads this as a room archive, the bytes are sound
+    try {
+      String info = NativeBridge.inspectArchive(file.getAbsolutePath(), "", 6);
+      Log.i(TAG, "inspectArchive: " + (info == null ? "null" : info));
+    } catch (Throwable e) {
+      Log.i(TAG, "inspectArchive failed: " + e);
+    }
   }
 
   /**
