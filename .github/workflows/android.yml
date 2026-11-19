@@ -73,12 +73,22 @@ jobs:
           chmod +x port/tools/whole_build_android.sh
           port/tools/whole_build_android.sh --ndk "$ANDROID_HOME/ndk/28.2.13676358" --abi all
 
+      - name: Name this build after its branch and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          branch="${branch//\//.}"
+          short="${GITHUB_SHA::7}"
+          echo "RE4_VERSION_NAME=0.99.18-rc-${branch}-${short}" >> "$GITHUB_ENV"
+          echo "the APK names itself: ${RE4_VERSION_NAME:-0.99.18-rc-${branch}-${short}}"
+
       - name: Assemble core APK
         working-directory: port/android-decomp
         shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon :app:assembleCoreDebug
+          ./gradlew --no-daemon :app:assembleCoreDebug "-Pre4.versionName=${RE4_VERSION_NAME}"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

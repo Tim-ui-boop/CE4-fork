@@ -34,6 +34,10 @@ public final class MainActivity extends Activity implements ImportManager.Listen
   @Override public void onCreate(Bundle state) {
     super.onCreate(state); startupShown=state!=null&&state.getBoolean("startupShown",false); imports = ((Re4Application)getApplication()).imports;
     if (getIntent().getBooleanExtra(SHOW_LAUNCHER, false)) startupShown = true;
+    // the randomizer's room collection is started from this screen, and after an import the launcher must stay
+    // reachable: the start screen always comes first instead of straight into the game
+    // (branch feature/offline-randomizer; undo this line to get the automatic start back)
+    startupShown = true;
     core = getResources().getBoolean(R.bool.core_mode);
     LinearLayout body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL);
     int p = dp(20); body.setPadding(p, core ? dp(12) : p, p, core ? dp(12) : p);
