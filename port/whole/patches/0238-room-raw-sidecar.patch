@@ -2,14 +2,13 @@
 # A room archive (files/StN/rNNN.das) is Yz2, an adaptive arithmetic coder (game/yz2code.cpp, yz2asm.cpp),
 # so a patcher cannot rebuild one offline. Instead the decoded archive is written into the app's own folder
 # randomizer/stN/rNNN.das.raw (the app's native room decoder, NativeBridge.decodeRoom, which is checked
-# against the original decoder's fingerprints) and ReadAreaData loads that sidecar in place of the room when
-# it exists (runtime/room_raw.cpp). The disc file keeps its bytes and its hash, the sidecar survives a new
-# import, and deleting that folder plays the disc as it is. The sidecar is read straight into pG->pRoom
-# because a decoded archive is larger than the read buffer READ_BUFF_OFS. Without a sidecar nothing changes:
-# the room is read and decoded as the disc has it.
+# against the original decoder's fingerprints) and decodeData loads it in place of the decoder's output
+# (runtime/room_raw.cpp). Allocating and filling there keeps the vanilla path's heap bookkeeping, its
+# out_data_size and its iTask; only the decode itself is skipped. A missing or unreadable sidecar falls back
+# to Yz2DecodeExec. The disc file keeps its bytes and its hash, and deleting that folder plays the disc as it is.
 --- a/src/game/read.cpp
 +++ b/src/game/read.cpp
-@@ -116,6 +116,10 @@ static inline int BitChk16(u16& f, u16 b) { return f & b; }
+@@ -116,12 +116,27 @@ static inline int BitChk16(u16& f, u16 b) { return f & b; }
  // iTask body of ReadAreaData: decompresses (Yz2) the room archive read into the top of the heap
  // into a fresh pG->pRoom allocation sized to the output (at least the room budget ROOM_ARC_SIZE
  // minus what the font already uses); HALTs when it would overlap the read buffer.
@@ -20,27 +19,33 @@
  void decodeData()
  {
      char buf[64];
-@@ -156,6 +160,23 @@ void ReadAreaData()
-     u32 decodeTime;
+     u32 used;
++    char rawName[64];
++    int rawSize;
  
-     sprintf(name, "st%x/r%03x.das", pG->stage_no, pG->room_id);
-+    /* port (patch 0238): a decoded sidecar of this room, when the offline randomizer patched one, is read
-+       straight into pG->pRoom: a decoded archive is larger than the read buffer READ_BUFF_OFS, so it must
-+       not go through it. Without a sidecar the room is read and decoded as the disc has it. */
-+    {
-+        int rawSize = re4_room_raw_size(name);
-+
-+        if (rawSize > 0) {
-+            pG->pRoom = MEM_ALLOC((u32) rawSize, 1, 0xD);
-+            if (pG->pRoom != NULL && re4_room_raw_load(name, pG->pRoom, rawSize) == 1) {
-+                pG->Rtp = GetDataExt(pG->pRoom, "RTP", 0);
-+                pG->RoomMes = GetDataExt(pG->pRoom, "MDT", 0);
-+                pG->pOsd = GetDataExt(pG->pRoom, "OSD", 0);
-+                pG->pEmi = (EmiData*) GetDataExt(pG->pRoom, "EMI", 0);
-+                return;
-+            }
-+        }
+     out_data_size = Yz2DecodeSet((char*) in_data_addr, (void*) ((u32) MemGetHeapEndAddr(MemGetCurrentHeap()) - READ_BUFF_OFS));
++    /* port (patch 0238): a room the offline randomizer patched carries its decoded archive beside the .das
++       (runtime/room_raw.cpp); that archive is the room, so its size is what is allocated here instead of the
++       decoder's. The heap is the same, the iTask is the same, and a missing or unreadable sidecar falls back to
++       the decoder below. */
++    sprintf(rawName, "st%x/r%03x.das", pG->stage_no, pG->room_id);
++    rawSize = re4_room_raw_size(rawName);
++    if (rawSize > 0) {
++        out_data_size = (u32) rawSize;
 +    }
-     if (SysFlagChk(pG, SYS_DATA_READ)) {
-         SysFlagOff(pG, SYS_DATA_READ);
-     } else {
+ #line 59 "D:/Bio4/Prog/read.cpp"
+     (pG->pRoom = MEM_ALLOC(ROOM_ARC_SIZE, 1, 0xD));
+     used = (u32) pG->pRoom - (u32) pG->pStFnt;
+@@ -141,7 +156,11 @@ void decodeData()
+ #line 82 "D:/Bio4/Prog/read.cpp"
+         HALT();
+     }
+-    Yz2DecodeExec(pG->pRoom);
++    if (rawSize > 0 && re4_room_raw_load(rawName, pG->pRoom, rawSize) == 1) {
++        /* port (patch 0238): the patched room, taken as it is (the sidecar is the decoder's own output) */
++    } else {
++        Yz2DecodeExec(pG->pRoom);
++    }
+     iTaskExit();
+ }
+ 
