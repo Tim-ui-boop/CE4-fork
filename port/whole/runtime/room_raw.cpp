@@ -83,5 +83,6 @@ extern "C" int re4_room_raw_load(const char* name, void* dst, int size)
         re4_log("randomizer: %s: read %d of %d bytes of its sidecar", name, got, size);
         return 0;
     }
+    re4_log("randomizer: %s from its sidecar (%d bytes)", name, size);
     return 1;
 }
