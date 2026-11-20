@@ -265,6 +265,11 @@ public final class ItemShuffle {
     return result;
   }
 
+  /** Whether a slot's room carries the model of item `id`, so the room can show it. */
+  private static boolean carries(Slot slot, int id) {
+    return slot.models != null && ownIndex(slot.models, id) >= 0;
+  }
+
   /** The first blob start above `at` (that blob's end), or `end` when it is the last one. */
   private static int nextStart(int[] starts, int at, int end) {
     for (int start : starts) {
@@ -289,6 +294,8 @@ public final class ItemShuffle {
     int id;
     /** Held by a crate, a barrel, an enemy or an etc model (waiting_type / ctrl_flag set). */
     boolean held;
+    /** The item models this room carries: what it can actually show (its ITM pack's ids). */
+    int[] models;
   }
 
   /** The model of every item id anywhere on the discs, the smallest variant (keeps a room's pack small). */
@@ -340,6 +347,8 @@ public final class ItemShuffle {
           Log.i(TAG, file.getName() + ": ITA of " + count + " areas does not fit its block, left as it is");
           continue;
         }
+        int itmEntry = arc.find(b, "ITM", 0);
+        int[] roomModels = itmEntry < 0 ? new int[0] : ownIds(b, arc, itmEntry);
         for (int i = 0; i < count; i++) {
           int at = base + ITA_RECORDS + i * RECORD;
           int id = be16(b, at + ITEM_ID);
@@ -353,6 +362,7 @@ public final class ItemShuffle {
           slot.at = at;
           slot.id = id;
           slot.held = held;
+          slot.models = roomModels;
           result.add(slot);
         }
       } catch (IOException | RuntimeException e) {
@@ -592,18 +602,40 @@ public final class ItemShuffle {
     if (files.isEmpty()) return "No collected rooms yet: collect the rooms first";
     Map<Integer, Model> index = modelIndex(files);
     List<Slot> slots = slots(files);
+    StringBuilder contents = new StringBuilder();
+    java.util.Map<Integer, Integer> counts = new java.util.HashMap<>();
+    for (Slot slot : slots) counts.merge(slot.id, 1, Integer::sum);
+    Integer[] keys = counts.keySet().toArray(new Integer[0]);
+    Arrays.sort(keys);
+    for (Integer id : keys) contents.append(itemLabel(id)).append(" x").append(counts.get(id)).append(", ");
     List<Slot> movable = new ArrayList<>();
     for (Slot slot : slots) if (inPool(slot.id, index)) movable.add(slot);
     if (movable.isEmpty()) return "Nothing to shuffle: no item of the pool in the collected rooms";
 
+    // A swap is allowed only when each room carries the other item's model. That keeps every id in the game
+    // (a weapon can only trade with a slot of the room that has its model, so it stays findable) and keeps
+    // every item visible (nothing lands where it has no model). Common ids still cross rooms freely.
     int[] dealt = movable.stream().mapToInt(s -> s.id).toArray();
+    int[] original = dealt.clone();
     long[] state = {seed};
-    for (int i = dealt.length - 1; i > 0; i--) {
-      int j = below(state, i + 1);
-      int swap = dealt[i];
-      dealt[i] = dealt[j];
-      dealt[j] = swap;
+    int swaps = 0;
+    int attempts = movable.size() * 12;
+    for (int k = 0; k < attempts; k++) {
+      int a = below(state, movable.size());
+      int b = below(state, movable.size());
+      if (a == b) continue;
+      if (!carries(movable.get(a), dealt[b]) || !carries(movable.get(b), dealt[a])) continue;
+      int swap = dealt[a];
+      dealt[a] = dealt[b];
+      dealt[b] = swap;
+      swaps++;
     }
+    // swaps cannot change the multiset, but a seed that loses an id is a softlock - so check it
+    int[] checkA = original.clone();
+    int[] checkB = dealt.clone();
+    Arrays.sort(checkA);
+    Arrays.sort(checkB);
+    boolean keptIds = Arrays.equals(checkA, checkB);
     Map<String, Integer> changed = new HashMap<>();
     for (int i = 0; i < movable.size(); i++) {
       Slot slot = movable.get(i);
@@ -728,6 +760,8 @@ public final class ItemShuffle {
     String head = "RE4 offline randomizer - item shuffle\nseed " + seed + "   fingerprint " + fingerprint
         + "\n" + rooms + " rooms, " + changedAreas + " item areas changed of " + areas
         + ", models merged: " + (MERGE_MODELS ? "yes" : "no") + "\n"
+        + "every id kept: " + (keptIds ? "yes" : "NO - TELL THE DEVELOPER") + "   swaps tried: " + swaps + "\n"
+        + "the seed holds: " + contents.toString().trim() + "\n"
         + "  record  placement   position                 was -> now\n";
     try {
       writeAll(new File(root, "randomizer/items.txt"), (head + log).getBytes(StandardCharsets.UTF_8));
