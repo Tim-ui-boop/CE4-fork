@@ -21,6 +21,8 @@ public final class MainActivity extends Activity implements ImportManager.Listen
   private final ExecutorService worker = Executors.newSingleThreadExecutor();
   private final Handler main = new Handler(Looper.getMainLooper());
   private volatile boolean destroyed;
+  /** The seed of the item shuffle ("Shuffle all room items"), empty for a new one each time. */
+  private android.widget.EditText seedField;
   private boolean loading, startupShown;
   /** Core flavor: the original game core runs the game (CoreActivity). */
   private boolean core;
@@ -74,6 +76,12 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     status = new TextView(this); status.setPadding(0, dp(8), 0, dp(8)); body.addView(status);
     button(body, "Collect rooms for the randomizer", this::startRoomTour);
     button(body, "Swap room items (test the patching)", this::swapRoomItems);
+    seedField = new android.widget.EditText(this);
+    seedField.setHint("seed (empty = a new one each time)");
+    seedField.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+    body.addView(seedField);
+    button(body, "Shuffle all room items (full shuffle)", this::shuffleRoomItems);
+    button(body, "Restore original rooms", this::restoreRoomItems);
     // the menu's only entry in the core mode was the disc import, which its launcher shows anyway
     if (!core) button(body, getString(R.string.browser_menu), this::showMenu);
     importPanel = new LinearLayout(this); importPanel.setOrientation(LinearLayout.VERTICAL);
@@ -110,6 +118,45 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       runOnUiThread(() -> android.widget.Toast.makeText(this, result, android.widget.Toast.LENGTH_LONG).show());
     }, "sidecar-swap").start();
   }
+  /** The randomizer's full shuffle (branch feature/offline-randomizer): every room item dealt anew, with models. */
+  private void shuffleRoomItems() {
+    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
+    final java.io.File root = imports.root;
+    final String typed = seedField.getText().toString().trim();
+    long parsed;
+    try {
+      parsed = typed.isEmpty() ? 0L : Long.parseLong(typed);
+    } catch (NumberFormatException e) {
+      parsed = 0L;   // a seed that is not a number: roll a new one instead of failing
+    }
+    final long seed = parsed == 0L ? new java.util.Random().nextLong() : parsed;
+    seedField.setText(Long.toString(seed));
+    new Thread(() -> {
+      String result;
+      try {
+        result = ItemShuffle.shuffleAll(root, seed);
+      } catch (RuntimeException e) {
+        result = "The shuffle stopped: " + e;
+      }
+      final String shown = result;
+      runOnUiThread(() -> android.widget.Toast.makeText(this, shown, android.widget.Toast.LENGTH_LONG).show());
+    }, "item-shuffle").start();
+  }
+
+  /** Deletes the collected rooms, so the next collection writes the discs' own items again. */
+  private void restoreRoomItems() {
+    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
+    new android.app.AlertDialog.Builder(this)
+        .setMessage("Remove the collected rooms? The discs stay untouched; collect the rooms again to play them as "
+            + "the discs have them.")
+        .setNegativeButton("Cancel", null)
+        .setPositiveButton("Remove", (dialog, which) -> new Thread(() -> {
+          final String result = ItemShuffle.restore(imports.root);
+          runOnUiThread(() -> android.widget.Toast.makeText(this, result, android.widget.Toast.LENGTH_LONG).show());
+        }, "item-restore").start())
+        .show();
+  }
+
   private void startRoomTour() {
     if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
     startActivity(new Intent(this, RoomTourActivity.class));
