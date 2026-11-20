@@ -594,7 +594,12 @@ public final class ItemShuffle {
             put16(patched, at + ITEM_ID, want);
             // the holder spawns the item with the record's effect: a new item gets its own (0 = the id's own),
             // not the old one's (an 8 there hangs the item a metre above a crate that then looks empty)
-            if (held) patched[at + EFF_TYPE] = 0;
+            if (held) {
+              patched[at + EFF_TYPE] = 0;
+              Log.i(TAG, file.getParentFile().getName() + "/" + file.getName() + ": held record " + i
+                  + " at (" + position(patched, at) + ") 0x" + Integer.toHexString(old) + " -> 0x"
+                  + Integer.toHexString(want));
+            }
           }
           // the room's own pack already carries it, or nothing on the discs can supply its model: leave it alone
           if (ownIndex(ownAll, want) >= 0 || ownIndex(needed, want) >= 0) continue;
