@@ -195,10 +195,9 @@ public final class DoorShuffle {
         if (!file.getName().endsWith(".das.raw")) continue;
         String name = file.getName().substring(0, file.getName().length() - 8);
         if (file.length() <= 0 || file.length() > MAX_ROOM) continue;
-        File orig = new File(file.getPath() + ".orig");
         byte[] bytes;
         try {
-          bytes = readAll(orig.isFile() ? orig : file);     // every run starts from the vanilla snapshot
+          bytes = readAll(file);
         } catch (IOException | RuntimeException e) {
           Log.i(TAG, file.getName() + ": " + e);
           continue;
@@ -242,7 +241,87 @@ public final class DoorShuffle {
         }
       }
     }
+    applySnapshot(root, rooms);
     return rooms;
+  }
+
+  /**
+   * The vanilla record of everything this feature changes: about 30 kB instead of a copy of every room.
+   *
+   *   d <room> <record offset> <stage> <room> <part> <position+angle as hex>
+   *   i <room> <record offset> <item id>
+   *
+   * Without it a second shuffle would shuffle the already shuffled map, which is how the reachable set
+   * collapsed on the phone. It is written once, from the state the first accepted seed started from.
+   */
+  private static File snapshotFile(File root) {
+    return new File(root, "randomizer/doors.orig.txt");
+  }
+
+  private static void applySnapshot(File root, Map<String, Room> rooms) {
+    File file = snapshotFile(root);
+    if (!file.isFile()) return;
+    try {
+      for (String line : new String(readAll(file), StandardCharsets.UTF_8).split("\n")) {
+        String[] parts = line.trim().split(" ");
+        if (parts.length < 4) continue;
+        Room room = rooms.get(parts[1]);
+        if (room == null) continue;
+        int at = Integer.parseInt(parts[2]);
+        if ("d".equals(parts[0]) && parts.length >= 7) {
+          for (Door door : room.doors) {
+            if (door.at != at) continue;
+            Dest d = new Dest();
+            d.stage = Integer.parseInt(parts[3]);
+            d.room = Integer.parseInt(parts[4]);
+            d.part = Integer.parseInt(parts[5]);
+            byte[] pos = hex(parts[6]);
+            if (pos != null && pos.length == DOOR_POS_LEN) System.arraycopy(pos, 0, d.pos, 0, DOOR_POS_LEN);
+            door.dest = d;
+            door.orig = d;
+          }
+        } else if ("i".equals(parts[0]) && parts.length >= 4) {
+          int id = Integer.parseInt(parts[3]);
+          for (ItemArea item : room.items) if (item.at == at) item.id = id;
+        }
+      }
+    } catch (IOException | RuntimeException e) {
+      Log.i(TAG, "the vanilla record could not be read: " + e);
+    }
+  }
+
+  private static void writeSnapshot(File root, Map<String, Room> rooms) {
+    StringBuilder text = new StringBuilder();
+    for (Room room : rooms.values()) {
+      for (Door door : room.doors) {
+        text.append("d ").append(room.name).append(' ').append(door.at).append(' ')
+            .append(door.orig.stage).append(' ').append(door.orig.room).append(' ').append(door.orig.part).append(' ')
+            .append(hex(door.orig.pos)).append('\n');
+      }
+    }
+    try {
+      writeAll(snapshotFile(root), text.toString().getBytes(StandardCharsets.UTF_8));
+    } catch (IOException e) {
+      Log.i(TAG, "the vanilla record could not be written: " + e);
+    }
+  }
+
+  private static byte[] hex(String text) {
+    if (text.length() % 2 != 0) return null;
+    byte[] out = new byte[text.length() / 2];
+    for (int i = 0; i < out.length; i++) {
+      int hi = Character.digit(text.charAt(i * 2), 16);
+      int lo = Character.digit(text.charAt(i * 2 + 1), 16);
+      if (hi < 0 || lo < 0) return null;
+      out[i] = (byte) ((hi << 4) | lo);
+    }
+    return out;
+  }
+
+  private static String hex(byte[] bytes) {
+    StringBuilder text = new StringBuilder(bytes.length * 2);
+    for (byte b : bytes) text.append(String.format(Locale.US, "%02x", b & 0xFF));
+    return text.toString();
   }
 
   private static byte[] readAll(File file) throws IOException {
@@ -518,14 +597,6 @@ public final class DoorShuffle {
         boolean doorChanged = false;
         for (Door door : room.doors) if (!same(door.dest, door.orig)) doorChanged = true;
         if (!doorChanged && room.writes.isEmpty()) continue;
-        File orig = new File(room.file.getPath() + ".orig");
-        if (!orig.isFile()) {
-          try {
-            writeAll(orig, readAll(room.file));       // remember the map this run started from
-          } catch (IOException e) {
-            Log.i(TAG, room.name + ": no snapshot: " + e);
-          }
-        }
         byte[] b = readAll(room.file);               // one room at a time: a room can be several megabytes
         for (Door door : room.doors) if (!same(door.dest, door.orig)) door.dest.into(b, door.at);
         for (Map.Entry<Integer, int[]> w : room.writes.entrySet()) {
@@ -538,6 +609,7 @@ public final class DoorShuffle {
         changed++;
       }
       writeAll(logFile(root), log.toString().getBytes(StandardCharsets.UTF_8));
+      if (!snapshotFile(root).isFile()) writeSnapshot(root, rooms);   // the map this run started from
     } catch (IOException | OutOfMemoryError e) {
       Log.i(TAG, "the rooms could not be written: " + e);
       return "The shuffle could not be written: " + e;
