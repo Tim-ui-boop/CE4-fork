@@ -49,6 +49,10 @@ public final class ItemShuffle {
   /** The item records start after the ITA block's 0x10-byte header (sce_at.cpp SceAtInit). */
   private static final int ITA_RECORDS = 0x10;
   private static final int ITEM_ID = 0x78;
+  /** SCE_AT_UNIT: 1 = held by an enemy list entry (a crate, a Ganado), 2 = etc model. */
+  private static final int WAITING_TYPE = 0x46;
+  /** SCE_AT_DATA_ITEM.ctrl_flag (0x5C + 0x28): bit0 = handed to an enemy, bit3 = save work. */
+  private static final int CTRL_FLAG = 0x84;
   /** Bytes per entry of the model pack's id table. */
   private static final int ITM_ID = 8;
   private static final int MAX_ARCHIVE = 64 * 1024 * 1024;
@@ -280,6 +284,9 @@ public final class ItemShuffle {
           int at = base + ITA_RECORDS + i * RECORD;
           int id = be16(b, at + ITEM_ID);
           if (id == 0 || id == 0xFFFF) continue;   // "nothing here"
+          // a held record belongs to its holder: the item there is placed by a crate/enemy, with that holder's
+          // effect and flags, so it keeps it (port/docs, cheats.cpp re4_item_random leaves them alone too)
+          if ((b[at + WAITING_TYPE] & 0xFF) != 0 || (b[at + CTRL_FLAG] & 0xFF) != 0) continue;
           Slot slot = new Slot();
           slot.file = file;
           slot.at = at;
@@ -533,9 +540,10 @@ public final class ItemShuffle {
           // the room's own pack already carries it, or nothing on the discs can supply its model: leave it alone
           if (ownIndex(ownAll, want) >= 0 || ownIndex(needed, want) >= 0) continue;
           if (!index.containsKey(want)) {
-            if (missing.isEmpty()) Log.i(TAG, file.getParentFile().getName() + "/" + file.getName()
-                + ": no model on the discs for");
-            if (missing.size() < 8) missing.add(String.format("0x%02x", want));
+            // only a id the deal brought here is a surprise; an untouched marker (0x1002) needs no model
+            if (changed.containsKey(key(file, at)) && missing.size() < 8) {
+              missing.add(String.format("0x%02x", want));
+            }
             continue;
           }
           needed[neededCount++] = want;
