@@ -30,7 +30,15 @@
      pG->Part_next = pG->Part;
      pG->Rno0 = 4;
      pG->Rno1 = 0;
-@@ -1270,6 +1270,20 @@
+@@ -1204,6 +1204,7 @@
+ // filter, 1 = 15-frame fade, 2 = instant), runs the pending door/exit callbacks, cancels loads,
+ // plays the door sound, moves the player to NextPos/NextY, sets room_id/Part to the next room and
+ // goes back to Rno0 = 1.
++extern "C" void re4_log(const char* fmt, ...);   /* port (patch 0239): runtime/log.cpp, tag re4 */
+ void gameDoordemo()
+ {
+     OSReport("--DOORDEMO START!!\n");
+@@ -1270,6 +1271,19 @@
      }
      pG->pl_pos = pG->NextPos;
      pG->pl_ang_y = pG->NextY;
@@ -41,7 +49,6 @@
 +       no-op for vanilla doors (they name their own stage) and makes a cross-stage door land in the right
 +       stage; this step ends with Rno0 = 1, so gameStageInit runs next and does the disc change and StageSet
 +       as always. Stage_next == 0 means "no destination stage" (boot, save load, continue). */
-+    extern "C" void re4_log(const char* fmt, ...);   /* port: runtime/log.cpp (tag re4) */
 +    if (pG->Stage_next != 0 && pG->Stage_next != pG->stage_no) {
 +        re4_log("doordemo: stage %d -> %d, room %03x -> %03x, part %d",
 +                (int) pG->stage_no, (int) pG->Stage_next, (unsigned) pG->room_id,
