@@ -25,6 +25,8 @@ public final class MainActivity extends Activity implements ImportManager.Listen
   private android.widget.EditText seedField;
   /** The door shuffle's cross-stage switch (branch feature/offline-randomizer). */
   private android.widget.CheckBox crossStage;
+  /** Roll a new seed on every shuffle click, so a test run does not need the number typed by hand. */
+  private android.widget.CheckBox newSeedEach;
   private boolean loading, startupShown;
   /** Core flavor: the original game core runs the game (CoreActivity). */
   private boolean core;
@@ -82,6 +84,10 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     seedField.setHint("seed (empty = a new one each time)");
     seedField.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
     body.addView(seedField);
+    newSeedEach = new android.widget.CheckBox(this);
+    newSeedEach.setText("New seed on every shuffle (untick to reuse the seed in the box)");
+    newSeedEach.setChecked(true);
+    body.addView(newSeedEach);
     button(body, "Shuffle all room items (full shuffle)", this::shuffleRoomItems);
     button(body, "Restore original rooms", this::restoreRoomItems);
     button(body, "Item shuffle log (where each item went)", this::showShuffleLog);
@@ -127,19 +133,29 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       runOnUiThread(() -> android.widget.Toast.makeText(this, result, android.widget.Toast.LENGTH_LONG).show());
     }, "sidecar-swap").start();
   }
+  /** The seed this click uses: a fresh roll while the switch is on, otherwise the number in the box (a roll
+   *  when the box is empty or holds something that is not a number). The box always shows the seed that ran. */
+  private long seedForThisClick() {
+    final boolean fresh = newSeedEach == null || newSeedEach.isChecked();
+    final String typed = seedField.getText().toString().trim();
+    long parsed = 0L;
+    if (!fresh && !typed.isEmpty()) {
+      try {
+        parsed = Long.parseLong(typed);
+      } catch (NumberFormatException e) {
+        parsed = 0L;   // not a number: roll instead of failing
+      }
+    }
+    final long seed = parsed == 0L ? new java.util.Random().nextLong() : parsed;
+    seedField.setText(Long.toString(seed));
+    return seed;
+  }
+
   /** The randomizer's full shuffle (branch feature/offline-randomizer): every room item dealt anew, with models. */
   private void shuffleRoomItems() {
     if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
     final java.io.File root = imports.root;
-    final String typed = seedField.getText().toString().trim();
-    long parsed;
-    try {
-      parsed = typed.isEmpty() ? 0L : Long.parseLong(typed);
-    } catch (NumberFormatException e) {
-      parsed = 0L;   // a seed that is not a number: roll a new one instead of failing
-    }
-    final long seed = parsed == 0L ? new java.util.Random().nextLong() : parsed;
-    seedField.setText(Long.toString(seed));
+    final long seed = seedForThisClick();
     new Thread(() -> {
       String result;
       try {
@@ -159,15 +175,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
     final File root = imports.root;
     final boolean cross = crossStage != null && crossStage.isChecked();
-    final String typed = seedField.getText().toString().trim();
-    long parsed;
-    try {
-      parsed = typed.isEmpty() ? 0L : Long.parseLong(typed);
-    } catch (NumberFormatException e) {
-      parsed = 0L;   // a seed that is not a number: roll a new one instead of failing
-    }
-    final long seed = parsed == 0L ? new java.util.Random().nextLong() : parsed;
-    seedField.setText(Long.toString(seed));
+    final long seed = seedForThisClick();
     new Thread(() -> {
       String result;
       try {

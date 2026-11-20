@@ -1,0 +1,48 @@
+# Port patch (branch feature/offline-randomizer): a model pointer a room script never checked.
+#
+# src/game/em_set.cpp EmSetFromList2 returns `errEm`, which is a null pointer, whenever it does not create an
+# enemy: the list entry belongs to another room, is switched off, or - the case a shuffled map hits - it was
+# already created (`d->be_flag & 2`). Several room scripts then write through the result without asking
+# (src/st1/r11b.cpp:127/138 `boat->setPos`, for instance), and a null cModel faults inside setPos at the offset
+# of its `pos` member (0xa4), which is what the phone logged on 21.11.:
+#
+#   C_VECSubtract ... fault addr 0xa4
+#   R11bInit()+876 -> ScenarioRoomInit -> gameRoomInit -> GameTask
+#
+# The guard cannot live in the method as a plain `if (this == 0)`: a C++ compiler is allowed to assume that
+# `this` is never null and removes the branch. So the method asks re4_null_model() (runtime/room_raw.cpp), a
+# call it cannot see through, and returns when the pointer is null. setPos and setAng are the two entry points
+# every script uses; both are protected here, and the port logs the first five occurrences so a broken room
+# can be identified from logcat.
+#
+# Nothing changes for a non-null model: the functions keep their exact behaviour, only the null call is dropped.
+--- a/src/game/model.cpp
++++ b/src/game/model.cpp
+@@ -22,6 +22,7 @@
+ void calcTplOffset(TEXPalette* tpl);
+ void getBoundingBox(cModelData* data, cBoundingBox* bound);
+ void drawBoundingBox(Mtx m, cBoundingBox* bound);
++extern "C" int re4_null_model(const void* p);   // port (patch 0241): runtime/room_raw.cpp
+ int GetModelInfoNum(cModelInfo* info);
+ cModelInfo* GetModelInfoAddr(cModelInfo* info, int no);
+ 
+@@ -496,6 +497,9 @@
+     Vec d;
+     cParts* p;
+ 
++    if (re4_null_model(this) != 0) {   /* port (patch 0241): EmSetFromList2 hands out a null when it refuses */
++        return;
++    }
+     PSVECSubtract(newPos, &this->pos, &d);
+     p = pList;
+     if (PSVECMag(&d) != 0.0f) {
+@@ -519,6 +523,9 @@
+ // Sets the rotation and rebuilds all matrices.
+ void cModel::setAng(Vec* ang)
+ {
++    if (re4_null_model(this) != 0) {   /* port (patch 0241): same guard, same reason */
++        return;
++    }
+     this->ang = *ang;
+     matUpdate();
+ }

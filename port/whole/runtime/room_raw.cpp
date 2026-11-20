@@ -148,6 +148,25 @@ extern "C" int re4_room_raw_host_order_ok(const void* data, int size)
     return 1;
 }
 
+/* Whether a model pointer a room script is about to use is null. src/game/model.cpp (patch 0241) calls this
+ * before setPos/setAng, because EmSetFromList2 (src/game/em_set.cpp) returns errEm = 0 when a list entry was
+ * already created or does not belong to this room, and several room scripts write to the result without
+ * asking. The check has to happen across a call the C++ compiler cannot see through, otherwise it assumes
+ * `this` is never null and drops the branch. */
+extern "C" int re4_null_model(const void* p)
+{
+    static int logged;
+
+    if (p != 0) {
+        return 0;
+    }
+    if (logged < 5) {
+        logged++;
+        re4_log("randomizer: a room script used a model the enemy list refused (null guard, patch 0241)");
+    }
+    return 1;
+}
+
 /* Whether the door shuffle is installed: <data>/randomizer/doors.active exists. DoorShuffle writes that marker
  * only when it accepted a seed (a refusal deletes it again) and "Restore original rooms" removes the whole
  * folder, so it is present exactly while a shuffled map is being played. sce_at.cpp asks it once per door bump
