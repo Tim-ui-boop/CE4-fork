@@ -144,7 +144,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       String result;
       try {
         result = ItemShuffle.shuffleAll(root, seed);
-      } catch (RuntimeException e) {
+      } catch (RuntimeException | OutOfMemoryError e) {
         result = "The shuffle stopped: " + e;
       }
       final String shown = result;
@@ -171,7 +171,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       String result;
       try {
         result = DoorShuffle.shuffleAll(root, seed, cross);
-      } catch (RuntimeException e) {
+      } catch (RuntimeException | OutOfMemoryError e) {
         result = "The door shuffle stopped: " + e;
       }
       final String shown = result;

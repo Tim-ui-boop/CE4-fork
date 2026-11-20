@@ -26,12 +26,13 @@ import java.util.TreeSet;
  * Door payload: destination position + angle 0x5C..0x6B, stage 0x6C, room 0x6D, part 0x74. The lock is the
  * record's own (key_id 0x6E, key_flg 0x6F) and never travels.
  *
+ * Memory: a room archive is up to several megabytes and there are more than a hundred of them, so nothing
+ * keeps the room bytes. A scan reads one file, keeps the small metadata (door payloads, item areas, the
+ * model ids) and drops the bytes again; the patching pass later reads and writes one room at a time.
+ *
  * Geometry of a swap: the destination payload belongs to the room it leads into, so re-pairing A-B and C-D
  * into A-D and C-B is exactly "exchange the payloads of a and c, and of b and d". Every room keeps its
- * number of doors, and the pairing stays reciprocal, so no door can lead into a wall.
- *
- * A seed is accepted only when a walk from r100 reaches every room the vanilla doors reach, where a room
- * holding a gate for an item you do not carry yet cannot be left.
+ * number of doors and the pairing stays reciprocal, so no door can lead into a wall.
  */
 public final class DoorShuffle {
   private static final String TAG = "DoorShuffle";
@@ -78,7 +79,6 @@ public final class DoorShuffle {
     b[at + 1] = (byte) v;
   }
 
-  /** Offset of a sub-file by 3-letter tag, -1 when the archive does not parse. */
   private static int entry(byte[] b, String tag) {
     if (b.length < 0x20) return -1;
     int num = be32(b, 0);
@@ -105,7 +105,6 @@ public final class DoorShuffle {
     return out;
   }
 
-  /** The ids this room's own model pack can show (ITM: count at +4, id table offset at +8). */
   private static Set<Integer> models(byte[] b) {
     Set<Integer> ids = new TreeSet<>();
     int itm = entry(b, "ITM");
@@ -117,9 +116,8 @@ public final class DoorShuffle {
     return ids;
   }
 
-  // ---- model ----------------------------------------------------------------------------------------------
+  // ---- metadata (small enough to keep for every room) ------------------------------------------------------
 
-  /** Where a door leads: the payload that travels when doors are re-paired. */
   private static final class Dest {
     final byte[] pos = new byte[DOOR_POS_LEN];
     int stage;
@@ -162,22 +160,33 @@ public final class DoorShuffle {
     Door pair;
   }
 
+  /** One item area, only what the key placement needs. */
+  private static final class ItemArea {
+    int at;
+    int id;
+    int waiting;
+    int ctrl;
+
+    boolean free() {
+      return (id == 0 || id == 0xFFFF || id >= 0x1000) && waiting == 0 && (ctrl & 0x10) == 0;
+    }
+  }
+
   private static final class Room {
     String name;
     File file;
-    byte[] bytes;
-    /** The state this run started from, kept as the vanilla snapshot when there was none yet. */
-    byte[] source;
     boolean dirty;
     final List<Door> doors = new ArrayList<>();
-    final List<Integer> itemAreas = new ArrayList<>();
+    final List<ItemArea> items = new ArrayList<>();
     final List<Integer> gates = new ArrayList<>();
     Set<Integer> models = new TreeSet<>();
+    /** Item areas this run writes: offset -> {id, num}. */
+    final Map<Integer, int[]> writes = new LinkedHashMap<>();
   }
 
-  // ---- loading ---------------------------------------------------------------------------------------------
+  // ---- scan: one room at a time, keep metadata only ---------------------------------------------------------
 
-  private static Map<String, Room> load(File root) {
+  private static Map<String, Room> scan(File root) {
     Map<String, Room> rooms = new TreeMap<>();
     for (String stage : STORY) {
       File[] files = new File(new File(root, "randomizer"), stage).listFiles();
@@ -185,42 +194,51 @@ public final class DoorShuffle {
       for (File file : files) {
         if (!file.getName().endsWith(".das.raw")) continue;
         String name = file.getName().substring(0, file.getName().length() - 8);
+        if (file.length() <= 0 || file.length() > MAX_ROOM) continue;
+        File orig = new File(file.getPath() + ".orig");
+        byte[] bytes;
         try {
-          if (file.length() <= 0 || file.length() > MAX_ROOM) continue;
+          bytes = readAll(orig.isFile() ? orig : file);     // every run starts from the vanilla snapshot
+        } catch (IOException | RuntimeException e) {
+          Log.i(TAG, file.getName() + ": " + e);
+          continue;
+        }
+        try {
           Room room = new Room();
           room.file = file;
           room.name = name;
-          // every run starts from the vanilla snapshot when there is one, so shuffling twice does not
-          // shuffle the shuffled map (that is what collapsed the reachable set to five rooms on device)
-          File orig = new File(file.getPath() + ".orig");
-          room.bytes = readAll(orig.isFile() ? orig : file);
-          room.source = room.bytes.clone();
-          int aev = entry(room.bytes, "AEV");
-          for (int at : records(room.bytes, aev, 0x104)) {
-            int type = room.bytes[at + TYPE] & 0xFF;
+          int aev = entry(bytes, "AEV");
+          for (int at : records(bytes, aev, 0x104)) {
+            int type = bytes[at + TYPE] & 0xFF;
             if (type == TYPE_DOOR) {
               Door door = new Door();
               door.room = room;
               door.at = at;
-              door.area = room.bytes[at + AREA_NO] & 0xFF;
-              door.keyId = room.bytes[at + DOOR_KEY] & 0xFF;
-              door.keyFlg = room.bytes[at + DOOR_FLG] & 0xFF;
-              door.dest = Dest.of(room.bytes, at);
-              door.orig = Dest.of(room.bytes, at);
-              if (door.dest.name().equals(name)) continue;         // a door into its own room: leave it
+              door.area = bytes[at + AREA_NO] & 0xFF;
+              door.keyId = bytes[at + DOOR_KEY] & 0xFF;
+              door.keyFlg = bytes[at + DOOR_FLG] & 0xFF;
+              door.dest = Dest.of(bytes, at);
+              door.orig = Dest.of(bytes, at);
+              if (door.dest.name().equals(name)) continue;     // a door into its own room stays as it is
               room.doors.add(door);
             } else if (type == TYPE_USE) {
-              room.gates.add(be16(room.bytes, at + USE_ITEM));
+              room.gates.add(be16(bytes, at + USE_ITEM));
             }
           }
-          int ita = entry(room.bytes, "ITA");
-          for (int at : records(room.bytes, ita, 0x105)) {
-            if ((room.bytes[at + TYPE] & 0xFF) == TYPE_ITEM) room.itemAreas.add(at);
+          int ita = entry(bytes, "ITA");
+          for (int at : records(bytes, ita, 0x105)) {
+            if ((bytes[at + TYPE] & 0xFF) != TYPE_ITEM) continue;
+            ItemArea item = new ItemArea();
+            item.at = at;
+            item.id = be16(bytes, at + ITEM_ID);
+            item.waiting = bytes[at + WAITING] & 0xFF;
+            item.ctrl = bytes[at + CTRL] & 0xFF;
+            room.items.add(item);
           }
-          room.models = models(room.bytes);
+          room.models = models(bytes);
           rooms.put(name, room);
-        } catch (IOException | RuntimeException e) {
-          Log.i(TAG, file.getName() + ": " + e);
+        } finally {
+          bytes = null;                                        // the room bytes are never kept
         }
       }
     }
@@ -239,11 +257,12 @@ public final class DoorShuffle {
     try (RandomAccessFile f = new RandomAccessFile(file, "rw")) {
       f.seek(0);
       f.write(b);
-      f.setLength(b.length);   // a shorter log must not keep the tail of the previous one
+      f.setLength(b.length);   // a shorter file must not keep the tail of the previous one
     }
   }
 
-  /** Pair the two halves of each two-way door; the one-way ones stay as the disc has them. */
+  // ---- the map ---------------------------------------------------------------------------------------------
+
   private static void link(Map<String, Room> rooms) {
     Map<String, List<Door>> byEdge = new HashMap<>();
     for (Room room : rooms.values()) {
@@ -251,12 +270,14 @@ public final class DoorShuffle {
     }
     for (Room room : rooms.values()) {
       for (Door door : room.doors) {
-        Door back = null;
         List<Door> candidates = byEdge.get(door.dest.name() + ">" + room.name);
-        if (candidates != null) for (Door c : candidates) if (c.pair == null && c.room != door.room) { back = c; break; }
-        if (back != null) {
-          door.pair = back;
-          back.pair = door;
+        if (candidates == null) continue;
+        for (Door c : candidates) {
+          if (c.pair == null && c.room != door.room) {
+            door.pair = c;
+            c.pair = door;
+            break;
+          }
         }
       }
     }
@@ -266,8 +287,7 @@ public final class DoorShuffle {
     Set<String> fixed = new TreeSet<>();
     for (Room room : rooms.values()) {
       for (Door door : room.doors) {
-        String target = door.dest.name();
-        if (door.pair == null && rooms.containsKey(target)) fixed.add(room.name + ">" + target);
+        if (door.pair == null && rooms.containsKey(door.dest.name())) fixed.add(room.name + ">" + door.dest.name());
       }
     }
     return fixed;
@@ -284,14 +304,13 @@ public final class DoorShuffle {
     }
     for (String edge : oneWay(rooms)) {
       String[] parts = edge.split(">");
-      if (parts.length != 2 || !rooms.containsKey(parts[0]) || !rooms.containsKey(parts[1])) continue;
+      if (parts.length != 2) continue;
       adj.computeIfAbsent(parts[0], k -> new TreeSet<>()).add(parts[1]);
       adj.computeIfAbsent(parts[1], k -> new TreeSet<>()).add(parts[0]);
     }
     return adj;
   }
 
-  /** Rooms reachable from the start; when held is non-null, a room whose gate item is missing cannot be left. */
   private static Set<String> reach(Map<String, Set<String>> adj, Map<String, Room> rooms, Set<Integer> held) {
     Set<String> seen = new TreeSet<>();
     List<String> stack = new ArrayList<>();
@@ -300,8 +319,8 @@ public final class DoorShuffle {
       String room = stack.remove(stack.size() - 1);
       if (seen.contains(room) || !rooms.containsKey(room)) continue;
       seen.add(room);
-      Room r = rooms.get(room);
       if (held != null) {
+        Room r = rooms.get(room);
         boolean blocked = false;
         for (Integer gate : r.gates) if (!held.contains(gate)) blocked = true;
         if (blocked) continue;
@@ -311,8 +330,8 @@ public final class DoorShuffle {
     return seen;
   }
 
-  private static int distance(Map<String, Set<String>> adj, String to) {
-    return distanceMap(adj).getOrDefault(to, Integer.MAX_VALUE / 2);
+  private static int stageOf(String name) {
+    return name.length() > 1 ? Character.digit(name.charAt(1), 10) : 0;
   }
 
   private static Map<String, Integer> distanceMap(Map<String, Set<String>> adj) {
@@ -332,17 +351,16 @@ public final class DoorShuffle {
     return dist;
   }
 
-  // ---- the seed -------------------------------------------------------------------------------------------
-
-  private static int stageOf(String name) {
-    return name.length() > 1 ? Character.digit(name.charAt(1), 10) : 0;
+  private static int distance(Map<String, Set<String>> adj, String to) {
+    return distanceMap(adj).getOrDefault(to, Integer.MAX_VALUE / 2);
   }
+
+  // ---- the seed ---------------------------------------------------------------------------------------------
 
   private static File logFile(File root) {
     return new File(root, "randomizer/doors.txt");
   }
 
-  /** Writes the log of a run that wrote no room, so the reason survives the session. */
   private static void writeRefusal(File root, long seed, boolean allowCross, int rooms, int doors, int orphan,
                                    int reachable, String why) {
     StringBuilder log = new StringBuilder();
@@ -363,7 +381,7 @@ public final class DoorShuffle {
 
   /** Deals the doors with a seed, moves the keys, writes the rooms, and logs every change. */
   static String shuffleAll(File root, long seed, boolean allowCross) {
-    Map<String, Room> rooms = load(root);
+    Map<String, Room> rooms = scan(root);
     if (rooms.isEmpty()) return "No collected rooms yet: collect the rooms first";
     link(rooms);
     int doors = 0, orphan = 0;
@@ -375,9 +393,6 @@ public final class DoorShuffle {
     }
     Set<String> universe = reach(graph(rooms), rooms, null);
     if (universe.isEmpty()) return "The rooms do not link up: no door leaves " + START;
-    // A universe far smaller than the collection means the doors do not match the room names: a partial
-    // collection, unreadable sidecars, or a previous run that left the map broken. Refuse instead of
-    // writing a map nobody can play (one early run validated against 5 rooms and teleported the player).
     if (universe.size() < MIN_UNIVERSE || orphan > doors / 8) {
       String why = "Door shuffle refused: only " + universe.size() + " rooms are reachable from " + START
           + " of " + rooms.size() + " collected (" + doors + " doors, " + orphan
@@ -408,12 +423,11 @@ public final class DoorShuffle {
       if (one == two) continue;
       Door a = one[0], b = one[1], c = two[0], d = two[1];
       if (a.room == c.room || b.room == d.room) continue;
-      if (a.room == d.room || c.room == b.room) continue;   // never a door into its own room
+      if (a.room == d.room || c.room == b.room) continue;      // never a door into its own room
       Dest da = a.dest, dc = c.dest, db = b.dest, dd = d.dest;
       int sa = stageOf(a.room.name), sd = stageOf(d.room.name);
       int sc = stageOf(c.room.name), sb = stageOf(b.room.name);
       if (!allowCross) {
-        // the two new doors put A next to D and C next to B: both links must stay inside one stage
         if (sa != sd || sc != sb) {
           rejected++;
           continue;
@@ -430,15 +444,12 @@ public final class DoorShuffle {
           continue;
         }
       }
-      // exchange payloads: a takes c's, c takes a's, b takes d's, d takes b's
       a.dest = dc;
       c.dest = da;
       b.dest = dd;
       d.dest = db;
-      // the new pairings must stay reciprocal: a's new target's back door must be d, and so on
-      boolean ok = reciprocal(rooms, a, d) && reciprocal(rooms, c, b);
-      boolean connected = ok && universe.containsAll(reach(graph(rooms), rooms, null));
-      if (!connected) {
+      boolean ok = a.dest.name().equals(d.room.name) && c.dest.name().equals(b.room.name);
+      if (!ok || !universe.containsAll(reach(graph(rooms), rooms, null))) {
         a.dest = da;
         c.dest = dc;
         b.dest = db;
@@ -447,10 +458,9 @@ public final class DoorShuffle {
         continue;
       }
       swaps++;
-      if (a.room.name.charAt(1) != d.room.name.charAt(1)) cross++;
+      if (sa != sd) cross++;
     }
 
-    // where every progression item sits now, and what the walk says
     Map<Integer, String> placement = placeKeys(rooms, rng);
     Map<String, Set<String>> adj = graph(rooms);
     Set<Integer> held = new TreeSet<>();
@@ -477,7 +487,7 @@ public final class DoorShuffle {
         .append(oneWay(rooms).size()).append(" one-way links, ").append(swaps).append(" door swaps accepted, ")
         .append(rejected).append(" rejected, ").append(cross).append(" across stages\n");
     log.append("every room the vanilla doors reach is reachable: ").append(complete ? "yes" : "NO - TELL THE DEVELOPER")
-        .append(" (").append(finalRooms.size()).append('/').append(universe.size()).append(" rooms)").append('\n');
+        .append(" (").append(finalRooms.size()).append('/').append(universe.size()).append(" rooms)\n");
     log.append('\n').append("room    area  leads to        lock\n");
     for (Room room : rooms.values()) {
       for (Door door : room.doors) {
@@ -505,20 +515,30 @@ public final class DoorShuffle {
     int changed = 0;
     try {
       for (Room room : rooms.values()) {
+        boolean doorChanged = false;
+        for (Door door : room.doors) if (!same(door.dest, door.orig)) doorChanged = true;
+        if (!doorChanged && room.writes.isEmpty()) continue;
         File orig = new File(room.file.getPath() + ".orig");
-        if (!orig.isFile()) writeAll(orig, room.source);   // remember the vanilla map for the next run
-        for (Door door : room.doors) {
-          if (door.dest == door.orig) continue;
-          if (same(door.dest, door.orig)) continue;
-          door.dest.into(room.bytes, door.at);   // the payload travels, the lock (key_id/key_flg) stays
-          room.dirty = true;
+        if (!orig.isFile()) {
+          try {
+            writeAll(orig, readAll(room.file));       // remember the map this run started from
+          } catch (IOException e) {
+            Log.i(TAG, room.name + ": no snapshot: " + e);
+          }
         }
-        if (!room.dirty) continue;
-        writeAll(room.file, room.bytes);
+        byte[] b = readAll(room.file);               // one room at a time: a room can be several megabytes
+        for (Door door : room.doors) if (!same(door.dest, door.orig)) door.dest.into(b, door.at);
+        for (Map.Entry<Integer, int[]> w : room.writes.entrySet()) {
+          put16(b, w.getKey() + ITEM_ID, w.getValue()[0]);
+          put16(b, w.getKey() + ITEM_NUM, w.getValue()[1]);
+          b[w.getKey() + ITEM_EFF] = 0;
+        }
+        writeAll(room.file, b);
+        b = null;
         changed++;
       }
       writeAll(logFile(root), log.toString().getBytes(StandardCharsets.UTF_8));
-    } catch (IOException e) {
+    } catch (IOException | OutOfMemoryError e) {
       Log.i(TAG, "the rooms could not be written: " + e);
       return "The shuffle could not be written: " + e;
     }
@@ -529,14 +549,10 @@ public final class DoorShuffle {
     return summary;
   }
 
-  /** Is `door`'s new target the room whose door is `expected`? (the pairing must stay two-way) */
-  private static boolean reciprocal(Map<String, Room> rooms, Door door, Door expected) {
-    return door.dest.name().equals(expected.room.name);
-  }
-
   /**
    * Moves the progression items the rooms gate on. A key may only go to a room that (a) already carries its
-   * model, so it can be seen, and (b) comes before the room whose gate needs it.
+   * model, so it can be seen, and (b) comes before the room whose gate needs it. The writes are recorded and
+   * applied with the patching pass, so no room bytes are held here.
    */
   private static Map<Integer, String> placeKeys(Map<String, Room> rooms, Random rng) {
     Map<Integer, String> placement = new LinkedHashMap<>();
@@ -551,31 +567,29 @@ public final class DoorShuffle {
         if (!room.models.contains(key)) continue;                 // the room could not show it
         if (room.gates.contains(key)) continue;                   // never behind its own gate
         if (distance(adj, room.name) >= gateDist) continue;       // must come before it
-        for (int at : room.itemAreas) {
-          int id = be16(room.bytes, at + ITEM_ID);
-          if (id == 0 || id == 0xFFFF) { candidates.add(room); break; }
-          if (id >= 0x1000) { candidates.add(room); break; }      // the game's own random drops
-        }
+        if (freeArea(room) >= 0) candidates.add(room);
       }
       if (candidates.isEmpty()) {
         placement.put(key, whereIs(rooms, key));
         continue;
       }
       Room to = candidates.get(rng.nextInt(candidates.size()));
-      int at = freeArea(to);
-      if (at < 0) { placement.put(key, whereIs(rooms, key)); continue; }
-      // write the item into the room that can show it, and clear the record that held it elsewhere
       String was = whereIs(rooms, key);
       Room old = rooms.get(was);
-      if (old != null) for (int oldAt : old.itemAreas) {
-        if (be16(old.bytes, oldAt + ITEM_ID) == key) {
-          put16(old.bytes, oldAt + ITEM_ID, 0);
-          old.dirty = true;
+      if (old != null) {
+        for (ItemArea item : old.items) {
+          if (item.id == key) {
+            old.writes.put(item.at, new int[]{0, 0});
+            old.dirty = true;
+          }
         }
       }
-      put16(to.bytes, at + ITEM_ID, key);
-      put16(to.bytes, at + ITEM_NUM, 1);
-      to.bytes[at + ITEM_EFF] = 0;
+      int at = freeArea(to);
+      if (at < 0) {
+        placement.put(key, was);
+        continue;
+      }
+      to.writes.put(at, new int[]{key, 1});
       to.dirty = true;
       placement.put(key, to.name);
     }
@@ -583,25 +597,20 @@ public final class DoorShuffle {
   }
 
   private static int freeArea(Room room) {
-    for (int at : room.itemAreas) {
-      int id = be16(room.bytes, at + ITEM_ID);
-      if (id == 0 || id == 0xFFFF || id >= 0x1000) {
-        if ((room.bytes[at + WAITING] & 0xFF) == 0 && (room.bytes[at + CTRL] & 0x10) == 0) return at;
-      }
-    }
+    for (ItemArea item : room.items) if (item.free()) return item.at;
     return -1;
   }
 
   private static String whereIs(Map<String, Room> rooms, int id) {
     for (Room room : rooms.values()) {
-      for (int at : room.itemAreas) if (be16(room.bytes, at + ITEM_ID) == id) return room.name;
+      for (ItemArea item : room.items) if (item.id == id) return room.name;
     }
     return "nowhere";
   }
 
   /** The last door log, or a line saying there is none yet. */
   static String readLog(File root) {
-    File file = new File(root, "randomizer/doors.txt");
+    File file = logFile(root);
     if (!file.isFile()) return "No door shuffle log yet: shuffle the doors once.";
     try {
       return new String(readAll(file), StandardCharsets.UTF_8);
