@@ -53,6 +53,17 @@ public final class ItemShuffle {
   private static final int WAITING_TYPE = 0x46;
   /** SCE_AT_DATA_ITEM.ctrl_flag (0x5C + 0x28): bit0 = handed to an enemy, bit3 = save work. */
   private static final int CTRL_FLAG = 0x84;
+  /** SCE_AT_DATA_ITEM.eff_type (0x5C + 0x24): 8 = the item hangs a metre above its place (shot down). */
+  private static final int EFF_TYPE = 0x80;
+
+  /** Debug switch (20.11.2026): deal what crates, barrels and other holders keep, not only the records that lie
+   *  free. A held item is spawned by its holder with the record's effect, so a changed item gets its own effect
+   *  (the byte at 0x80 is cleared). Set false to deal free-standing records only, as the port's cheat does. */
+  private static final boolean DEAL_HELD = true;
+  /** Debug test: the first held record of each of these rooms shows DEBUG_HELD_ITEM, so a known crate can be
+   *  checked by eye. r100 and r101 are the village's first houses (the first Ganado). */
+  private static final String[] DEBUG_HELD_ROOMS = {"r100.das.raw", "r101.das.raw"};
+  private static final int DEBUG_HELD_ITEM = 0x58;
   /** Bytes per entry of the model pack's id table. */
   private static final int ITM_ID = 8;
   private static final int MAX_ARCHIVE = 64 * 1024 * 1024;
@@ -229,6 +240,8 @@ public final class ItemShuffle {
     File file;
     int at;
     int id;
+    /** Held by a crate, a barrel, an enemy or an etc model (waiting_type / ctrl_flag set). */
+    boolean held;
   }
 
   /** The model of every item id anywhere on the discs, the smallest variant (keeps a room's pack small). */
@@ -285,12 +298,14 @@ public final class ItemShuffle {
           int id = be16(b, at + ITEM_ID);
           if (id == 0 || id == 0xFFFF) continue;   // "nothing here"
           // a held record belongs to its holder: the item there is placed by a crate/enemy, with that holder's
-          // effect and flags, so it keeps it (port/docs, cheats.cpp re4_item_random leaves them alone too)
-          if ((b[at + WAITING_TYPE] & 0xFF) != 0 || (b[at + CTRL_FLAG] & 0xFF) != 0) continue;
+          // effect and flags. DEAL_HELD deals them as well; the write step then gives a changed item its own effect.
+          boolean held = (b[at + WAITING_TYPE] & 0xFF) != 0 || (b[at + CTRL_FLAG] & 0xFF) != 0;
+          if (held && !DEAL_HELD) continue;
           Slot slot = new Slot();
           slot.file = file;
           slot.at = at;
           slot.id = id;
+          slot.held = held;
           result.add(slot);
         }
       } catch (IOException | RuntimeException e) {
@@ -530,13 +545,32 @@ public final class ItemShuffle {
         int neededCount = 0;
         boolean touched = false;
         List<String> missing = new ArrayList<>();   // ids the deal moved here that nothing can show
+        boolean debugHeld = false;
         for (int i = 0; i < count; i++) {
           int at = base + ITA_RECORDS + i * RECORD;
-          int want = changed.containsKey(key(file, at)) ? changed.get(key(file, at)) : be16(patched, at + ITEM_ID);
-          if (want != be16(patched, at + ITEM_ID)) touched = true;
+          int old = be16(patched, at + ITEM_ID);
+          int want = changed.containsKey(key(file, at)) ? changed.get(key(file, at)) : old;
+          boolean held = (patched[at + WAITING_TYPE] & 0xFF) != 0;
+          if (held && debugRoom(file)) {
+            // the position names the crate: item_pos at 0x5C, three big-endian floats
+            Log.i(TAG, file.getName() + ": held record " + i + " holds 0x" + Integer.toHexString(old) + " at ("
+                + position(patched, at) + ")");
+          }
+          if (DEBUG_HELD_ROOMS.length > 0 && !debugHeld && held && old != 0 && old != 0xFFFF && debugRoom(file)) {
+            want = DEBUG_HELD_ITEM;   // debug: this room's first held record shows a known item
+            debugHeld = true;
+            Log.i(TAG, file.getName() + ": debug, the first held record (" + i + ") gets 0x"
+                + Integer.toHexString(DEBUG_HELD_ITEM));
+          }
           mapping.append(file.getParentFile().getName()).append('/').append(file.getName()).append(':').append(at)
-              .append(' ').append(be16(patched, at + ITEM_ID)).append("->").append(want).append('\n');
-          put16(patched, at + ITEM_ID, want);
+              .append(' ').append(old).append("->").append(want).append('\n');
+          if (want != old) {
+            touched = true;
+            put16(patched, at + ITEM_ID, want);
+            // the holder spawns the item with the record's effect: a new item gets its own (0 = the id's own),
+            // not the old one's (an 8 there hangs the item a metre above a crate that then looks empty)
+            if (held) patched[at + EFF_TYPE] = 0;
+          }
           // the room's own pack already carries it, or nothing on the discs can supply its model: leave it alone
           if (ownIndex(ownAll, want) >= 0 || ownIndex(needed, want) >= 0) continue;
           if (!index.containsKey(want)) {
@@ -588,6 +622,18 @@ public final class ItemShuffle {
         + fingerprint + "), models +" + Math.max(0, added) + " bytes, rooms +" + Math.max(0, grew) + " bytes";
     Log.i(TAG, summary);
     return summary;
+  }
+
+  /** The record's item position (item_pos at 0x5C, three big-endian floats), for the debug log. */
+  private static String position(byte[] b, int at) {
+    return Float.intBitsToFloat(be32(b, at + 0x5C)) + ", " + Float.intBitsToFloat(be32(b, at + 0x60)) + ", "
+        + Float.intBitsToFloat(be32(b, at + 0x64));
+  }
+
+  /** Whether `file` is one of the debug rooms. */
+  private static boolean debugRoom(File file) {
+    for (String name : DEBUG_HELD_ROOMS) if (file.getName().equals(name)) return true;
+    return false;
   }
 
   private static String key(File file, int at) {
