@@ -8,44 +8,40 @@
 # stage" (boot, save load, continue) and is ignored, which keeps vanilla behaviour identical.
 # The door log line is the debug hook: one line per jump with the raw record, so a bad seed can be read out
 # of logcat (tag re4, runtime/log.cpp) instead of guessed.
+# No line is added to game.cpp before the word accesses port/whole/byte_views.json records (the Rno0 writes):
+# whole_prepare.py only looks +-40 lines around them, and an earlier version of this patch pushed one past it.
 --- a/src/game/game.cpp
 +++ b/src/game/game.cpp
-@@ -16,6 +16,8 @@
- #include "main_mem.h"
- #include "joy.h"
- #include "game.h"
-+/* port (patch 0239): runtime/log.cpp, the port's own log (tag re4) */
-+extern "C" void re4_log(const char* fmt, ...);
- #include "em.h"
- #include "obj.h"
- #include "model.h"
-@@ -739,6 +741,7 @@
+@@ -739,7 +739,7 @@
      SysFlagOn(pG, SYS_LOAD_GAME);
      SysFlagOff(pG, SYS_CONTINUE);
      SysFlagOff(pG, SYS_START_EVT_SKIP);
-+    pG->Stage_next = pG->stage_no;  /* port (patch 0239): a save load carries no door stage */
-     pG->RoomNo_next = pG->room_id;
+-    pG->RoomNo_next = pG->room_id;
++    pG->RoomNo_next = pG->room_id; pG->Stage_next = pG->stage_no;  /* port (patch 0239): a save load names no stage */
      pG->Part_next = pG->Part;
  }
-@@ -769,6 +772,7 @@
+ 
+@@ -769,7 +769,7 @@
      ContinueWepData();
      pG->NextPos = pG->pl_pos;
      pG->NextY = pG->pl_ang_y;
-+    pG->Stage_next = pG->stage_no;  /* port (patch 0239): a continue carries no door stage */
-     pG->RoomNo_next = pG->room_id;
+-    pG->RoomNo_next = pG->room_id;
++    pG->RoomNo_next = pG->room_id; pG->Stage_next = pG->stage_no;  /* port (patch 0239): a continue names no stage */
      pG->Part_next = pG->Part;
      pG->Rno0 = 4;
-@@ -1270,6 +1274,19 @@
+     pG->Rno1 = 0;
+@@ -1270,6 +1270,20 @@
      }
      pG->pl_pos = pG->NextPos;
      pG->pl_ang_y = pG->NextY;
 +    /* port (patch 0239): a door may name a room in another stage (the offline randomizer shuffles doors and
 +       keys across stages). room_id already carries the stage byte (stage << 8 | room), but the archive name
-+       read.cpp builds comes from stage_no (read.cpp:158), which an ordinary door never updates: it only does
-+       so through the chapter sequence (sce_com.cpp SceChapterEnd). Applying Stage_next here is a no-op for
-+       vanilla doors (they name their own stage) and makes a cross-stage door land in the right stage; the
-+       step ends with Rno0 = 1, so gameStageInit runs next and does the disc change and StageSet as always.
-+       Stage_next == 0 is "no destination stage" (boot, continue, save load write RoomNo_next from room_id). */
++       read.cpp builds comes from stage_no (read.cpp:158), which an ordinary door never updates: the stage
++       only moves through the chapter sequence (sce_com.cpp SceChapterEnd). Applying Stage_next here is a
++       no-op for vanilla doors (they name their own stage) and makes a cross-stage door land in the right
++       stage; this step ends with Rno0 = 1, so gameStageInit runs next and does the disc change and StageSet
++       as always. Stage_next == 0 means "no destination stage" (boot, save load, continue). */
++    extern "C" void re4_log(const char* fmt, ...);   /* port: runtime/log.cpp (tag re4) */
 +    if (pG->Stage_next != 0 && pG->Stage_next != pG->stage_no) {
 +        re4_log("doordemo: stage %d -> %d, room %03x -> %03x, part %d",
 +                (int) pG->stage_no, (int) pG->Stage_next, (unsigned) pG->room_id,
