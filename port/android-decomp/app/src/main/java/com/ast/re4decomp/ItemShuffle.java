@@ -616,7 +616,7 @@ public final class ItemShuffle {
     // (a weapon can only trade with a slot of the room that has its model, so it stays findable) and keeps
     // every item visible (nothing lands where it has no model). Common ids still cross rooms freely.
     int[] dealt = movable.stream().mapToInt(s -> s.id).toArray();
-    int[] original = dealt.clone();
+    int[] asDealt = dealt.clone();
     long[] state = {seed};
     int swaps = 0;
     int attempts = movable.size() * 12;
@@ -631,7 +631,7 @@ public final class ItemShuffle {
       swaps++;
     }
     // swaps cannot change the multiset, but a seed that loses an id is a softlock - so check it
-    int[] checkA = original.clone();
+    int[] checkA = asDealt.clone();
     int[] checkB = dealt.clone();
     Arrays.sort(checkA);
     Arrays.sort(checkB);
