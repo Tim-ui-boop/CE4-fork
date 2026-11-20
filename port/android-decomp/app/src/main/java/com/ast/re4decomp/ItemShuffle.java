@@ -463,9 +463,13 @@ public final class ItemShuffle {
 
   // ---- the two public steps ------------------------------------------------------------------------------------
 
+  /** The story's stages. St4 is the extra games (Mercenaries, Ada's assignment): its rooms hold items the story
+   *  never shows (0x0C, the Mercenaries time hourglass) and are left out of the deal and of the model index. */
+  private static final String[] STORY = {"st1", "st2", "st3"};
+
   private static List<File> sidecars(File root) {
     List<File> files = new ArrayList<>();
-    for (String stage : new String[] {"st1", "st2", "st3", "st4"}) {
+    for (String stage : STORY) {
       File[] found = new File(root, "randomizer/" + stage).listFiles();
       if (found == null) continue;
       for (File file : found) if (file.getName().endsWith(".das.raw")) files.add(file);
@@ -518,6 +522,7 @@ public final class ItemShuffle {
         int[] needed = new int[count];
         int neededCount = 0;
         boolean touched = false;
+        List<String> missing = new ArrayList<>();   // ids the deal moved here that nothing can show
         for (int i = 0; i < count; i++) {
           int at = base + ITA_RECORDS + i * RECORD;
           int want = changed.containsKey(key(file, at)) ? changed.get(key(file, at)) : be16(patched, at + ITEM_ID);
@@ -526,8 +531,17 @@ public final class ItemShuffle {
               .append(' ').append(be16(patched, at + ITEM_ID)).append("->").append(want).append('\n');
           put16(patched, at + ITEM_ID, want);
           // the room's own pack already carries it, or nothing on the discs can supply its model: leave it alone
-          if (ownIndex(ownAll, want) >= 0 || !index.containsKey(want) || ownIndex(needed, want) >= 0) continue;
+          if (ownIndex(ownAll, want) >= 0 || ownIndex(needed, want) >= 0) continue;
+          if (!index.containsKey(want)) {
+            if (missing.isEmpty()) Log.i(TAG, file.getParentFile().getName() + "/" + file.getName()
+                + ": no model on the discs for");
+            if (missing.size() < 8) missing.add(String.format("0x%02x", want));
+            continue;
+          }
           needed[neededCount++] = want;
+        }
+        if (!missing.isEmpty()) {
+          Log.i(TAG, file.getParentFile().getName() + "/" + file.getName() + ": no model for " + missing);
         }
         if (!touched) continue;
         // the room's own models first, then whatever its new items need
@@ -586,7 +600,13 @@ public final class ItemShuffle {
   static String restore(File root) {
     File folder = new File(root, "randomizer");
     int files = 0;
-    for (File file : sidecars(root)) {
+    List<File> all = new ArrayList<>();
+    for (String stage : new String[] {"st1", "st2", "st3", "st4"}) {
+      File[] found = new File(folder, stage).listFiles();
+      if (found == null) continue;
+      for (File file : found) if (file.getName().endsWith(".das.raw")) all.add(file);
+    }
+    for (File file : all) {
       if (file.delete()) files++;
     }
     for (String stage : new String[] {"st1", "st2", "st3", "st4"}) {
