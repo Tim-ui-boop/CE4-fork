@@ -33,6 +33,12 @@ import java.util.TreeSet;
  * Geometry of a swap: the destination payload belongs to the room it leads into, so re-pairing A-B and C-D
  * into A-D and C-B is exactly "exchange the payloads of a and c, and of b and d". Every room keeps its
  * number of doors and the pairing stays reciprocal, so no door can lead into a wall.
+ *
+ * Stages are one pool: with crossStage on, a village door may lead into the castle or the island and back
+ * again (the PC randomizer deals its doors the same way). Two things never move: a door whose payload is a
+ * chapter's spawn (a script calls SceSetChapterEnd(chapter, door_area) and the chapter end reads that very
+ * record afterwards)
+ * and the opening, whose rooms may not be linked straight to the late ones.
  */
 public final class DoorShuffle {
   private static final String TAG = "DoorShuffle";
@@ -62,6 +68,18 @@ public final class DoorShuffle {
   private static final int MIN_UNIVERSE = 24;
   private static final String START = "r100";
   private static final String[] STORY = {"st1", "st2", "st3"};
+  /**
+   * Chapter endings that hand over to a door area of their own room, as "room/area".
+   *
+   * The scripts name them directly (SceSetChapterEnd(CHAPTER_4_2, 0xC) in src/st2/r21d.cpp, and so on), so the
+   * next chapter spawns from that record's payload: shuffling it moves where the chapter puts the player, which
+   * is how a seed ends up somewhere it has no business being yet. Their pair is pinned as a whole, because a
+   * swap exchanges both ends of a link.
+   *
+   * The other ten chapters pass -1 and never fire a door, so nothing of theirs can move.
+   */
+  private static final String[] CHAPTER_DOORS = {
+      "r106/3", "r10b/6", "r200/9", "r21d/12", "r225/1", "r22a/1", "r22b/0", "r31c/0"};
 
   private DoorShuffle() {
   }
@@ -413,6 +431,14 @@ public final class DoorShuffle {
     return name.length() > 1 ? Character.digit(name.charAt(1), 10) : 0;
   }
 
+  private static boolean chapterDoor(String room, int area) {
+    String key = room + "/" + area;
+    for (String pinned : CHAPTER_DOORS) {
+      if (pinned.equals(key)) return true;
+    }
+    return false;
+  }
+
   private static Map<String, Integer> distanceMap(Map<String, Set<String>> adj) {
     Map<String, Integer> dist = new HashMap<>();
     List<String> queue = new ArrayList<>();
@@ -444,7 +470,7 @@ public final class DoorShuffle {
                                    int reachable, String why) {
     StringBuilder log = new StringBuilder();
     log.append("RE4 offline randomizer - door and key shuffle\n");
-    log.append("seed ").append(seed).append("   cross-stage ").append(allowCross ? "allowed" : "same stage only")
+    log.append("seed ").append(seed).append("   cross-stage ").append(allowCross ? "mixed, any stage" : "same stage only")
         .append('\n');
     log.append("verdict: REJECTED - nothing was written\n");
     log.append(rooms).append(" rooms, ").append(doors).append(" doors, ").append(orphan)
@@ -482,11 +508,17 @@ public final class DoorShuffle {
       return why;
     }
 
+    int chapterPinned = 0;
+    for (Room room : rooms.values()) {
+      for (Door door : room.doors) if (chapterDoor(room.name, door.area)) chapterPinned++;
+    }
     List<Door[]> pairs = new ArrayList<>();
     for (Room room : rooms.values()) {
       for (Door door : room.doors) {
         if (door.pair == null || door.pair.room == door.room) continue;
         if (door.room.name.compareTo(door.pair.room.name) < 0) continue;
+        // a chapter's spawn never moves, and neither does the link it belongs to
+        if (chapterDoor(door.room.name, door.area) || chapterDoor(door.pair.room.name, door.pair.area)) continue;
         pairs.add(new Door[]{door, door.pair});
       }
     }
@@ -512,12 +544,9 @@ public final class DoorShuffle {
           continue;
         }
       } else {
-        // a village door straight into the island is what put the first test next to the last boss: only
-        // neighbouring stages may meet, and never in the opening rooms of the game
-        if (Math.abs(sa - sd) > 1 || Math.abs(sc - sb) > 1) {
-          rejected++;
-          continue;
-        }
+        // Every stage may meet every stage: one pool for the whole game, as the PC randomizer deals it. The
+        // only rule left is the opening - two doors of the first rooms may not be wired into the last
+        // chapter's rooms, which is what the vanilla-graph distance keeps apart anyway.
         if (dist.getOrDefault(a.room.name, 99) < 3 || dist.getOrDefault(d.room.name, 99) < 3) {
           rejected++;
           continue;
@@ -563,7 +592,9 @@ public final class DoorShuffle {
     log.append("verdict: ").append(complete ? "PLAYABLE"
         : structure ? "PLAYABLE - " + unproven.size() + " gate(s) unproven, see below"
         : "REJECTED - nothing was written").append('\n');
-    log.append("seed ").append(seed).append("   cross-stage ").append(allowCross ? "allowed" : "same stage only").append('\n');
+    log.append("seed ").append(seed).append("   cross-stage ").append(allowCross ? "mixed, any stage" : "same stage only")
+        .append('\n');
+    log.append(chapterPinned).append(" chapter doors kept in place (their payload is the next chapter's spawn)\n");
     log.append(rooms.size()).append(" rooms, ").append(pairs.size()).append(" two-way doors, ")
         .append(oneWay(rooms).size()).append(" one-way links, ").append(swaps).append(" door swaps accepted, ")
         .append(rejected).append(" rejected, ").append(cross).append(" across stages\n");
