@@ -86,8 +86,8 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     button(body, "Restore original rooms", this::restoreRoomItems);
     button(body, "Item shuffle log (where each item went)", this::showShuffleLog);
     crossStage = new android.widget.CheckBox(this);
-    crossStage.setText("Doors across stages (experimental)");
-    crossStage.setChecked(true);
+    crossStage.setText("Doors across stages (experimental: story order may break)");
+    crossStage.setChecked(false);
     body.addView(crossStage);
     button(body, "Shuffle doors and keys", this::shuffleDoors);
     button(body, "Door shuffle log (where each door goes)", this::showDoorLog);

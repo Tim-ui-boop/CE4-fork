@@ -810,7 +810,7 @@ public final class ItemShuffle {
     for (String stage : new String[] {"st1", "st2", "st3", "st4"}) {
       File[] found = new File(folder, stage).listFiles();
       if (found == null) continue;
-      for (File file : found) if (file.getName().endsWith(".das.raw")) all.add(file);
+      for (File file : found) if (file.getName().endsWith(".das.raw") || file.getName().endsWith(".orig")) all.add(file);
     }
     for (File file : all) {
       if (file.delete()) files++;

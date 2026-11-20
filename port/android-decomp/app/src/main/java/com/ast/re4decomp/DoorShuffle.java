@@ -57,6 +57,8 @@ public final class DoorShuffle {
   private static final int CTRL = 0x84;
   private static final int MODEL_ID = 8;
   private static final long MAX_ROOM = 64L * 1024 * 1024;
+  /** Below this many reachable rooms the collection does not match the doors: refuse instead of writing. */
+  private static final int MIN_UNIVERSE = 24;
   private static final String START = "r100";
   private static final String[] STORY = {"st1", "st2", "st3"};
 
@@ -164,6 +166,8 @@ public final class DoorShuffle {
     String name;
     File file;
     byte[] bytes;
+    /** The state this run started from, kept as the vanilla snapshot when there was none yet. */
+    byte[] source;
     boolean dirty;
     final List<Door> doors = new ArrayList<>();
     final List<Integer> itemAreas = new ArrayList<>();
@@ -186,7 +190,11 @@ public final class DoorShuffle {
           Room room = new Room();
           room.file = file;
           room.name = name;
-          room.bytes = readAll(file);
+          // every run starts from the vanilla snapshot when there is one, so shuffling twice does not
+          // shuffle the shuffled map (that is what collapsed the reachable set to five rooms on device)
+          File orig = new File(file.getPath() + ".orig");
+          room.bytes = readAll(orig.isFile() ? orig : file);
+          room.source = room.bytes.clone();
           int aev = entry(room.bytes, "AEV");
           for (int at : records(room.bytes, aev, 0x104)) {
             int type = room.bytes[at + TYPE] & 0xFF;
@@ -231,6 +239,7 @@ public final class DoorShuffle {
     try (RandomAccessFile f = new RandomAccessFile(file, "rw")) {
       f.seek(0);
       f.write(b);
+      f.setLength(b.length);   // a shorter log must not keep the tail of the previous one
     }
   }
 
@@ -303,6 +312,10 @@ public final class DoorShuffle {
   }
 
   private static int distance(Map<String, Set<String>> adj, String to) {
+    return distanceMap(adj).getOrDefault(to, Integer.MAX_VALUE / 2);
+  }
+
+  private static Map<String, Integer> distanceMap(Map<String, Set<String>> adj) {
     Map<String, Integer> dist = new HashMap<>();
     List<String> queue = new ArrayList<>();
     dist.put(START, 0);
@@ -316,18 +329,64 @@ public final class DoorShuffle {
         }
       }
     }
-    return dist.getOrDefault(to, Integer.MAX_VALUE / 2);
+    return dist;
   }
 
   // ---- the seed -------------------------------------------------------------------------------------------
+
+  private static int stageOf(String name) {
+    return name.length() > 1 ? Character.digit(name.charAt(1), 10) : 0;
+  }
+
+  private static File logFile(File root) {
+    return new File(root, "randomizer/doors.txt");
+  }
+
+  /** Writes the log of a run that wrote no room, so the reason survives the session. */
+  private static void writeRefusal(File root, long seed, boolean allowCross, int rooms, int doors, int orphan,
+                                   int reachable, String why) {
+    StringBuilder log = new StringBuilder();
+    log.append("RE4 offline randomizer - door and key shuffle\n");
+    log.append("seed ").append(seed).append("   cross-stage ").append(allowCross ? "allowed" : "same stage only")
+        .append('\n');
+    log.append("verdict: REJECTED - nothing was written\n");
+    log.append(rooms).append(" rooms, ").append(doors).append(" doors, ").append(orphan)
+        .append(" doors whose target is not a collected room, ").append(reachable).append(" rooms reachable from ")
+        .append(START).append('\n');
+    log.append(why).append('\n');
+    try {
+      writeAll(logFile(root), log.toString().getBytes(StandardCharsets.UTF_8));
+    } catch (IOException e) {
+      Log.i(TAG, "the log could not be written: " + e);
+    }
+  }
 
   /** Deals the doors with a seed, moves the keys, writes the rooms, and logs every change. */
   static String shuffleAll(File root, long seed, boolean allowCross) {
     Map<String, Room> rooms = load(root);
     if (rooms.isEmpty()) return "No collected rooms yet: collect the rooms first";
     link(rooms);
+    int doors = 0, orphan = 0;
+    for (Room room : rooms.values()) {
+      for (Door door : room.doors) {
+        doors++;
+        if (!rooms.containsKey(door.dest.name())) orphan++;
+      }
+    }
     Set<String> universe = reach(graph(rooms), rooms, null);
     if (universe.isEmpty()) return "The rooms do not link up: no door leaves " + START;
+    // A universe far smaller than the collection means the doors do not match the room names: a partial
+    // collection, unreadable sidecars, or a previous run that left the map broken. Refuse instead of
+    // writing a map nobody can play (one early run validated against 5 rooms and teleported the player).
+    if (universe.size() < MIN_UNIVERSE || orphan > doors / 8) {
+      String why = "Door shuffle refused: only " + universe.size() + " rooms are reachable from " + START
+          + " of " + rooms.size() + " collected (" + doors + " doors, " + orphan
+          + " pointing outside the collection); nothing was written. Press \"Restore original rooms\" and "
+          + "\"Collect rooms for the randomizer\" again, then retry.";
+      Log.i(TAG, why);
+      writeRefusal(root, seed, allowCross, rooms.size(), doors, orphan, universe.size(), why);
+      return why;
+    }
 
     List<Door[]> pairs = new ArrayList<>();
     for (Room room : rooms.values()) {
@@ -340,6 +399,7 @@ public final class DoorShuffle {
     if (pairs.size() < 2) return "Nothing to deal: only " + pairs.size() + " two-way doors in the collected rooms";
 
     Random rng = new Random(seed);
+    Map<String, Integer> dist = distanceMap(graph(rooms));
     int rounds = pairs.size() * 40;
     int swaps = 0, rejected = 0, cross = 0;
     for (int n = 0; n < rounds; n++) {
@@ -348,10 +408,24 @@ public final class DoorShuffle {
       if (one == two) continue;
       Door a = one[0], b = one[1], c = two[0], d = two[1];
       if (a.room == c.room || b.room == d.room) continue;
+      if (a.room == d.room || c.room == b.room) continue;   // never a door into its own room
       Dest da = a.dest, dc = c.dest, db = b.dest, dd = d.dest;
+      int sa = stageOf(a.room.name), sd = stageOf(d.room.name);
+      int sc = stageOf(c.room.name), sb = stageOf(b.room.name);
       if (!allowCross) {
         // the two new doors put A next to D and C next to B: both links must stay inside one stage
-        if (a.room.name.charAt(1) != d.room.name.charAt(1) || c.room.name.charAt(1) != b.room.name.charAt(1)) {
+        if (sa != sd || sc != sb) {
+          rejected++;
+          continue;
+        }
+      } else {
+        // a village door straight into the island is what put the first test next to the last boss: only
+        // neighbouring stages may meet, and never in the opening rooms of the game
+        if (Math.abs(sa - sd) > 1 || Math.abs(sc - sb) > 1) {
+          rejected++;
+          continue;
+        }
+        if (dist.getOrDefault(a.room.name, 99) < 3 || dist.getOrDefault(d.room.name, 99) < 3) {
           rejected++;
           continue;
         }
@@ -397,6 +471,7 @@ public final class DoorShuffle {
 
     StringBuilder log = new StringBuilder();
     log.append("RE4 offline randomizer - door and key shuffle\n");
+    log.append("verdict: ").append(complete ? "PLAYABLE" : "REJECTED - nothing was written").append('\n');
     log.append("seed ").append(seed).append("   cross-stage ").append(allowCross ? "allowed" : "same stage only").append('\n');
     log.append(rooms.size()).append(" rooms, ").append(pairs.size()).append(" two-way doors, ")
         .append(oneWay(rooms).size()).append(" one-way links, ").append(swaps).append(" door swaps accepted, ")
@@ -415,9 +490,23 @@ public final class DoorShuffle {
       log.append(String.format(Locale.US, "  0x%02x in %s%n", e.getKey(), e.getValue()));
     }
 
+    if (!complete) {
+      try {
+        writeAll(logFile(root), log.toString().getBytes(StandardCharsets.UTF_8));
+      } catch (IOException e) {
+        Log.i(TAG, "the log could not be written: " + e);
+      }
+      String why = "Seed " + seed + " rejected: only " + finalRooms.size() + " of " + universe.size()
+          + " rooms stay reachable; nothing was written. The walk is in randomizer/doors.txt - try another seed.";
+      Log.i(TAG, why);
+      return why;
+    }
+
     int changed = 0;
     try {
       for (Room room : rooms.values()) {
+        File orig = new File(room.file.getPath() + ".orig");
+        if (!orig.isFile()) writeAll(orig, room.source);   // remember the vanilla map for the next run
         for (Door door : room.doors) {
           if (door.dest == door.orig) continue;
           if (same(door.dest, door.orig)) continue;
@@ -428,7 +517,7 @@ public final class DoorShuffle {
         writeAll(room.file, room.bytes);
         changed++;
       }
-      writeAll(new File(root, "randomizer/doors.txt"), log.toString().getBytes(StandardCharsets.UTF_8));
+      writeAll(logFile(root), log.toString().getBytes(StandardCharsets.UTF_8));
     } catch (IOException e) {
       Log.i(TAG, "the rooms could not be written: " + e);
       return "The shuffle could not be written: " + e;
