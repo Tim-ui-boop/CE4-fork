@@ -23,6 +23,8 @@ public final class MainActivity extends Activity implements ImportManager.Listen
   private volatile boolean destroyed;
   /** The seed of the item shuffle ("Shuffle all room items"), empty for a new one each time. */
   private android.widget.EditText seedField;
+  /** The door shuffle's cross-stage switch (branch feature/offline-randomizer). */
+  private android.widget.CheckBox crossStage;
   private boolean loading, startupShown;
   /** Core flavor: the original game core runs the game (CoreActivity). */
   private boolean core;
@@ -83,6 +85,12 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     button(body, "Shuffle all room items (full shuffle)", this::shuffleRoomItems);
     button(body, "Restore original rooms", this::restoreRoomItems);
     button(body, "Item shuffle log (where each item went)", this::showShuffleLog);
+    crossStage = new android.widget.CheckBox(this);
+    crossStage.setText("Doors across stages (experimental)");
+    crossStage.setChecked(true);
+    body.addView(crossStage);
+    button(body, "Shuffle doors and keys", this::shuffleDoors);
+    button(body, "Door shuffle log (where each door goes)", this::showDoorLog);
     // the menu's only entry in the core mode was the disc import, which its launcher shows anyway
     if (!core) button(body, getString(R.string.browser_menu), this::showMenu);
     importPanel = new LinearLayout(this); importPanel.setOrientation(LinearLayout.VERTICAL);
@@ -142,6 +150,48 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       final String shown = result;
       runOnUiThread(() -> android.widget.Toast.makeText(this, shown, android.widget.Toast.LENGTH_LONG).show());
     }, "item-shuffle").start();
+  }
+
+  /** Deals the doors and the progression keys with a seed and writes randomizer/doors.txt (experimental across
+   *  stages: the stage switch is honoured by port patch 0239). */
+  private void shuffleDoors() {
+    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
+    final File root = imports.root;
+    final boolean cross = crossStage != null && crossStage.isChecked();
+    final String typed = seedField.getText().toString().trim();
+    long parsed;
+    try {
+      parsed = typed.isEmpty() ? 0L : Long.parseLong(typed);
+    } catch (NumberFormatException e) {
+      parsed = 0L;   // a seed that is not a number: roll a new one instead of failing
+    }
+    final long seed = parsed == 0L ? new java.util.Random().nextLong() : parsed;
+    seedField.setText(Long.toString(seed));
+    new Thread(() -> {
+      String result;
+      try {
+        result = DoorShuffle.shuffleAll(root, seed, cross);
+      } catch (RuntimeException e) {
+        result = "The door shuffle stopped: " + e;
+      }
+      final String shown = result;
+      runOnUiThread(() -> Toast.makeText(this, shown, Toast.LENGTH_LONG).show());
+    }, "door-shuffle").start();
+  }
+
+  /** Every door as it now leads, plus where the progression items were put. */
+  private void showDoorLog() {
+    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
+    android.widget.TextView text = new android.widget.TextView(this);
+    text.setText(DoorShuffle.readLog(imports.root));
+    text.setTextIsSelectable(true);
+    text.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12);
+    text.setTypeface(android.graphics.Typeface.MONOSPACE);
+    text.setPadding(dp(12), dp(8), dp(12), dp(8));
+    android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+    scroll.addView(text);
+    new android.app.AlertDialog.Builder(this).setTitle("Door shuffle log").setView(scroll)
+        .setPositiveButton("Close", null).show();
   }
 
   /** The readable log of the last shuffle: every room, every changed item area, where it is and what it became. */
