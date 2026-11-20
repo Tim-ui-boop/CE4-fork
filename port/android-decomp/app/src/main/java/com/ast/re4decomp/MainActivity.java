@@ -86,7 +86,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     button(body, "Restore original rooms", this::restoreRoomItems);
     button(body, "Item shuffle log (where each item went)", this::showShuffleLog);
     crossStage = new android.widget.CheckBox(this);
-    crossStage.setText("Doors across stages (experimental: story order may break)");
+    crossStage.setText("One door pool for the whole game: village, castle and island mix (tick this for the full shuffle)");
     crossStage.setChecked(false);
     body.addView(crossStage);
     button(body, "Shuffle doors and keys", this::shuffleDoors);
@@ -152,8 +152,9 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     }, "item-shuffle").start();
   }
 
-  /** Deals the doors and the progression keys with a seed and writes randomizer/doors.txt (experimental across
-   *  stages: the stage switch is honoured by port patch 0239). */
+  /** Deals the doors and the progression keys with a seed and writes randomizer/doors.txt. With cross-stage on
+   *  every stage is one pool (a village door may open into the castle or the island); the stage switch is
+   *  honoured by port patch 0239. */
   private void shuffleDoors() {
     if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
     final File root = imports.root;
