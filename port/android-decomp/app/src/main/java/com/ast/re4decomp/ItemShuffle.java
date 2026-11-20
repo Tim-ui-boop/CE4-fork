@@ -60,9 +60,15 @@ public final class ItemShuffle {
    *  free. A held item is spawned by its holder with the record's effect, so a changed item gets its own effect
    *  (the byte at 0x80 is cleared). Set false to deal free-standing records only, as the port's cheat does. */
   private static final boolean DEAL_HELD = true;
+  /** Whether a room may receive models it does not have (a rebuilt ITM pack). OFF: a dealt item the room has no
+   *  model for is reverted to the disc's own item, and the room's pack and archive layout stay untouched.
+   *  Measured 20.11.2026: merged packs crash cModel::modelInit in r103's cesspit (the script sets item 0x89 and
+   *  builds its model) and emptied crates again, so a copied model is not reliably self-contained. */
+  private static final boolean MERGE_MODELS = false;
+
   /** Debug test: the first held record of each of these rooms shows DEBUG_HELD_ITEM, so a known crate can be
    *  checked by eye. r100 and r101 are the village's first houses (the first Ganado). */
-  private static final String[] DEBUG_HELD_ROOMS = {"r100.das.raw", "r101.das.raw"};
+  private static final String[] DEBUG_HELD_ROOMS = {};   // empty: the crate test is done, crates deal normally
   private static final int DEBUG_HELD_ITEM = 0x58;
   /** Bytes per entry of the model pack's id table. */
   private static final int ITM_ID = 8;
@@ -567,6 +573,9 @@ public final class ItemShuffle {
           int old = be16(patched, at + ITEM_ID);
           int want = changed.containsKey(key(file, at)) ? changed.get(key(file, at)) : old;
           boolean held = (patched[at + WAITING_TYPE] & 0xFF) != 0;
+          if (!MERGE_MODELS && want != old && ownIndex(ownAll, want) < 0) {
+            want = old;   // the room has no model for it: keep the disc's own item
+          }
           if (held && debugRoom(file)) {
             // the position names the crate: item_pos at 0x5C, three big-endian floats
             Log.i(TAG, file.getName() + ": held record " + i + " holds 0x" + Integer.toHexString(old) + " at ("
@@ -611,7 +620,7 @@ public final class ItemShuffle {
           all[used++] = needed[i];
         }
         all = Arrays.copyOf(all, used);
-        byte[] pack = itmEntry < 0 ? null : buildPack(original, arc, itmEntry, all, index, sources);
+        byte[] pack = !MERGE_MODELS || itmEntry < 0 ? null : buildPack(original, arc, itmEntry, all, index, sources);
         byte[] out = pack == null ? patched : rebuild(patched, arc, itmEntry, pack);
         Arc after = Arc.of(out);
         int beforeItm = itmEntry < 0 ? 0 : arc.end(original, itmEntry) - arc.offsets[itmEntry];
