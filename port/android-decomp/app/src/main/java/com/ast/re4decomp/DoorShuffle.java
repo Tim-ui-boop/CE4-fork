@@ -7,6 +7,7 @@ import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -607,134 +608,17 @@ public final class DoorShuffle {
       if (sa != sd) cross++;
     }
 
-    KeyPlan plan = placeKeys(rooms, rng);
-    Map<Integer, String> placement = plan.placement;
-    Map<String, Set<String>> adj = graph(rooms);
-    // The door map itself must keep every room reachable; that is the hard rule. A gate whose item could not
-    // be put in front of it (its model only exists in rooms behind the gate) is named in the log instead of
-    // rejecting every seed: the PC randomizer reports the same class of problem and leaves it to play testing.
-    Set<String> doorReach = reach(adj, rooms, null);
-    boolean structure = doorReach.containsAll(universe);
-    Set<Integer> unproven = new TreeSet<>();
-    for (Integer key : plan.placement.keySet()) {
-      if (plan.held.contains(key)) continue;
-      for (Room room : rooms.values()) {
-        if (room.gates.contains(key) && universe.contains(room.name)) unproven.add(key);
-      }
-    }
-    boolean complete = structure && unproven.isEmpty();
-    boolean write = structure;
-
-    Map<String, Integer> stagePairs = new TreeMap<>();
-    for (Room room : rooms.values()) {
-      for (Door door : room.doors) {
-        int from = stageOf(room.name), to = stageOf(door.dest.name());
-        if (from == to) continue;
-        String edge = "st" + Math.min(from, to) + "->st" + Math.max(from, to);
-        stagePairs.put(edge, stagePairs.getOrDefault(edge, 0) + 1);
-      }
-    }
-
-    StringBuilder log = new StringBuilder();
-    log.append("RE4 offline randomizer - door and key shuffle\n");
-    log.append("verdict: ").append(complete ? "PLAYABLE"
-        : structure ? "PLAYABLE - " + unproven.size() + " gate(s) unproven, see below"
-        : "REJECTED - nothing was written").append('\n');
-    log.append("seed ").append(seed).append("   cross-stage ").append(allowCross ? "mixed, any stage" : "same stage only")
-        .append('\n');
-    log.append(chapterPinned).append(" chapter doors kept in place (their payload is the next chapter's spawn)\n");
-    log.append(roomPinned).append(" links kept for the shooting range and its merchant rooms: ")
-        .append(String.join(", ", PIN_ROOMS)).append('\n');
-    log.append("Ashley's door check is off while randomizer/doors.active exists (port patch 0240): a shuffled map has no back room\n");
-    if (stagePairs.isEmpty()) {
-      log.append("door records that change stage: none\n");
-    } else {
-      log.append("door records that change stage:");
-      for (Map.Entry<String, Integer> e : stagePairs.entrySet()) {
-        log.append(' ').append(e.getKey()).append('=').append(e.getValue());
-      }
-      log.append('\n');
-    }
-    log.append(rooms.size()).append(" rooms, ").append(pairs.size()).append(" two-way doors, ")
-        .append(oneWay(rooms).size()).append(" one-way links, ").append(swaps).append(" door swaps accepted, ")
-        .append(rejected).append(" rejected, ").append(cross).append(" across stages\n");
-    log.append("every room the vanilla doors reach is reachable: ").append(structure ? "yes" : "NO - TELL THE DEVELOPER")
-        .append(" (").append(doorReach.size()).append('/').append(universe.size()).append(" rooms)\n");
-    if (!unproven.isEmpty()) {
-      log.append("gates whose item could not be put in front of them (test these first):\n");
-      for (Integer key : unproven) {
-        Set<String> gates = new TreeSet<>();
-        for (Room room : rooms.values()) if (room.gates.contains(key)) gates.add(room.name);
-        log.append(String.format(Locale.US, "  0x%02x needed in %s, sits in %s%n", key, gates,
-            placement.getOrDefault(key, "nowhere")));
-      }
-    }
-    log.append('\n').append("room    area  leads to        lock\n");
-    for (Room room : rooms.values()) {
-      for (Door door : room.doors) {
-        String lock = door.keyId != 0 ? ("key_id " + door.keyId + " flg " + door.keyFlg) : "-";
-        log.append(String.format(Locale.US, "%-7s %5d  %-13s %s%n", room.name, door.area, door.dest.name(), lock));
-      }
-    }
-    log.append('\n').append("progression items: where they are now\n");
-    for (Map.Entry<Integer, String> e : placement.entrySet()) {
-      log.append(String.format(Locale.US, "  0x%02x in %s%n", e.getKey(), e.getValue()));
-    }
-    // the debug view: only the doors this seed actually moved, so a bad jump can be read against the vanilla map
-    log.append('\n').append("doors this seed moved (vanilla -> now)\n");
-    int moved = 0;
-    for (Room room : rooms.values()) {
-      for (Door door : room.doors) {
-        if (same(door.dest, door.orig)) continue;
-        log.append(String.format(Locale.US, "  %-6s area %2d: %-8s -> %s%n", room.name, door.area,
-            door.orig.name(), door.dest.name()));
-        moved++;
-      }
-    }
-    log.append("  ").append(moved).append(" door records written\n");
-
-    if (!write) {
-      try {
-        writeAll(logFile(root), log.toString().getBytes(StandardCharsets.UTF_8));
-      } catch (IOException e) {
-        Log.i(TAG, "the log could not be written: " + e);
-      }
-      String why = "Seed " + seed + " rejected: only " + doorReach.size() + " of " + universe.size()
-          + " rooms stay reachable; nothing was written. The walk is in randomizer/doors.txt - try another seed.";
-      Log.i(TAG, why);
-      return why;
-    }
-
-    int changed = 0;
-    try {
-      for (Room room : rooms.values()) {
-        boolean doorChanged = false;
-        for (Door door : room.doors) if (!same(door.dest, door.orig)) doorChanged = true;
-        if (!doorChanged && room.writes.isEmpty()) continue;
-        byte[] b = readAll(room.file);               // one room at a time: a room can be several megabytes
-        for (Door door : room.doors) if (!same(door.dest, door.orig)) door.dest.into(b, door.at);
-        for (Map.Entry<Integer, int[]> w : room.writes.entrySet()) {
-          put16(b, w.getKey() + ITEM_ID, w.getValue()[0]);
-          put16(b, w.getKey() + ITEM_NUM, w.getValue()[1]);
-          b[w.getKey() + ITEM_EFF] = 0;
-        }
-        writeAll(room.file, b);
-        b = null;
-        changed++;
-      }
-      writeAll(logFile(root), log.toString().getBytes(StandardCharsets.UTF_8));
-      writeAll(markerFile(root), Long.toString(seed).getBytes(StandardCharsets.UTF_8));   // patch 0240 reads this
-      if (!snapshotFile(root).isFile()) writeSnapshot(root, rooms);   // the map this run started from
-    } catch (IOException | OutOfMemoryError e) {
-      Log.i(TAG, "the rooms could not be written: " + e);
-      return "The shuffle could not be written: " + e;
-    }
-    String summary = "Doors: " + swaps + " swaps in " + pairs.size() + " pairs (" + cross + " across stages), "
-        + changed + " rooms written; every room reachable: " + (structure ? "yes" : "NO")
-        + (unproven.isEmpty() ? "" : ", " + unproven.size() + " gate(s) unproven")
-        + "; the log is randomizer/doors.txt";
-    Log.i(TAG, summary);
-    return summary;
+    List<String> head = new ArrayList<>();
+    head.add(chapterPinned + " chapter doors kept in place (their payload is the next chapter's spawn)");
+    head.add(roomPinned + " links kept for the shooting range and its merchant rooms: "
+        + String.join(", ", PIN_ROOMS));
+    head.add(ASHLEY_NOTE);
+    head.add(stageLine(rooms));
+    head.add(rooms.size() + " rooms, " + pairs.size() + " two-way doors, " + oneWay(rooms).size()
+        + " one-way links, " + swaps + " door swaps accepted, " + rejected + " rejected, "
+        + cross + " across stages");
+    return settle(root, seed, allowCross, "RE4 offline randomizer - door and key shuffle", rooms, universe,
+        head, rng, "Doors: " + swaps + " swaps in " + pairs.size() + " pairs (" + cross + " across stages), ");
   }
 
   /** The keys as dealt, and the ones the walk can actually hold. */
@@ -821,5 +705,402 @@ public final class DoorShuffle {
     } catch (IOException | RuntimeException e) {
       return "The log could not be read: " + e;
     }
+  }
+
+  /** The same line appears in both logs: patch 0240 makes a shuffled map enterable without Ashley. */
+  private static final String ASHLEY_NOTE =
+      "Ashley's door check is off while randomizer/doors.active exists (port patch 0240): a shuffled map has no back room";
+  /** Rooms on the main path the spine aims for, the smallest spine accepted, and how often a seed retries. */
+  private static final int SPINE_TARGET = 24;
+  private static final int SPINE_MIN = 14;
+  private static final int SPINE_TRIES = 12;
+
+  // ---- the spine (branch feature/offline-randomizer) --------------------------------------------------------
+
+  /**
+   * The PC randomizer's shape instead of pair swaps: pick an ordered main path first, hang branches on it, and
+   * only then write the doors.
+   *
+   * Why: a swap keeps the map legal but says nothing about the order the player walks it in, so a chapter door
+   * or a key can guard a room nobody is ready for. The spine decides the order first and writes the destinations
+   * afterwards. Every link is proved against the whole map before it is kept: a link that would strand a room
+   * is refused and another door combination is tried.
+   */
+
+  /** One candidate room of the spine with its score. */
+  private static final class Pick {
+    final String name;
+    final double score;
+
+    Pick(String name, double score) {
+      this.name = name;
+      this.score = score;
+    }
+  }
+
+  /** What one spine attempt produced, for the log. */
+  private static final class SpineBuild {
+    final List<String> spine = new ArrayList<>();
+    final Set<String> used = new TreeSet<>();
+    int links;
+    int branches;
+  }
+
+  /** The room classes the plan names, read from the disc instead of guessed. */
+  private static String spineClass(Room room, Set<String> universe) {
+    if (!universe.contains(room.name) || room.doors.isEmpty()) return "scripted";
+    if (roomPinned(room.name) || chapterRoom(room.name) || "r120".equals(room.name)) return "reserved";
+    boolean oneWay = false, locked = false;
+    for (Door door : room.doors) {
+      if (door.pair == null) oneWay = true;
+      if (door.keyId != 0) locked = true;
+    }
+    if (oneWay) return "oneway";
+    if (!room.gates.isEmpty()) return "gated";
+    if (locked) return "locked";
+    if (room.doors.size() == 1) return "single";
+    return "regular";
+  }
+
+  /** True for the rooms that host a boundary chapter's ending. */
+  private static boolean chapterRoom(String name) {
+    for (String pinned : CHAPTER_DOORS) {
+      if (pinned.startsWith(name + "/")) return true;
+    }
+    return false;
+  }
+
+  /** Doors the spine may re-point: reciprocal, known target, no chapter ending, no lock. */
+  private static List<Door> spineDoors(Room room, Map<String, Room> rooms) {
+    List<Door> out = new ArrayList<>();
+    for (Door door : room.doors) {
+      if (door.pair == null || door.pair.room == room) continue;
+      if (!rooms.containsKey(door.dest.name())) continue;
+      if (chapterDoor(room.name, door.area)) continue;
+      if (door.keyId != 0) continue;
+      out.add(door);
+    }
+    return out;
+  }
+
+  /** Every gate of a room must be placeable in a room the spine already visits before it. */
+  private static boolean spineKeyHost(Room room, List<String> spine, Map<String, Room> rooms) {
+    for (Integer gate : room.gates) {
+      boolean host = false;
+      for (String earlier : spine) {
+        Room r = rooms.get(earlier);
+        if (r == null) continue;
+        for (ItemArea item : r.items) if (item.free()) host = true;
+      }
+      if (!host) return false;
+    }
+    return true;
+  }
+
+  /**
+   * The arrival payload for a room: the vanilla payload of the partner of the door the player walks back
+   * through. It is a point in front of that door in the room, with that room's part number.
+   */
+  private static Dest spineArrival(Door returnDoor) {
+    Dest src = returnDoor.pair.orig;
+    Dest d = new Dest();
+    System.arraycopy(src.pos, 0, d.pos, 0, DOOR_POS_LEN);
+    d.part = src.part;
+    d.stage = stageOf(returnDoor.room.name);
+    d.room = Integer.parseInt(returnDoor.room.name.substring(2), 16);
+    return d;
+  }
+
+  /**
+   * Write one link both ways and prove it: the whole vanilla-reachable set must still be reachable.
+   * Every door combination at both ends is tried before the link is given up.
+   */
+  private static Door[] spineLink(String aName, String bName, Map<String, List<Door>> free,
+                                  Map<String, Room> rooms, Set<String> universe) {
+    List<Door> fa = free.get(aName);
+    List<Door> fb = free.get(bName);
+    if (fa == null || fb == null) return null;
+    for (Door da : new ArrayList<>(fa)) {
+      if (da.dest.name().equals(bName)) continue;
+      for (Door db : new ArrayList<>(fb)) {
+        if (db.dest.name().equals(aName)) continue;
+        Dest oa = da.dest, ob = db.dest;
+        da.dest = spineArrival(db);          // the player appears in b, in front of b's return door
+        db.dest = spineArrival(da);          // and back in a, in front of a's door
+        boolean ok = universe.containsAll(reach(graph(rooms), rooms, null));
+        if (ok) {
+          fa.remove(da);
+          fb.remove(db);
+          return new Door[]{da, db};
+        }
+        da.dest = oa;
+        db.dest = ob;
+      }
+    }
+    return null;
+  }
+
+  /** One attempt: main path first, then every room still free is hung somewhere on it. */
+  private static SpineBuild spineAttempt(Map<String, Room> rooms, Set<String> universe, Random rng) {
+    SpineBuild out = new SpineBuild();
+    Map<String, List<Door>> free = new TreeMap<>();
+    Map<String, String> cls = new TreeMap<>();
+    for (Room room : rooms.values()) {
+      cls.put(room.name, spineClass(room, universe));
+      free.put(room.name, spineDoors(room, rooms));
+    }
+    out.spine.add(START);
+    out.used.add(START);
+    if (free.get(START).isEmpty()) return null;
+    // r100 has exactly one door and the next room hangs on it: start on that vanilla link and continue from
+    // r101, whose four doors are what makes a spine possible at all.
+    String first = rooms.get(START).doors.get(0).dest.name();
+    if (rooms.containsKey(first) && free.get(first).size() >= 3) {
+      out.spine.add(first);
+      out.used.add(first);
+    }
+    while (out.spine.size() < SPINE_TARGET) {
+      String tip = out.spine.get(out.spine.size() - 1);
+      List<Pick> picks = new ArrayList<>();
+      for (String name : universe) {
+        if (out.used.contains(name)) continue;
+        String c = cls.get(name);
+        if ("reserved".equals(c) || "scripted".equals(c)) continue;
+        if (free.get(name).size() < 2) continue;
+        if ("gated".equals(c) && !spineKeyHost(rooms.get(name), out.spine, rooms)) continue;
+        double score = rng.nextDouble();
+        if (stageOf(name) != stageOf(tip)) score += 0.30;     // cross-stage steps are wanted, not mandatory
+        if (free.get(name).size() >= 3) score += 0.25;        // room for a branch
+        if ("gated".equals(c)) score -= 0.15;
+        picks.add(new Pick(name, score));
+      }
+      Collections.sort(picks, (p, q) -> Double.compare(q.score, p.score));
+      boolean linked = false;
+      for (Pick pick : picks) {
+        Door[] link = spineLink(tip, pick.name, free, rooms, universe);
+        if (link == null) continue;
+        out.links++;
+        out.spine.add(pick.name);
+        out.used.add(pick.name);
+        linked = true;
+        break;
+      }
+      if (!linked) break;
+    }
+    // branches: a room whose only door is the way in stays a tip; the rest is a path hung anywhere on the spine
+    List<String> rest = new ArrayList<>();
+    for (String name : universe) {
+      if (out.used.contains(name)) continue;
+      String c = cls.get(name);
+      if ("reserved".equals(c) || "scripted".equals(c)) continue;
+      rest.add(name);
+    }
+    Collections.shuffle(rest, rng);
+    for (String room : rest) {
+      if (free.get(room).isEmpty()) continue;
+      List<String> parents = new ArrayList<>(out.used);
+      Collections.shuffle(parents, rng);
+      int tried = 0;
+      for (String parent : parents) {
+        if (free.get(parent).isEmpty()) continue;
+        if (tried++ >= 6) break;
+        if (spineLink(parent, room, free, rooms, universe) == null) continue;
+        out.links++;
+        out.branches++;
+        out.used.add(room);
+        break;
+      }
+    }
+    return out.spine.size() >= SPINE_MIN ? out : null;
+  }
+
+  /** "door records that change stage: st1->st2=12 ..." for the log. */
+  private static String stageLine(Map<String, Room> rooms) {
+    Map<String, Integer> stagePairs = new TreeMap<>();
+    for (Room room : rooms.values()) {
+      for (Door door : room.doors) {
+        int from = stageOf(room.name), to = stageOf(door.dest.name());
+        if (from == to) continue;
+        String edge = "st" + Math.min(from, to) + "->st" + Math.max(from, to);
+        stagePairs.put(edge, stagePairs.getOrDefault(edge, 0) + 1);
+      }
+    }
+    if (stagePairs.isEmpty()) return "door records that change stage: none";
+    StringBuilder line = new StringBuilder("door records that change stage:");
+    for (Map.Entry<String, Integer> e : stagePairs.entrySet()) {
+      line.append(' ').append(e.getKey()).append('=').append(e.getValue());
+    }
+    return line.toString();
+  }
+
+  /** The last stage both shuffles share: place the keys, prove the map, write the log, then the rooms. */
+  private static String settle(File root, long seed, boolean allowCross, String title, Map<String, Room> rooms,
+                               Set<String> universe, List<String> head, Random rng, String summaryLead) {
+    KeyPlan plan = placeKeys(rooms, rng);
+    Map<Integer, String> placement = plan.placement;
+    Map<String, Set<String>> adj = graph(rooms);
+    // The door map itself must keep every room reachable; that is the hard rule. A gate whose item could not
+    // be put in front of it (its model only exists in rooms behind the gate) is named in the log instead of
+    // rejecting every seed: the PC randomizer reports the same class of problem and leaves it to play testing.
+    Set<String> doorReach = reach(adj, rooms, null);
+    boolean structure = doorReach.containsAll(universe);
+    Set<Integer> unproven = new TreeSet<>();
+    for (Integer key : plan.placement.keySet()) {
+      if (plan.held.contains(key)) continue;
+      for (Room room : rooms.values()) {
+        if (room.gates.contains(key) && universe.contains(room.name)) unproven.add(key);
+      }
+    }
+    boolean complete = structure && unproven.isEmpty();
+    boolean write = structure;
+
+    StringBuilder log = new StringBuilder();
+    log.append(title).append('\n');
+    log.append("verdict: ").append(complete ? "PLAYABLE"
+        : structure ? "PLAYABLE - " + unproven.size() + " gate(s) unproven, see below"
+        : "REJECTED - nothing was written").append('\n');
+    log.append("seed ").append(seed).append("   cross-stage ")
+        .append(allowCross ? "mixed, any stage" : "same stage only").append('\n');
+    for (String line : head) log.append(line).append('\n');
+    log.append("every room the vanilla doors reach is reachable: ")
+        .append(structure ? "yes" : "NO - TELL THE DEVELOPER")
+        .append(" (").append(doorReach.size()).append('/').append(universe.size()).append(" rooms)\n");
+    if (!unproven.isEmpty()) {
+      log.append("gates whose item could not be put in front of them (test these first):\n");
+      for (Integer key : unproven) {
+        Set<String> gates = new TreeSet<>();
+        for (Room room : rooms.values()) if (room.gates.contains(key)) gates.add(room.name);
+        log.append(String.format(Locale.US, "  0x%02x needed in %s, sits in %s%n", key, gates,
+            placement.getOrDefault(key, "nowhere")));
+      }
+    }
+    log.append('\n').append("room    area  leads to        lock\n");
+    for (Room room : rooms.values()) {
+      for (Door door : room.doors) {
+        String lock = door.keyId != 0 ? ("key_id " + door.keyId + " flg " + door.keyFlg) : "-";
+        log.append(String.format(Locale.US, "%-7s %5d  %-13s %s%n", room.name, door.area, door.dest.name(), lock));
+      }
+    }
+    log.append('\n').append("progression items: where they are now\n");
+    for (Map.Entry<Integer, String> e : placement.entrySet()) {
+      log.append(String.format(Locale.US, "  0x%02x in %s%n", e.getKey(), e.getValue()));
+    }
+    // the debug view: only the doors this seed actually moved, so a bad jump can be read against the vanilla map
+    log.append('\n').append("doors this seed moved (vanilla -> now)\n");
+    int moved = 0;
+    for (Room room : rooms.values()) {
+      for (Door door : room.doors) {
+        if (same(door.dest, door.orig)) continue;
+        log.append(String.format(Locale.US, "  %-6s area %2d: %-8s -> %s%n", room.name, door.area,
+            door.orig.name(), door.dest.name()));
+        moved++;
+      }
+    }
+    log.append("  ").append(moved).append(" door records written\n");
+
+    if (!write) {
+      try {
+        writeAll(logFile(root), log.toString().getBytes(StandardCharsets.UTF_8));
+      } catch (IOException e) {
+        Log.i(TAG, "the log could not be written: " + e);
+      }
+      String why = "Seed " + seed + " rejected: only " + doorReach.size() + " of " + universe.size()
+          + " rooms stay reachable; nothing was written. The walk is in randomizer/doors.txt - try another seed.";
+      Log.i(TAG, why);
+      return why;
+    }
+
+    int changed = 0;
+    try {
+      for (Room room : rooms.values()) {
+        boolean doorChanged = false;
+        for (Door door : room.doors) if (!same(door.dest, door.orig)) doorChanged = true;
+        if (!doorChanged && room.writes.isEmpty()) continue;
+        byte[] b = readAll(room.file);               // one room at a time: a room can be several megabytes
+        for (Door door : room.doors) if (!same(door.dest, door.orig)) door.dest.into(b, door.at);
+        for (Map.Entry<Integer, int[]> w : room.writes.entrySet()) {
+          put16(b, w.getKey() + ITEM_ID, w.getValue()[0]);
+          put16(b, w.getKey() + ITEM_NUM, w.getValue()[1]);
+          b[w.getKey() + ITEM_EFF] = 0;
+        }
+        writeAll(room.file, b);
+        b = null;
+        changed++;
+      }
+      writeAll(logFile(root), log.toString().getBytes(StandardCharsets.UTF_8));
+      writeAll(markerFile(root), Long.toString(seed).getBytes(StandardCharsets.UTF_8));   // patch 0240 reads this
+      if (!snapshotFile(root).isFile()) writeSnapshot(root, rooms);   // the map this run started from
+    } catch (IOException | OutOfMemoryError e) {
+      Log.i(TAG, "the rooms could not be written: " + e);
+      return "The shuffle could not be written: " + e;
+    }
+    String summary = summaryLead + changed + " rooms written; every room reachable: "
+        + (structure ? "yes" : "NO")
+        + (unproven.isEmpty() ? "" : ", " + unproven.size() + " gate(s) unproven")
+        + "; the log is randomizer/doors.txt";
+    Log.i(TAG, summary);
+    return summary;
+  }
+
+  /** The PC-style shuffle: an ordered main path, branches hung on it, then the doors are written. */
+  static String shuffleWithSpine(File root, long seed, boolean allowCross) {
+    Map<String, Room> rooms = scan(root);
+    link(rooms);
+    int doors = 0, orphan = 0;
+    for (Room room : rooms.values()) {
+      for (Door door : room.doors) {
+        doors++;
+        if (!rooms.containsKey(door.dest.name())) orphan++;
+      }
+    }
+    Set<String> universe = reach(graph(rooms), rooms, null);
+    if (universe.isEmpty()) return "The rooms do not link up: no door leaves " + START;
+    if (universe.size() < MIN_UNIVERSE || orphan > doors / 8) {
+      String why = "Spine shuffle refused: only " + universe.size() + " rooms are reachable from " + START
+          + " of " + rooms.size() + " collected (" + doors + " doors, " + orphan
+          + " pointing outside the collection); nothing was written. Press \"Restore original rooms\" and "
+          + "\"Collect rooms for the randomizer\" again, then retry.";
+      Log.i(TAG, why);
+      writeRefusal(root, seed, allowCross, rooms.size(), doors, orphan, universe.size(), why);
+      return why;
+    }
+    // The vanilla destinations, so a failed attempt can put the map back exactly as it was.
+    Map<Door, Dest> vanilla = new HashMap<>();
+    for (Room room : rooms.values()) for (Door door : room.doors) vanilla.put(door, door.dest);
+
+    Random rng = new Random(seed);
+    SpineBuild build = null;
+    for (int attempt = 0; attempt < SPINE_TRIES && build == null; attempt++) {
+      for (Map.Entry<Door, Dest> e : vanilla.entrySet()) e.getKey().dest = e.getValue();
+      build = spineAttempt(rooms, universe, rng);
+    }
+    if (build == null) {
+      for (Map.Entry<Door, Dest> e : vanilla.entrySet()) e.getKey().dest = e.getValue();
+      String why = "Seed " + seed + " refused: no main path of " + SPINE_MIN
+          + " rooms keeps every room reachable; nothing was written. Try another seed.";
+      StringBuilder log = new StringBuilder();
+      log.append("RE4 offline randomizer - spine shuffle\n");
+      log.append("verdict: REJECTED - nothing was written\n");
+      log.append("seed ").append(seed).append('\n');
+      log.append(why).append('\n');
+      try {
+        writeAll(logFile(root), log.toString().getBytes(StandardCharsets.UTF_8));
+      } catch (IOException e) {
+        Log.i(TAG, "the log could not be written: " + e);
+      }
+      Log.i(TAG, why);
+      return why;
+    }
+
+    List<String> head = new ArrayList<>();
+    head.add("spine (" + build.spine.size() + " rooms): " + String.join(" -> ", build.spine));
+    head.add(build.links + " door links written, " + build.branches + " of them branches; "
+        + build.used.size() + " of " + universe.size() + " reachable rooms are on the spine or a branch");
+    head.add("chapter doors and the shooting range keep their payloads (pins are never a spine step)");
+    head.add(ASHLEY_NOTE);
+    head.add(stageLine(rooms));
+    head.add(rooms.size() + " rooms, " + oneWay(rooms).size() + " one-way links");
+    return settle(root, seed, allowCross, "RE4 offline randomizer - spine shuffle", rooms, universe,
+        head, rng, "Spine: " + build.spine.size() + " rooms on the main path, ");
   }
 }

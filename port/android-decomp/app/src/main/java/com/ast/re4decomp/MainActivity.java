@@ -95,6 +95,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     crossStage.setText("One door pool for the whole game: village, castle and island mix (tick this for the full shuffle)");
     crossStage.setChecked(false);
     body.addView(crossStage);
+    button(body, "Shuffle with a spine (recommended)", this::shuffleDoorsSpine);
     button(body, "Shuffle doors and keys", this::shuffleDoors);
     button(body, "Door shuffle log (where each door goes)", this::showDoorLog);
     // the menu's only entry in the core mode was the disc import, which its launcher shows anyway
@@ -186,6 +187,24 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       final String shown = result;
       runOnUiThread(() -> Toast.makeText(this, shown, Toast.LENGTH_LONG).show());
     }, "door-shuffle").start();
+  }
+
+  /** The PC-style shuffle: a main path first, branches hung on it, doors written afterwards. */
+  private void shuffleDoorsSpine() {
+    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
+    final File root = imports.root;
+    final boolean cross = crossStage != null && crossStage.isChecked();
+    final long seed = seedForThisClick();
+    new Thread(() -> {
+      String result;
+      try {
+        result = DoorShuffle.shuffleWithSpine(root, seed, cross);
+      } catch (RuntimeException | OutOfMemoryError e) {
+        result = "The spine shuffle stopped: " + e;
+      }
+      final String shown = result;
+      runOnUiThread(() -> Toast.makeText(this, shown, Toast.LENGTH_LONG).show());
+    }, "door-spine").start();
   }
 
   /** Every door as it now leads, plus where the progression items were put. */
