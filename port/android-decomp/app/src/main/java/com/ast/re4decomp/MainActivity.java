@@ -82,6 +82,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     body.addView(seedField);
     button(body, "Shuffle all room items (full shuffle)", this::shuffleRoomItems);
     button(body, "Restore original rooms", this::restoreRoomItems);
+    button(body, "Item shuffle log (where each item went)", this::showShuffleLog);
     // the menu's only entry in the core mode was the disc import, which its launcher shows anyway
     if (!core) button(body, getString(R.string.browser_menu), this::showMenu);
     importPanel = new LinearLayout(this); importPanel.setOrientation(LinearLayout.VERTICAL);
@@ -141,6 +142,21 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       final String shown = result;
       runOnUiThread(() -> android.widget.Toast.makeText(this, shown, android.widget.Toast.LENGTH_LONG).show());
     }, "item-shuffle").start();
+  }
+
+  /** The readable log of the last shuffle: every room, every changed item area, where it is and what it became. */
+  private void showShuffleLog() {
+    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
+    android.widget.TextView text = new android.widget.TextView(this);
+    text.setText(ItemShuffle.readLog(imports.root));
+    text.setTextIsSelectable(true);
+    text.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12);
+    text.setTypeface(android.graphics.Typeface.MONOSPACE);
+    text.setPadding(dp(12), dp(8), dp(12), dp(8));
+    android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+    scroll.addView(text);
+    new android.app.AlertDialog.Builder(this).setTitle("Item shuffle log").setView(scroll)
+        .setPositiveButton("Close", null).show();
   }
 
   /** Deletes the collected rooms, so the next collection writes the discs' own items again. */
