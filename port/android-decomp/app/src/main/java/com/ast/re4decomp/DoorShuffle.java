@@ -596,7 +596,7 @@ public final class DoorShuffle {
       b.dest = dd;
       d.dest = db;
       boolean ok = a.dest.name().equals(d.room.name) && c.dest.name().equals(b.room.name);
-      if (!ok || !universe.containsAll(reach(graph(rooms), rooms, null))) {
+      if (!ok || !reach(graph(rooms), rooms, null).containsAll(universe)) {
         a.dest = da;
         c.dest = dc;
         b.dest = db;
@@ -713,7 +713,7 @@ public final class DoorShuffle {
   /** Rooms on the main path the spine aims for, the smallest spine accepted, and how often a seed retries. */
   private static final int SPINE_TARGET = 24;
   private static final int SPINE_MIN = 14;
-  private static final int SPINE_TRIES = 12;
+  private static final int SPINE_TRIES = 20;
 
   // ---- the spine (branch feature/offline-randomizer) --------------------------------------------------------
 
@@ -827,7 +827,7 @@ public final class DoorShuffle {
         Dest oa = da.dest, ob = db.dest;
         da.dest = spineArrival(db);          // the player appears in b, in front of b's return door
         db.dest = spineArrival(da);          // and back in a, in front of a's door
-        boolean ok = universe.containsAll(reach(graph(rooms), rooms, null));
+        boolean ok = reach(graph(rooms), rooms, null).containsAll(universe);
         if (ok) {
           fa.remove(da);
           fb.remove(db);
@@ -1086,7 +1086,7 @@ public final class DoorShuffle {
       if (candidate == null) continue;
       // The whole map is checked once, after it is built: a link that passes on its own can still orphan a room
       // a later link depended on. A map that fails is thrown away and the next attempt starts from vanilla.
-      if (!universe.containsAll(reach(graph(rooms), rooms, null))) continue;
+      if (!reach(graph(rooms), rooms, null).containsAll(universe)) continue;
       build = candidate;
     }
     if (build == null) {
