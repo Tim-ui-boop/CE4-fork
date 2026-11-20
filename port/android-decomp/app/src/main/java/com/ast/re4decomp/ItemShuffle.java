@@ -327,31 +327,39 @@ public final class ItemShuffle {
     }
   }
 
-  /** Copies the models of `ids` into one pack: this room's own blobs where it has the id, the smallest variant
-   *  elsewhere. All BIN blobs first, then all TPL blobs, each 32-byte aligned (GX data needs it). */
+  /** Copies the models of every id it can resolve into one pack: this room's own blobs where it has the id, the
+   *  smallest variant elsewhere. An id nothing can supply is dropped (the room keeps its original pack for it).
+   *  All BIN blobs first, then all TPL blobs, each 32-byte aligned (GX data needs it). Null when nothing resolves. */
   private static byte[] buildPack(byte[] own, Arc arc, int ownEntry, int[] ids, Map<Integer, Model> index,
       Sources sources) throws IOException {
-    int count = ids.length;
     Model[] ownModels = ownEntry < 0 ? null : models(own, arc, ownEntry);
     int[] ownIds = ownEntry < 0 ? new int[0] : ownIds(own, arc, ownEntry);
-    byte[][] bins = new byte[count][];
-    byte[][] tpls = new byte[count][];
-    for (int i = 0; i < count; i++) {
-      int seen = ownIndex(ownIds, ids[i]);
+    List<Integer> kept = new ArrayList<>();
+    List<byte[]> bins = new ArrayList<>();
+    List<byte[]> tpls = new ArrayList<>();
+    for (int id : ids) {
+      byte[] bin = null;
+      byte[] tpl = null;
+      int seen = ownIndex(ownIds, id);
       if (ownModels != null && seen >= 0 && seen < ownModels.length) {
         Model model = ownModels[seen];
-        bins[i] = Arrays.copyOfRange(own, model.binAt, model.binAt + model.binLen);
-        tpls[i] = Arrays.copyOfRange(own, model.tplAt, model.tplAt + model.tplLen);
-        continue;
+        bin = Arrays.copyOfRange(own, model.binAt, model.binAt + model.binLen);
+        tpl = Arrays.copyOfRange(own, model.tplAt, model.tplAt + model.tplLen);
+      } else {
+        Model model = index.get(id);
+        if (model != null && model.file != null) {
+          byte[] from = load(sources, model.file);
+          bin = Arrays.copyOfRange(from, model.binAt, model.binAt + model.binLen);
+          tpl = Arrays.copyOfRange(from, model.tplAt, model.tplAt + model.tplLen);
+        }
       }
-      Model model = index.get(ids[i]);
-      if (model == null || model.file == null) {
-        throw new IOException("no model for item 0x" + Integer.toHexString(ids[i]));
-      }
-      byte[] from = load(sources, model.file);
-      bins[i] = Arrays.copyOfRange(from, model.binAt, model.binAt + model.binLen);
-      tpls[i] = Arrays.copyOfRange(from, model.tplAt, model.tplAt + model.tplLen);
+      if (bin == null || tpl == null) continue;   // nothing can show it: leave this id out
+      kept.add(id);
+      bins.add(bin);
+      tpls.add(tpl);
     }
+    int count = kept.size();
+    if (count == 0) return null;
     int ofsId = 0x10;
     int ofsBin = ofsId + 4 + count * ITM_ID;
     int ofsTpl = ofsBin + 4 + count * 4;
@@ -362,12 +370,12 @@ public final class ItemShuffle {
     for (int i = 0; i < count; i++) {
       at = align32(at);
       binRel[i] = at - ofsBin;
-      at += bins[i].length;
+      at += bins.get(i).length;
     }
     for (int i = 0; i < count; i++) {
       at = align32(at);
       tplRel[i] = at - ofsTpl;
-      at += tpls[i].length;
+      at += tpls.get(i).length;
     }
     byte[] pack = new byte[align32(at)];
     put32(pack, 0, 0);
@@ -378,20 +386,20 @@ public final class ItemShuffle {
     put32(pack, ofsBin, count);
     put32(pack, ofsTpl, count);
     for (int i = 0; i < count; i++) {
-      put16(pack, ofsId + 4 + i * ITM_ID, ids[i]);
+      put16(pack, ofsId + 4 + i * ITM_ID, kept.get(i));
       put32(pack, ofsBin + 4 + i * 4, binRel[i]);
       put32(pack, ofsTpl + 4 + i * 4, tplRel[i]);
     }
     int pos = dataAt;
     for (int i = 0; i < count; i++) {
       pos = align32(pos);
-      System.arraycopy(bins[i], 0, pack, pos, bins[i].length);
-      pos += bins[i].length;
+      System.arraycopy(bins.get(i), 0, pack, pos, bins.get(i).length);
+      pos += bins.get(i).length;
     }
     for (int i = 0; i < count; i++) {
       pos = align32(pos);
-      System.arraycopy(tpls[i], 0, pack, pos, tpls[i].length);
-      pos += tpls[i].length;
+      System.arraycopy(tpls.get(i), 0, pack, pos, tpls.get(i).length);
+      pos += tpls.get(i).length;
     }
     return pack;
   }
@@ -504,6 +512,7 @@ public final class ItemShuffle {
         if (itaEntry < 0) continue;
         int itmEntry = arc.find(original, "ITM", 0);
         byte[] patched = original.clone();
+        int[] ownAll = itmEntry < 0 ? new int[0] : ownIds(original, arc, itmEntry);
         int base = arc.offsets[itaEntry];
         int count = be16(patched, base + 6);
         int[] needed = new int[count];
@@ -516,17 +525,15 @@ public final class ItemShuffle {
           mapping.append(file.getParentFile().getName()).append('/').append(file.getName()).append(':').append(at)
               .append(' ').append(be16(patched, at + ITEM_ID)).append("->").append(want).append('\n');
           put16(patched, at + ITEM_ID, want);
-          int found = ownIndex(needed, want);
-          if (found >= 0) continue;
+          // the room's own pack already carries it, or nothing on the discs can supply its model: leave it alone
+          if (ownIndex(ownAll, want) >= 0 || !index.containsKey(want) || ownIndex(needed, want) >= 0) continue;
           needed[neededCount++] = want;
         }
         if (!touched) continue;
         // the room's own models first, then whatever its new items need
-        int[] all = new int[neededCount + (itmEntry < 0 ? 0 : ownIds(original, arc, itmEntry).length)];
+        int[] all = new int[neededCount + ownAll.length];
         int used = 0;
-        if (itmEntry >= 0) {
-          for (int id : ownIds(original, arc, itmEntry)) all[used++] = id;
-        }
+        for (int id : ownAll) all[used++] = id;
         for (int i = 0; i < neededCount; i++) {
           if (ownIndex(all, needed[i]) >= 0) continue;
           all[used++] = needed[i];
