@@ -820,8 +820,8 @@ public final class ItemShuffle {
       //noinspection ResultOfMethodCallIgnored
       dir.delete();   // only when empty
     }
-    // the door log and its vanilla record describe rooms that no longer exist
-    for (String name : new String[] {"doors.txt", "doors.orig.txt"}) {
+    // the door log, its vanilla record and the marker patch 0240 reads describe rooms that no longer exist
+    for (String name : new String[] {"doors.txt", "doors.orig.txt", "doors.active"}) {
       File log = new File(folder, name);
       //noinspection ResultOfMethodCallIgnored
       if (log.isFile()) log.delete();

@@ -147,3 +147,27 @@ extern "C" int re4_room_raw_host_order_ok(const void* data, int size)
     }
     return 1;
 }
+
+/* Whether the door shuffle is installed: <data>/randomizer/doors.active exists. DoorShuffle writes that marker
+ * only when it accepted a seed (a refusal deletes it again) and "Restore original rooms" removes the whole
+ * folder, so it is present exactly while a shuffled map is being played. sce_at.cpp asks it once per door bump
+ * (the answer is cached after the first stat). Without it the vanilla pair check runs unchanged. */
+extern "C" int re4_randomizer_doors(void)
+{
+    static int cached = -1;
+    char path[1400];
+    const char* dir;
+
+    if (cached < 0) {
+        dir = re4_data_dir();
+        if (dir == 0 || *dir == 0) {
+            return 0;   /* no data folder yet: nothing can be shuffled, keep the disc's behaviour */
+        }
+        snprintf(path, sizeof(path), "%s/randomizer/doors.active", dir);
+        cached = exists(path) ? 1 : 0;
+        re4_log("randomizer: %s", cached
+                    ? "a door shuffle is installed: Ashley's door check is off (patch 0240)"
+                    : "no door shuffle installed: Ashley's door check stays as the disc has it");
+    }
+    return cached;
+}

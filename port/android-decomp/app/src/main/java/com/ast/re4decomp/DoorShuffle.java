@@ -276,6 +276,12 @@ public final class DoorShuffle {
     return new File(root, "randomizer/doors.orig.txt");
   }
 
+  /** The marker patch 0240 looks for: written only when a seed is accepted, deleted by a refusal and by
+   *  "Restore original rooms". While it exists the player may pass a door without Ashley. */
+  private static File markerFile(File root) {
+    return new File(root, "randomizer/doors.active");
+  }
+
   private static void applySnapshot(File root, Map<String, Room> rooms) {
     File file = snapshotFile(root);
     if (!file.isFile()) return;
@@ -468,6 +474,8 @@ public final class DoorShuffle {
 
   private static void writeRefusal(File root, long seed, boolean allowCross, int rooms, int doors, int orphan,
                                    int reachable, String why) {
+    File marker = markerFile(root);
+    if (marker.isFile() && !marker.delete()) Log.i(TAG, "the door marker could not be removed");
     StringBuilder log = new StringBuilder();
     log.append("RE4 offline randomizer - door and key shuffle\n");
     log.append("seed ").append(seed).append("   cross-stage ").append(allowCross ? "mixed, any stage" : "same stage only")
@@ -587,6 +595,16 @@ public final class DoorShuffle {
     boolean complete = structure && unproven.isEmpty();
     boolean write = structure;
 
+    Map<String, Integer> stagePairs = new TreeMap<>();
+    for (Room room : rooms.values()) {
+      for (Door door : room.doors) {
+        int from = stageOf(room.name), to = stageOf(door.dest.name());
+        if (from == to) continue;
+        String edge = "st" + Math.min(from, to) + "->st" + Math.max(from, to);
+        stagePairs.put(edge, stagePairs.getOrDefault(edge, 0) + 1);
+      }
+    }
+
     StringBuilder log = new StringBuilder();
     log.append("RE4 offline randomizer - door and key shuffle\n");
     log.append("verdict: ").append(complete ? "PLAYABLE"
@@ -595,6 +613,16 @@ public final class DoorShuffle {
     log.append("seed ").append(seed).append("   cross-stage ").append(allowCross ? "mixed, any stage" : "same stage only")
         .append('\n');
     log.append(chapterPinned).append(" chapter doors kept in place (their payload is the next chapter's spawn)\n");
+    log.append("Ashley's door check is off while randomizer/doors.active exists (port patch 0240): a shuffled map has no back room\n");
+    if (stagePairs.isEmpty()) {
+      log.append("door records that change stage: none\n");
+    } else {
+      log.append("door records that change stage:");
+      for (Map.Entry<String, Integer> e : stagePairs.entrySet()) {
+        log.append(' ').append(e.getKey()).append('=').append(e.getValue());
+      }
+      log.append('\n');
+    }
     log.append(rooms.size()).append(" rooms, ").append(pairs.size()).append(" two-way doors, ")
         .append(oneWay(rooms).size()).append(" one-way links, ").append(swaps).append(" door swaps accepted, ")
         .append(rejected).append(" rejected, ").append(cross).append(" across stages\n");
@@ -620,6 +648,18 @@ public final class DoorShuffle {
     for (Map.Entry<Integer, String> e : placement.entrySet()) {
       log.append(String.format(Locale.US, "  0x%02x in %s%n", e.getKey(), e.getValue()));
     }
+    // the debug view: only the doors this seed actually moved, so a bad jump can be read against the vanilla map
+    log.append('\n').append("doors this seed moved (vanilla -> now)\n");
+    int moved = 0;
+    for (Room room : rooms.values()) {
+      for (Door door : room.doors) {
+        if (same(door.dest, door.orig)) continue;
+        log.append(String.format(Locale.US, "  %-6s area %2d: %-8s -> %s%n", room.name, door.area,
+            door.orig.name(), door.dest.name()));
+        moved++;
+      }
+    }
+    log.append("  ").append(moved).append(" door records written\n");
 
     if (!write) {
       try {
@@ -651,6 +691,7 @@ public final class DoorShuffle {
         changed++;
       }
       writeAll(logFile(root), log.toString().getBytes(StandardCharsets.UTF_8));
+      writeAll(markerFile(root), Long.toString(seed).getBytes(StandardCharsets.UTF_8));   // patch 0240 reads this
       if (!snapshotFile(root).isFile()) writeSnapshot(root, rooms);   // the map this run started from
     } catch (IOException | OutOfMemoryError e) {
       Log.i(TAG, "the rooms could not be written: " + e);

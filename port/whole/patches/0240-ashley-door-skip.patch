@@ -1,0 +1,37 @@
+# Port patch (branch feature/offline-randomizer): with shuffled doors, let the player through a door even when
+# Ashley cannot follow.
+#
+# The vanilla door handler refuses the door when the partner is present but too far behind
+# (src/game/sce_at.cpp CheckDoorJumpWithAshley, message 0x67). That is what keeps the pair together in a fixed
+# map. Once the doors are shuffled, the same check strands her in a room that no longer connects back, which is
+# exactly what the PC randomizer's "Allow entering doors without Ashley" option is for (its shipping profile has
+# it on).
+#
+# Not a blanket removal: the port asks re4_randomizer_doors(), implemented in port/whole/runtime/room_raw.cpp
+# (not a patch: the prepare step stages src/ only). It reports whether <data>/randomizer/doors.active exists;
+# DoorShuffle writes that marker only when it accepted a seed, and a refusal or "Restore original rooms" deletes
+# it again. Without the marker the check behaves exactly as the disc does, and the flag the disc itself offers
+# (SCF_NO_ASHLEY_DIST_CK) still wins when a scenario sets it.
+#
+# Two small edits in this file: one file-scope declaration, and the condition of the existing check. sce_at.cpp
+# carries no byte-view record, so the prepare step cannot be pushed out of its window.
+--- a/src/game/sce_at.cpp
++++ b/src/game/sce_at.cpp
+@@ -58,6 +58,7 @@
+ 
+ int DbMenuActiveCheck();                                 // game/db_menu.cpp
+ cObj* setItemObj(void* bin, void* tpl, Vec* pos, Vec* rot);  // game/obj19.cpp
++extern "C" int re4_randomizer_doors(void);               // port (patch 0240): runtime/room_raw.cpp
+ 
+ // MTX_COPY (vec.h) with `d_` assigned after the declarations: the pointer order sceAtGetArea and
+ // SceAtItemHitCheck need.
+@@ -786,7 +787,8 @@
+ // Scenario_flg[0] 0x80 is not set) but cannot follow.
+ int CheckDoorJumpWithAshley()
+ {
+-    if (pSUB != 0 && !ScfFlagChk(pG, SCF_NO_ASHLEY_DIST_CK)) {
++    /* port (patch 0240): a shuffled map has no "back room" to leave her in, so the pair check is off */
++    if (pSUB != 0 && !ScfFlagChk(pG, SCF_NO_ASHLEY_DIST_CK) && re4_randomizer_doors() == 0) {
+         if (CheckAshleyActive() == 0) {
+             return 0;
+         }
