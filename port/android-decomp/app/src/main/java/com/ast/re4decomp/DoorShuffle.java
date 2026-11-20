@@ -858,6 +858,16 @@ public final class DoorShuffle {
     if (rooms.containsKey(first) && free.get(first).size() >= 3) {
       out.spine.add(first);
       out.used.add(first);
+      // The opening link is vanilla and has to survive: if a branch took r100's only door later, the whole
+      // first chapter lost its way in (seen on the phone: 5 of 97 rooms left). These two doors are reserved.
+      List<Door> keep = new ArrayList<>();
+      for (Door door : free.get(START)) if (!door.dest.name().equals(first)) keep.add(door);
+      free.put(START, keep);
+      List<Door> keepFirst = new ArrayList<>();
+      for (Door door : free.get(first)) {
+        if (!door.dest.name().equals(START) && !door.dest.name().equals(first)) keepFirst.add(door);
+      }
+      free.put(first, keepFirst);
     }
     while (out.spine.size() < SPINE_TARGET) {
       String tip = out.spine.get(out.spine.size() - 1);
@@ -1072,7 +1082,12 @@ public final class DoorShuffle {
     SpineBuild build = null;
     for (int attempt = 0; attempt < SPINE_TRIES && build == null; attempt++) {
       for (Map.Entry<Door, Dest> e : vanilla.entrySet()) e.getKey().dest = e.getValue();
-      build = spineAttempt(rooms, universe, rng);
+      SpineBuild candidate = spineAttempt(rooms, universe, rng);
+      if (candidate == null) continue;
+      // The whole map is checked once, after it is built: a link that passes on its own can still orphan a room
+      // a later link depended on. A map that fails is thrown away and the next attempt starts from vanilla.
+      if (!universe.containsAll(reach(graph(rooms), rooms, null))) continue;
+      build = candidate;
     }
     if (build == null) {
       for (Map.Entry<Door, Dest> e : vanilla.entrySet()) e.getKey().dest = e.getValue();
