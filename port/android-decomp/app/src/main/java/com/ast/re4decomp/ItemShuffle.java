@@ -214,16 +214,32 @@ public final class ItemShuffle {
       bins[i] = binAt;
       tpls[i] = tplAt;
     }
+    // a blob ends at the next blob of EITHER table, else at the block's end: BIN and TPL data share the block,
+    // so "next BIN" is not the end of the last BIN (the TPL half follows it)
+    int[] starts = new int[count * 2];
+    for (int i = 0; i < count; i++) {
+      starts[i] = bins[i];
+      starts[count + i] = tpls[i];
+    }
+    Arrays.sort(starts);
     Model[] result = new Model[count];
     for (int i = 0; i < count; i++) {
       Model model = new Model();
       model.binAt = bins[i];
-      model.binLen = clampSpan(bins[i], i + 1 < count ? bins[i + 1] : blockEnd, blockEnd);
+      model.binLen = clampSpan(bins[i], nextStart(starts, bins[i], blockEnd), blockEnd);
       model.tplAt = tpls[i];
-      model.tplLen = clampSpan(tpls[i], i + 1 < count ? tpls[i + 1] : blockEnd, blockEnd);
+      model.tplLen = clampSpan(tpls[i], nextStart(starts, tpls[i], blockEnd), blockEnd);
       result[i] = model;
     }
     return result;
+  }
+
+  /** The first blob start above `at` (that blob's end), or `end` when it is the last one. */
+  private static int nextStart(int[] starts, int at, int end) {
+    for (int start : starts) {
+      if (start > at) return start;
+    }
+    return end;
   }
 
   /** A blob's length: up to the next blob or the end of the block, never past it. */
