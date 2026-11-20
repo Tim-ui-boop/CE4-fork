@@ -1,0 +1,79 @@
+# Port patch (branch feature/offline-randomizer): cross-stage doors, and a log line per door jump.
+# A door record (SCE_AT_DATA_DOOR, include/sce_at.h) names a destination stage/room/part. The vanilla door
+# handler (src/game/sce_at.cpp sceAtFunc_door) stores all three, but gameDoordemo (src/game/game.cpp) only
+# applies room and part: the stage only moves through the chapter sequence (sce_com.cpp SceChapterEnd). The
+# offline randomizer shuffles doors and keys across stages, so the stage byte has to be honoured as well.
+# gameDoordemo already ends with Rno0 = 1, which runs gameStageInit (disc change, StageSet) for every room
+# change, so a cross-stage door gets the same set-up a chapter jump gets. Stage_next == 0 means "no door
+# stage" (boot, save load, continue) and is ignored, which keeps vanilla behaviour identical.
+# The door log line is the debug hook: one line per jump with the raw record, so a bad seed can be read out
+# of logcat (tag re4, runtime/log.cpp) instead of guessed.
+--- a/src/game/game.cpp
++++ b/src/game/game.cpp
+@@ -16,6 +16,8 @@
+ #include "main_mem.h"
+ #include "joy.h"
+ #include "game.h"
++/* port (patch 0239): runtime/log.cpp, the port's own log (tag re4) */
++extern "C" void re4_log(const char* fmt, ...);
+ #include "em.h"
+ #include "obj.h"
+ #include "model.h"
+@@ -739,6 +741,7 @@
+     SysFlagOn(pG, SYS_LOAD_GAME);
+     SysFlagOff(pG, SYS_CONTINUE);
+     SysFlagOff(pG, SYS_START_EVT_SKIP);
++    pG->Stage_next = pG->stage_no;  /* port (patch 0239): a save load carries no door stage */
+     pG->RoomNo_next = pG->room_id;
+     pG->Part_next = pG->Part;
+ }
+@@ -769,6 +772,7 @@
+     ContinueWepData();
+     pG->NextPos = pG->pl_pos;
+     pG->NextY = pG->pl_ang_y;
++    pG->Stage_next = pG->stage_no;  /* port (patch 0239): a continue carries no door stage */
+     pG->RoomNo_next = pG->room_id;
+     pG->Part_next = pG->Part;
+     pG->Rno0 = 4;
+@@ -1270,6 +1274,19 @@
+     }
+     pG->pl_pos = pG->NextPos;
+     pG->pl_ang_y = pG->NextY;
++    /* port (patch 0239): a door may name a room in another stage (the offline randomizer shuffles doors and
++       keys across stages). room_id already carries the stage byte (stage << 8 | room), but the archive name
++       read.cpp builds comes from stage_no (read.cpp:158), which an ordinary door never updates: it only does
++       so through the chapter sequence (sce_com.cpp SceChapterEnd). Applying Stage_next here is a no-op for
++       vanilla doors (they name their own stage) and makes a cross-stage door land in the right stage; the
++       step ends with Rno0 = 1, so gameStageInit runs next and does the disc change and StageSet as always.
++       Stage_next == 0 is "no destination stage" (boot, continue, save load write RoomNo_next from room_id). */
++    if (pG->Stage_next != 0 && pG->Stage_next != pG->stage_no) {
++        re4_log("doordemo: stage %d -> %d, room %03x -> %03x, part %d",
++                (int) pG->stage_no, (int) pG->Stage_next, (unsigned) pG->room_id,
++                (unsigned) pG->RoomNo_next, (int) pG->Part_next);
++        pG->stage_no = pG->Stage_next;
++    }
+     pG->room_id = pG->RoomNo_next;
+     pG->Part = pG->Part_next;
+     if (!FlagChkSign(pG->Debug_flg, DBG_ROOMJMP) && !SysFlagChk(pG, SYS_CONTINUE)) {
+--- a/src/game/sce_at.cpp
++++ b/src/game/sce_at.cpp
+@@ -10,6 +10,8 @@
+ #include "main.h"
+ #include "main_sub.h"
+ #include "main_mem.h"
++/* port (patch 0239): runtime/log.cpp, the port's own log (tag re4) */
++extern "C" void re4_log(const char* fmt, ...);
+ #include "scheduler.h"
+ #include "libgpu.h"
+ #include "sce_sys.h"
+@@ -834,6 +836,10 @@
+     pG->NextY = w->door.next_ang_y;
+     pG->room_id_prev = pG->room_id;
+     pG->Part_old = pG->Part;
++    /* port (patch 0239): one line per door jump, the only place the raw record is still in hand */
++    re4_log("door: r%03x area %d -> st%d/r%03x part %d key_id %d key_flg %d fade %d", (unsigned) pG->room_id,
++            (int) w->no, (int) w->door.next_stage_no, (int) w->door.next_room_no, (int) w->door.next_part_no,
++            (int) w->door.key_id, (int) w->door.key_flg, (int) w->door.fade_eff);
+     pG->Stage_next = w->door.next_stage_no;
+     pG->Room_next = w->door.next_room_no;
+     pG->Part_next = w->door.next_part_no;
