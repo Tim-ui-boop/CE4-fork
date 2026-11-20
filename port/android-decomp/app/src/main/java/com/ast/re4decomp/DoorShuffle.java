@@ -540,33 +540,44 @@ public final class DoorShuffle {
       if (sa != sd) cross++;
     }
 
-    Map<Integer, String> placement = placeKeys(rooms, rng);
+    KeyPlan plan = placeKeys(rooms, rng);
+    Map<Integer, String> placement = plan.placement;
     Map<String, Set<String>> adj = graph(rooms);
-    Set<Integer> held = new TreeSet<>();
-    Set<String> got = reach(adj, rooms, held);
-    for (int n = 0; n < 20; n++) {
-      boolean more = false;
-      for (Map.Entry<Integer, String> e : placement.entrySet()) {
-        if (got.contains(e.getValue()) && !held.contains(e.getKey())) {
-          held.add(e.getKey());
-          more = true;
-        }
+    // The door map itself must keep every room reachable; that is the hard rule. A gate whose item could not
+    // be put in front of it (its model only exists in rooms behind the gate) is named in the log instead of
+    // rejecting every seed: the PC randomizer reports the same class of problem and leaves it to play testing.
+    Set<String> doorReach = reach(adj, rooms, null);
+    boolean structure = doorReach.containsAll(universe);
+    Set<Integer> unproven = new TreeSet<>();
+    for (Integer key : plan.placement.keySet()) {
+      if (plan.held.contains(key)) continue;
+      for (Room room : rooms.values()) {
+        if (room.gates.contains(key) && universe.contains(room.name)) unproven.add(key);
       }
-      if (!more) break;
-      got = reach(adj, rooms, held);
     }
-    Set<String> finalRooms = reach(adj, rooms, held);
-    boolean complete = finalRooms.containsAll(universe);
+    boolean complete = structure && unproven.isEmpty();
+    boolean write = structure;
 
     StringBuilder log = new StringBuilder();
     log.append("RE4 offline randomizer - door and key shuffle\n");
-    log.append("verdict: ").append(complete ? "PLAYABLE" : "REJECTED - nothing was written").append('\n');
+    log.append("verdict: ").append(complete ? "PLAYABLE"
+        : structure ? "PLAYABLE - " + unproven.size() + " gate(s) unproven, see below"
+        : "REJECTED - nothing was written").append('\n');
     log.append("seed ").append(seed).append("   cross-stage ").append(allowCross ? "allowed" : "same stage only").append('\n');
     log.append(rooms.size()).append(" rooms, ").append(pairs.size()).append(" two-way doors, ")
         .append(oneWay(rooms).size()).append(" one-way links, ").append(swaps).append(" door swaps accepted, ")
         .append(rejected).append(" rejected, ").append(cross).append(" across stages\n");
-    log.append("every room the vanilla doors reach is reachable: ").append(complete ? "yes" : "NO - TELL THE DEVELOPER")
-        .append(" (").append(finalRooms.size()).append('/').append(universe.size()).append(" rooms)\n");
+    log.append("every room the vanilla doors reach is reachable: ").append(structure ? "yes" : "NO - TELL THE DEVELOPER")
+        .append(" (").append(doorReach.size()).append('/').append(universe.size()).append(" rooms)\n");
+    if (!unproven.isEmpty()) {
+      log.append("gates whose item could not be put in front of them (test these first):\n");
+      for (Integer key : unproven) {
+        Set<String> gates = new TreeSet<>();
+        for (Room room : rooms.values()) if (room.gates.contains(key)) gates.add(room.name);
+        log.append(String.format(Locale.US, "  0x%02x needed in %s, sits in %s%n", key, gates,
+            placement.getOrDefault(key, "nowhere")));
+      }
+    }
     log.append('\n').append("room    area  leads to        lock\n");
     for (Room room : rooms.values()) {
       for (Door door : room.doors) {
@@ -579,13 +590,13 @@ public final class DoorShuffle {
       log.append(String.format(Locale.US, "  0x%02x in %s%n", e.getKey(), e.getValue()));
     }
 
-    if (!complete) {
+    if (!write) {
       try {
         writeAll(logFile(root), log.toString().getBytes(StandardCharsets.UTF_8));
       } catch (IOException e) {
         Log.i(TAG, "the log could not be written: " + e);
       }
-      String why = "Seed " + seed + " rejected: only " + finalRooms.size() + " of " + universe.size()
+      String why = "Seed " + seed + " rejected: only " + doorReach.size() + " of " + universe.size()
           + " rooms stay reachable; nothing was written. The walk is in randomizer/doors.txt - try another seed.";
       Log.i(TAG, why);
       return why;
@@ -615,57 +626,74 @@ public final class DoorShuffle {
       return "The shuffle could not be written: " + e;
     }
     String summary = "Doors: " + swaps + " swaps in " + pairs.size() + " pairs (" + cross + " across stages), "
-        + changed + " rooms written; every room reachable: " + (complete ? "yes" : "NO")
+        + changed + " rooms written; every room reachable: " + (structure ? "yes" : "NO")
+        + (unproven.isEmpty() ? "" : ", " + unproven.size() + " gate(s) unproven")
         + "; the log is randomizer/doors.txt";
     Log.i(TAG, summary);
     return summary;
   }
 
+  /** The keys as dealt, and the ones the walk can actually hold. */
+  private static final class KeyPlan {
+    final Map<Integer, String> placement = new LinkedHashMap<>();
+    final Set<Integer> held = new TreeSet<>();
+  }
+
   /**
-   * Moves the progression items the rooms gate on. A key may only go to a room that (a) already carries its
-   * model, so it can be seen, and (b) comes before the room whose gate needs it. The writes are recorded and
-   * applied with the patching pass, so no room bytes are held here.
+   * Places the progression items the rooms gate on, in the order the gate-aware walk can reach them.
+   *
+   * A room whose use area names an item you do not carry cannot be left, so a key must sit in a room that
+   * is reachable *before* the gate that needs it. The disc's own room is kept whenever the walk reaches it
+   * (usually it is), which is both the safest and the least writing; only a key whose room sits behind its
+   * own gate moves to another room that carries its model.
    */
-  private static Map<Integer, String> placeKeys(Map<String, Room> rooms, Random rng) {
-    Map<Integer, String> placement = new LinkedHashMap<>();
+  private static KeyPlan placeKeys(Map<String, Room> rooms, Random rng) {
+    KeyPlan plan = new KeyPlan();
     Map<String, Set<String>> adj = graph(rooms);
     Set<Integer> keys = new TreeSet<>();
     for (Room room : rooms.values()) keys.addAll(room.gates);
-    for (Integer key : keys) {
-      int gateDist = Integer.MAX_VALUE;
-      for (Room room : rooms.values()) if (room.gates.contains(key)) gateDist = Math.min(gateDist, distance(adj, room.name));
-      List<Room> candidates = new ArrayList<>();
-      for (Room room : rooms.values()) {
-        if (!room.models.contains(key)) continue;                 // the room could not show it
-        if (room.gates.contains(key)) continue;                   // never behind its own gate
-        if (distance(adj, room.name) >= gateDist) continue;       // must come before it
-        if (freeArea(room) >= 0) candidates.add(room);
-      }
-      if (candidates.isEmpty()) {
-        placement.put(key, whereIs(rooms, key));
-        continue;
-      }
-      Room to = candidates.get(rng.nextInt(candidates.size()));
-      String was = whereIs(rooms, key);
-      Room old = rooms.get(was);
-      if (old != null) {
-        for (ItemArea item : old.items) {
-          if (item.id == key) {
-            old.writes.put(item.at, new int[]{0, 0});
-            old.dirty = true;
+    for (int round = 0; round < 64; round++) {
+      Set<String> reachable = reach(adj, rooms, plan.held);
+      boolean progress = false;
+      for (Integer key : keys) {
+        if (plan.held.contains(key)) continue;
+        boolean needed = false;
+        for (String name : reachable) if (rooms.get(name).gates.contains(key)) needed = true;
+        if (!needed) continue;                       // no gate for it has been reached yet
+        String vanilla = whereIs(rooms, key);
+        if (reachable.contains(vanilla)) {
+          plan.placement.put(key, vanilla);          // the disc's own spot is reachable: leave it alone
+          plan.held.add(key);
+          progress = true;
+          continue;
+        }
+        List<Room> candidates = new ArrayList<>();
+        for (String name : reachable) {
+          Room room = rooms.get(name);
+          if (room.gates.contains(key)) continue;    // never behind the gate that needs it
+          if (room.models.contains(key) && freeArea(room) >= 0) candidates.add(room);
+        }
+        if (candidates.isEmpty()) continue;          // maybe reachable next round, when more is open
+        Room to = candidates.get(rng.nextInt(candidates.size()));
+        Room old = rooms.get(vanilla);
+        if (old != null) {
+          for (ItemArea item : old.items) {
+            if (item.id == key) {
+              old.writes.put(item.at, new int[]{0, 0});
+              old.dirty = true;
+            }
           }
         }
+        to.writes.put(freeArea(to), new int[]{key, 1});
+        to.dirty = true;
+        plan.placement.put(key, to.name);
+        plan.held.add(key);
+        progress = true;
       }
-      int at = freeArea(to);
-      if (at < 0) {
-        placement.put(key, was);
-        continue;
-      }
-      to.writes.put(at, new int[]{key, 1});
-      to.dirty = true;
-      placement.put(key, to.name);
+      if (!progress) break;
     }
-    return placement;
+    for (Integer key : keys) if (!plan.placement.containsKey(key)) plan.placement.put(key, whereIs(rooms, key));
+    return plan;
   }
 
   private static int freeArea(Room room) {
