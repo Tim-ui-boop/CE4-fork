@@ -80,6 +80,19 @@ public final class DoorShuffle {
    */
   private static final String[] CHAPTER_DOORS = {
       "r106/3", "r10b/6", "r200/9", "r21d/12", "r225/1", "r22a/1", "r22b/0", "r31c/0"};
+  /**
+   * Rooms the pool keeps out: the shared shooting-range gallery and the five merchant rooms that unlock its
+   * games.
+   *
+   * r22c (st2) is the one room every target-practice entrance uses; the minigame hands the player back to the
+   * room it came from, so a moved door here returns the player to a stranger's room (seen on the phone: a farm
+   * door in r103 led into r22c). r207, r211, r223, r303 and r31d are the merchant rooms that open games A-E,
+   * which is why the PC randomizer files them as reserved rooms instead of pool rooms.
+   */
+  private static final String[] PIN_ROOMS = {"r22c", "r207", "r211", "r223", "r303", "r31d"};
+  /** Vanilla door-graph distance: the first rooms of the game (0..2 hops from the start) and the closing ones. */
+  private static final int OPENING_DIST = 2;
+  private static final int LATE_DIST = 21;
 
   private DoorShuffle() {
   }
@@ -445,6 +458,13 @@ public final class DoorShuffle {
     return false;
   }
 
+  private static boolean roomPinned(String room) {
+    for (String pinned : PIN_ROOMS) {
+      if (pinned.equals(room)) return true;
+    }
+    return false;
+  }
+
   private static Map<String, Integer> distanceMap(Map<String, Set<String>> adj) {
     Map<String, Integer> dist = new HashMap<>();
     List<String> queue = new ArrayList<>();
@@ -521,12 +541,18 @@ public final class DoorShuffle {
       for (Door door : room.doors) if (chapterDoor(room.name, door.area)) chapterPinned++;
     }
     List<Door[]> pairs = new ArrayList<>();
+    int roomPinned = 0;
     for (Room room : rooms.values()) {
       for (Door door : room.doors) {
         if (door.pair == null || door.pair.room == door.room) continue;
         if (door.room.name.compareTo(door.pair.room.name) < 0) continue;
         // a chapter's spawn never moves, and neither does the link it belongs to
         if (chapterDoor(door.room.name, door.area) || chapterDoor(door.pair.room.name, door.pair.area)) continue;
+        // the shooting range and its merchant entrances keep the doors they have
+        if (roomPinned(door.room.name) || roomPinned(door.pair.room.name)) {
+          roomPinned++;
+          continue;
+        }
         pairs.add(new Door[]{door, door.pair});
       }
     }
@@ -552,10 +578,14 @@ public final class DoorShuffle {
           continue;
         }
       } else {
-        // Every stage may meet every stage: one pool for the whole game, as the PC randomizer deals it. The
-        // only rule left is the opening - two doors of the first rooms may not be wired into the last
-        // chapter's rooms, which is what the vanilla-graph distance keeps apart anyway.
-        if (dist.getOrDefault(a.room.name, 99) < 3 || dist.getOrDefault(d.room.name, 99) < 3) {
+        // Every stage may meet every stage: one pool for the whole game, as the PC randomizer deals it. The only
+        // rule left protects the pacing at the two ends of the story: a door of the opening rooms may not be
+        // wired straight into the closing ones. Everything in between is free, so the village doors shuffle too
+        // (the old >= 3 rule froze the first three rooms and that is what left the village alone).
+        int distA = dist.getOrDefault(a.room.name, 99), distB = dist.getOrDefault(b.room.name, 99);
+        int distC = dist.getOrDefault(c.room.name, 99), distD = dist.getOrDefault(d.room.name, 99);
+        // after the swap the links are a.room<->d.room and c.room<->b.room
+        if ((distA <= OPENING_DIST && distD >= LATE_DIST) || (distC <= OPENING_DIST && distB >= LATE_DIST)) {
           rejected++;
           continue;
         }
@@ -613,6 +643,8 @@ public final class DoorShuffle {
     log.append("seed ").append(seed).append("   cross-stage ").append(allowCross ? "mixed, any stage" : "same stage only")
         .append('\n');
     log.append(chapterPinned).append(" chapter doors kept in place (their payload is the next chapter's spawn)\n");
+    log.append(roomPinned).append(" links kept for the shooting range and its merchant rooms: ")
+        .append(String.join(", ", PIN_ROOMS)).append('\n');
     log.append("Ashley's door check is off while randomizer/doors.active exists (port patch 0240): a shuffled map has no back room\n");
     if (stagePairs.isEmpty()) {
       log.append("door records that change stage: none\n");
