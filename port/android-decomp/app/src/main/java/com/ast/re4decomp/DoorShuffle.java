@@ -91,6 +91,16 @@ public final class DoorShuffle {
    * which is why the PC randomizer files them as reserved rooms instead of pool rooms.
    */
   private static final String[] PIN_ROOMS = {"r22c", "r207", "r211", "r223", "r303", "r31d"};
+  /**
+   * Rooms whose script places a one-off prop and reads it straight afterwards, so the room it is entered
+   * from decides whether the prop exists at all.
+   *
+   * r11b is the lake: R11bInit creates the boat and places it at one of two piers depending on
+   * `room_id_prev == 0x10D` (the vanilla dock), and patch 0241 turns the missing boat into no boat instead of
+   * a crash. A shuffled door into the lake from a room the script never expects loses the boat, and the
+   * player cannot row back. Its doors stay exactly as the disc has them.
+   */
+  private static final String[] KEEP_VANILLA_ROOMS = {"r11b"};
   /** Vanilla door-graph distance: the first rooms of the game (0..2 hops from the start) and the closing ones. */
   private static final int OPENING_DIST = 2;
   private static final int LATE_DIST = 21;
@@ -463,7 +473,15 @@ public final class DoorShuffle {
     for (String pinned : PIN_ROOMS) {
       if (pinned.equals(room)) return true;
     }
+    for (String pinned : KEEP_VANILLA_ROOMS) {
+      if (pinned.equals(room)) return true;
+    }
     return false;
+  }
+
+  /** The pinned rooms as one line for the log: the range, its merchants, and the lake boat. */
+  private static String pinnedNames() {
+    return String.join(", ", PIN_ROOMS) + ", " + String.join(", ", KEEP_VANILLA_ROOMS);
   }
 
   private static Map<String, Integer> distanceMap(Map<String, Set<String>> adj) {
@@ -610,8 +628,8 @@ public final class DoorShuffle {
 
     List<String> head = new ArrayList<>();
     head.add(chapterPinned + " chapter doors kept in place (their payload is the next chapter's spawn)");
-    head.add(roomPinned + " links kept for the shooting range and its merchant rooms: "
-        + String.join(", ", PIN_ROOMS));
+    head.add(roomPinned + " links kept for the shooting range, its merchant rooms and the lake boat: "
+        + pinnedNames());
     head.add(ASHLEY_NOTE);
     head.add(stageLine(rooms));
     head.add(rooms.size() + " rooms, " + pairs.size() + " two-way doors, " + oneWay(rooms).size()
@@ -1111,7 +1129,7 @@ public final class DoorShuffle {
     head.add("spine (" + build.spine.size() + " rooms): " + String.join(" -> ", build.spine));
     head.add(build.links + " door links written, " + build.branches + " of them branches; "
         + build.used.size() + " of " + universe.size() + " reachable rooms are on the spine or a branch");
-    head.add("chapter doors and the shooting range keep their payloads (pins are never a spine step)");
+    head.add("chapter doors, the shooting range, its merchants and the lake boat keep their payloads");
     head.add(ASHLEY_NOTE);
     head.add(stageLine(rooms));
     head.add(rooms.size() + " rooms, " + oneWay(rooms).size() + " one-way links");
