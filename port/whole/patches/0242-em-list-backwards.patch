@@ -1,0 +1,33 @@
+# Port patch (branch feature/offline-randomizer): the enemy list is only reloaded when the room moves forward.
+#
+# src/game/stage.cpp readEmList() keeps the loaded enemy list when the room it belongs to does not have a
+# HIGHER list number than the one already in pG->Em_list:
+#
+#     if (no > g->em_list_no || SYS_NEW_GAME || SaveKind == 3 || ...) { name = getEmListName(no); }
+#
+# The disc has only eleven lists for the whole game (etc/emleon00.esl .. etc/omake02.esl), each shared by a
+# group of rooms, and the numbering follows the story: stage 1 early rooms use list 0, the later ones list 1,
+# the village list 2/3, the castle 4/5, the island 6/7. That works in vanilla because the player only walks
+# forward. A shuffled door walks backwards, and then the list is never re-read: pG->Em_list still holds the
+# entries of the other group, EmSetFromList() filters every entry by `d->room` and finds none, so the room
+# spawns no enemies at all. Anything a script creates from the list is lost the same way - the lake boat
+# (R11bInit EmSetFromList2(0x3C, 0)) is one of them.
+#
+# The fix asks the list number to DIFFER, not to be higher, so moving back into an earlier group reloads that
+# group's list and the room is populated again. Everything else is untouched: the same number still skips the
+# read, a new game / save kind 3 still reloads, and rooms without a list (checkEmListNo returns -1) keep the
+# previous behaviour.
+#
+# Cost: one small DVD read (a few KB) when a room change crosses a list boundary backwards. Killed list
+# enemies are reset when their group is re-read - they already were on a forward change into a new group.
+--- a/src/game/stage.cpp
++++ b/src/game/stage.cpp
+@@ -232,7 +232,7 @@ void readEmList(int proc)
+     no = checkEmListNo(G_ROOM_ID);
+     if (no >= 0) {
+         GLOBAL_WK* g = pG;
+-        if (no > g->em_list_no || (SysFlagChk(g, SYS_NEW_GAME)) || g->SaveKind == 3 ||
++        if (no != g->em_list_no || (SysFlagChk(g, SYS_NEW_GAME)) || g->SaveKind == 3 ||
+             (DbgFlagChk(g, DBG_ROOMJMP) && g->em_list_no != no)) {
+             name = getEmListName(no);
+             pG->em_list_no = no;
