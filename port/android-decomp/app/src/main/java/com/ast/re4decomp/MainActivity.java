@@ -97,6 +97,8 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     body.addView(crossStage);
     button(body, "Shuffle with a spine (recommended)", this::shuffleDoorsSpine);
     button(body, "Shuffle doors and keys", this::shuffleDoors);
+    button(body, "Rooms kept vanilla: doors", () -> roomPinsDialog(RoomPins.DOORS));
+    button(body, "Rooms kept vanilla: items", () -> roomPinsDialog(RoomPins.ITEMS));
     button(body, "Door shuffle log (where each door goes)", this::showDoorLog);
     // the menu's only entry in the core mode was the disc import, which its launcher shows anyway
     if (!core) button(body, getString(R.string.browser_menu), this::showMenu);
@@ -205,6 +207,42 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       final String shown = result;
       runOnUiThread(() -> Toast.makeText(this, shown, Toast.LENGTH_LONG).show());
     }, "door-spine").start();
+  }
+
+  /** Tick the rooms a shuffle must leave exactly as the disc has them; the pins live in randomizer/pins.txt. */
+  private void roomPinsDialog(String kind) {
+    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
+    final String what = RoomPins.DOORS.equals(kind) ? "doors" : "items";
+    final File root = imports.root;
+    new Thread(() -> {
+      final java.util.List<String> rooms = RoomPins.rooms(root);
+      final java.util.Set<String> pinned = RoomPins.load(root, kind);
+      runOnUiThread(() -> {
+        if (rooms.isEmpty()) {
+          Toast.makeText(this, "Collect the rooms for the randomizer first", Toast.LENGTH_LONG).show();
+          return;
+        }
+        final boolean[] checked = new boolean[rooms.size()];
+        for (int i = 0; i < rooms.size(); i++) checked[i] = pinned.contains(rooms.get(i));
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Rooms kept vanilla: " + what + " (" + pinned.size() + " ticked)")
+            .setMultiChoiceItems(rooms.toArray(new String[0]), checked,
+                (dialog, which, on) -> checked[which] = on)
+            .setPositiveButton("Save", (dialog, which) -> {
+              java.util.Set<String> now = new java.util.TreeSet<>();
+              for (int i = 0; i < rooms.size(); i++) if (checked[i]) now.add(rooms.get(i));
+              RoomPins.save(root, kind, now);
+              Toast.makeText(this, now.size() + " room(s) kept vanilla for " + what,
+                  Toast.LENGTH_SHORT).show();
+            })
+            .setNeutralButton("Clear all", (dialog, which) -> {
+              RoomPins.save(root, kind, new java.util.TreeSet<>());
+              Toast.makeText(this, "nothing kept vanilla for " + what, Toast.LENGTH_SHORT).show();
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+      });
+    }, "room-pins").start();
   }
 
   /** Every door as it now leads, plus where the progression items were put. */

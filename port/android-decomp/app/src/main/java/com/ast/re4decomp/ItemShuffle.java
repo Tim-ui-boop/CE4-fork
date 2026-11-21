@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The offline randomizer's item shuffle (branch feature/offline-randomizer).
@@ -296,6 +297,12 @@ public final class ItemShuffle {
     boolean held;
     /** The item models this room carries: what it can actually show (its ITM pack's ids). */
     int[] models;
+  }
+
+  /** The room name of a sidecar (r10f.das.raw -> r10f). */
+  private static String roomOf(File file) {
+    String name = file.getName();
+    return name.endsWith(".das.raw") ? name.substring(0, name.length() - 8) : name;
   }
 
   /** The model of every item id anywhere on the discs, the smallest variant (keeps a room's pack small). */
@@ -609,7 +616,11 @@ public final class ItemShuffle {
     Arrays.sort(keys);
     for (Integer id : keys) contents.append(itemLabel(id)).append(" x").append(counts.get(id)).append(", ");
     List<Slot> movable = new ArrayList<>();
-    for (Slot slot : slots) if (inPool(slot.id, index)) movable.add(slot);
+    Set<String> excluded = RoomPins.load(root, RoomPins.ITEMS);
+    for (Slot slot : slots) {
+      if (excluded.contains(roomOf(slot.file))) continue;   // a room the player keeps vanilla keeps its items too
+      if (inPool(slot.id, index)) movable.add(slot);
+    }
     if (movable.isEmpty()) return "Nothing to shuffle: no item of the pool in the collected rooms";
 
     // A swap is allowed only when each room carries the other item's model. That keeps every id in the game

@@ -106,6 +106,8 @@ public final class DoorShuffle {
    * on the phone: the gondola had to be ridden twice before the Mendez-eye door to the castle answered.
    */
   private static final String[] KEEP_VANILLA_ROOMS = {"r11b", "r10f"};
+  /** Rooms the player ticked on the launcher's "rooms kept vanilla" screen; reloaded at every shuffle. */
+  private static Set<String> userPinned = new TreeSet<>();
   /** Vanilla door-graph distance: the first rooms of the game (0..2 hops from the start) and the closing ones. */
   private static final int OPENING_DIST = 2;
   private static final int LATE_DIST = 21;
@@ -475,6 +477,7 @@ public final class DoorShuffle {
   }
 
   private static boolean roomPinned(String room) {
+    if (userPinned.contains(room)) return true;
     for (String pinned : PIN_ROOMS) {
       if (pinned.equals(room)) return true;
     }
@@ -538,6 +541,7 @@ public final class DoorShuffle {
 
   /** Deals the doors with a seed, moves the keys, writes the rooms, and logs every change. */
   static String shuffleAll(File root, long seed, boolean allowCross) {
+    userPinned = RoomPins.load(root, RoomPins.DOORS);
     Map<String, Room> rooms = scan(root);
     if (rooms.isEmpty()) return "No collected rooms yet: collect the rooms first";
     link(rooms);
@@ -635,6 +639,9 @@ public final class DoorShuffle {
     head.add(chapterPinned + " chapter doors kept in place (their payload is the next chapter's spawn)");
     head.add(roomPinned + " links kept for the shooting range, its merchant rooms and the lake boat: "
         + pinnedNames());
+    if (!userPinned.isEmpty()) {
+      head.add(userPinned.size() + " room(s) kept vanilla by you: " + String.join(", ", userPinned));
+    }
     head.add(ASHLEY_NOTE);
     head.add(stageLine(rooms));
     head.add(rooms.size() + " rooms, " + pairs.size() + " two-way doors, " + oneWay(rooms).size()
@@ -682,6 +689,7 @@ public final class DoorShuffle {
         for (String name : reachable) {
           Room room = rooms.get(name);
           if (room.gates.contains(key)) continue;    // never behind the gate that needs it
+          if (userPinned.contains(name)) continue;   // a room the player keeps vanilla takes no key
           if (room.models.contains(key) && freeArea(room) >= 0) candidates.add(room);
         }
         if (candidates.isEmpty()) continue;          // maybe reachable next round, when more is open
@@ -1077,6 +1085,7 @@ public final class DoorShuffle {
 
   /** The PC-style shuffle: an ordered main path, branches hung on it, then the doors are written. */
   static String shuffleWithSpine(File root, long seed, boolean allowCross) {
+    userPinned = RoomPins.load(root, RoomPins.DOORS);
     Map<String, Room> rooms = scan(root);
     link(rooms);
     int doors = 0, orphan = 0;
@@ -1135,6 +1144,9 @@ public final class DoorShuffle {
     head.add(build.links + " door links written, " + build.branches + " of them branches; "
         + build.used.size() + " of " + universe.size() + " reachable rooms are on the spine or a branch");
     head.add("chapter doors, the shooting range, its merchants and the lake boat keep their payloads");
+    if (!userPinned.isEmpty()) {
+      head.add(userPinned.size() + " room(s) kept vanilla by you: " + String.join(", ", userPinned));
+    }
     head.add(ASHLEY_NOTE);
     head.add(stageLine(rooms));
     head.add(rooms.size() + " rooms, " + oneWay(rooms).size() + " one-way links");
