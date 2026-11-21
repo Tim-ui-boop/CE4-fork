@@ -104,8 +104,15 @@ public final class DoorShuffle {
    * ride whose state is room flag 0, and the door handlers are told which neighbour they belong to
    * (`r10f_DoorClose(0x11D)` / `0x11E`). Arriving through a shuffled door leaves the ride half-done - played
    * on the phone: the gondola had to be ridden twice before the Mendez-eye door to the castle answered.
+   *
+   * r208 is the water hall: its script asks `room_id_prev == 0xFFF` (entered from a chapter, not from a door)
+   * before it runs the crank/moat/bridge sequence for Ashley, so a shuffled arrival drops the player at the
+   * far end and skips it - played on the phone.
+   *
+   * r30a plays its s00 event and then jumps the player to room 0x316 by script (`SceAtExecRoomJump`), whatever
+   * its door says, so shuffling it only produces a one-way surprise.
    */
-  private static final String[] KEEP_VANILLA_ROOMS = {"r11b", "r10f"};
+  private static final String[] KEEP_VANILLA_ROOMS = {"r11b", "r10f", "r208", "r30a"};
   /** Rooms the player ticked on the launcher's "rooms kept vanilla" screen; reloaded at every shuffle. */
   private static Set<String> userPinned = new TreeSet<>();
   /** Vanilla door-graph distance: the first rooms of the game (0..2 hops from the start) and the closing ones. */
