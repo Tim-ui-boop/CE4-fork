@@ -99,8 +99,13 @@ public final class DoorShuffle {
    * `room_id_prev == 0x10D` (the vanilla dock), and patch 0241 turns the missing boat into no boat instead of
    * a crash. A shuffled door into the lake from a room the script never expects loses the boat, and the
    * player cannot row back. Its doors stay exactly as the disc has them.
+   *
+   * r10f is the cable car and the castle gate: the gondola get-on/get-off areas (7, 8, 9) drive a scripted
+   * ride whose state is room flag 0, and the door handlers are told which neighbour they belong to
+   * (`r10f_DoorClose(0x11D)` / `0x11E`). Arriving through a shuffled door leaves the ride half-done - played
+   * on the phone: the gondola had to be ridden twice before the Mendez-eye door to the castle answered.
    */
-  private static final String[] KEEP_VANILLA_ROOMS = {"r11b"};
+  private static final String[] KEEP_VANILLA_ROOMS = {"r11b", "r10f"};
   /** Vanilla door-graph distance: the first rooms of the game (0..2 hops from the start) and the closing ones. */
   private static final int OPENING_DIST = 2;
   private static final int LATE_DIST = 21;
