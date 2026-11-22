@@ -88,7 +88,8 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     newSeedEach.setText("New seed on every shuffle (untick to reuse the seed in the box)");
     newSeedEach.setChecked(true);
     body.addView(newSeedEach);
-    button(body, "Deal items and doors in one pass (proven walk)", this::dealAll);
+    button(body, "Deal items and doors, PC-style main path (proven walk)", this::dealSpine);
+    button(body, "Deal items and doors in one pass (random doors, proven walk)", this::dealAll);
     button(body, "Shuffle all room items (full shuffle)", this::shuffleRoomItems);
     button(body, "Restore original rooms", this::restoreRoomItems);
     button(body, "Item shuffle log (where each item went)", this::showShuffleLog);
@@ -170,6 +171,24 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       final String shown = result;
       runOnUiThread(() -> android.widget.Toast.makeText(this, shown, android.widget.Toast.LENGTH_LONG).show());
     }, "item-shuffle").start();
+  }
+
+  /** The PC randomizer's shape: an ordered main path with branches, then the same proven item deal. */
+  private void dealSpine() {
+    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
+    final File root = imports.root;
+    final boolean cross = crossStage != null && crossStage.isChecked();
+    final long seed = seedForThisClick();
+    new Thread(() -> {
+      String result;
+      try {
+        result = DoorShuffle.dealSpine(root, seed, cross);
+      } catch (RuntimeException | OutOfMemoryError e) {
+        result = "The deal stopped: " + e;
+      }
+      final String shown = result;
+      runOnUiThread(() -> Toast.makeText(this, shown, Toast.LENGTH_LONG).show());
+    }, "deal-spine").start();
   }
 
   /** The combined deal: whole door pairs and the whole item pool in one pass, proved by walking the result. */

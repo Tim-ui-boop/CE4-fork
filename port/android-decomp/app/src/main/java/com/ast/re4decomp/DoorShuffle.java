@@ -1564,4 +1564,499 @@ public final class DoorShuffle {
     return null;
   }
 
+  // ---- the PC randomizer's shape: a main path, then branches --------------------------------------------
+
+  /** The PC tool's room classes, read from what the disc wires. See RE4RND_v2's DoorRandomizerData. */
+  private static final int KIND_RESERVED = 0;    // chapter spawns, pinned puzzle rooms: payloads untouched
+  private static final int KIND_NEED_KEY = 1;    // TwoDoorOneWayRooms/NeedKey
+  private static final int KIND_NEED_ITEM = 2;   // a use area: the room cannot be left without an item
+  private static final int KIND_SINGLE = 3;      // one socket: can only end a path
+  private static final int KIND_REGULAR = 4;     // two sockets: a corridor
+  private static final int KIND_HUB = 5;         // more than two: a junction
+
+  /** How many rooms the main path aims for (the PC list has 25) and the shortest that is still a spine. */
+  private static final int PATH_TARGET = 22;
+  private static final int PATH_MIN = 12;
+
+  private static int kindOf(Room room, Map<String, Room> rooms) {
+    int sockets = 0;
+    boolean key = false;
+    for (Door door : room.doors) {
+      if (!rooms.containsKey(door.dest.name())) continue;
+      sockets++;
+      if (door.keyId != 0) key = true;
+    }
+    if (roomPinned(room.name) || chapterRoom(room.name)) return KIND_RESERVED;
+    if (key) return KIND_NEED_KEY;
+    for (Integer gate : room.gates) if (realGate(gate)) return KIND_NEED_ITEM;
+    if (sockets <= 1) return KIND_SINGLE;
+    if (sockets == 2) return KIND_REGULAR;
+    return KIND_HUB;
+  }
+
+  private static int socketsOf(Room room, Map<String, Room> rooms) {
+    int n = 0;
+    for (Door door : room.doors) if (rooms.containsKey(door.dest.name())) n++;
+    return n;
+  }
+
+  /** Where the disc's own doors already arrive: the legal arrival payloads for each target room. */
+  private static Map<String, List<Dest>> arrivals(Map<String, Room> rooms) {
+    Map<String, List<Dest>> into = new HashMap<>();
+    for (Room room : rooms.values()) {
+      for (Door door : room.doors) {
+        if (!rooms.containsKey(door.dest.name())) continue;
+        into.computeIfAbsent(door.dest.name(), k -> new ArrayList<>()).add(door.orig);
+      }
+    }
+    for (Room room : rooms.values()) {
+      if (into.containsKey(room.name) || room.doors.isEmpty()) continue;
+      // a room the disc never arrives into (a one-way drop): its own door position is still a legal place
+      into.put(room.name, new ArrayList<>(Collections.singletonList(room.doors.get(0).orig)));
+    }
+    return into;
+  }
+
+  /** A wired main path plus the branches hung on it. */
+  private static final class Spine {
+    List<String> path = new ArrayList<>();
+    Map<String, List<String>> plan = new LinkedHashMap<>();
+    Set<String> used = new TreeSet<>();
+    Map<String, Integer> spare = new LinkedHashMap<>();
+    int links;
+  }
+
+  /**
+   * Picks the ordered main path the way the PC tool's MainPathRooms.txt does, then hangs the rest on it.
+   *
+   * Each step spends one free socket of the room the path is standing in and one of the next room's, which is
+   * why a two-socket room is a corridor and a one-socket room can only end the path. The path prefers the
+   * disc's own neighbours and may otherwise hop anywhere (the PC list hops between areas freely).
+   */
+  private static Spine buildSpine(Map<String, Room> rooms, Set<String> universe, Map<String, Integer> kinds,
+      Random rng) {
+    Spine spine = new Spine();
+    Map<String, Integer> free = new LinkedHashMap<>();
+    for (String name : universe) free.put(name, socketsOf(rooms.get(name), rooms));
+    if (!universe.contains(START) || free.getOrDefault(START, 0) <= 0) return null;
+    spine.used.add(START);
+    spine.path.add(START);
+
+    while (spine.path.size() < PATH_TARGET) {
+      String here = spine.path.get(spine.path.size() - 1);
+      if (free.getOrDefault(here, 0) <= 0) break;
+      boolean longEnough = spine.path.size() + 1 >= PATH_MIN;
+      List<String> near = new ArrayList<>();
+      for (Door door : rooms.get(here).doors) {
+        String target = door.dest.name();
+        if (universe.contains(target) && !spine.used.contains(target) && free.getOrDefault(target, 0) > 0) {
+          near.add(target);
+        }
+      }
+      List<String> any = new ArrayList<>();
+      for (String name : universe) {
+        if (spine.used.contains(name) || free.getOrDefault(name, 0) <= 0) continue;
+        if (!longEnough && kinds.getOrDefault(name, KIND_REGULAR) == KIND_SINGLE) continue;
+        any.add(name);
+      }
+      List<String> pick;
+      if (!near.isEmpty()) {
+        pick = new ArrayList<>();
+        for (String name : near) {
+          if (longEnough || kinds.getOrDefault(name, KIND_REGULAR) != KIND_SINGLE) pick.add(name);
+        }
+      } else {
+        pick = any;
+      }
+      if (pick.isEmpty()) pick = any;
+      if (pick.isEmpty()) break;
+      String next = pick.get(rng.nextInt(pick.size()));
+      spine.plan.computeIfAbsent(here, k -> new ArrayList<>()).add(next);
+      spine.plan.computeIfAbsent(next, k -> new ArrayList<>()).add(here);
+      free.put(here, free.get(here) - 1);
+      free.put(next, free.get(next) - 1);
+      spine.used.add(next);
+      spine.path.add(next);
+      spine.links++;
+    }
+
+    // branches: always grow from the host with the most spare sockets to the unwired room with the most
+    // sockets of its own, so the frontier cannot dry up with rooms still unwired
+    List<String> rest = new ArrayList<>();
+    for (String name : universe) if (!spine.used.contains(name)) rest.add(name);
+    while (!rest.isEmpty()) {
+      String host = null;
+      for (String name : spine.used) {
+        if (free.getOrDefault(name, 0) <= 0) continue;
+        if (host == null || free.get(name) > free.get(host)) host = name;
+      }
+      if (host == null) break;
+      final Map<String, Integer> f = free;
+      rest.sort((a, b) -> {
+        int sa = f.getOrDefault(a, 0) <= 1 ? 0 : 1, sb = f.getOrDefault(b, 0) <= 1 ? 0 : 1;
+        if (sa != sb) return sa - sb;                       // a one-socket room ends a branch, so it goes last
+        return f.getOrDefault(b, 0) - f.getOrDefault(a, 0);
+      });
+      String next = rest.remove(0);
+      spine.plan.computeIfAbsent(host, k -> new ArrayList<>()).add(next);
+      spine.plan.computeIfAbsent(next, k -> new ArrayList<>()).add(host);
+      free.put(host, free.get(host) - 1);
+      free.put(next, free.get(next) - 1);
+      spine.used.add(next);
+      spine.links++;
+    }
+
+    // leftover sockets duplicate a link that already exists, so no new shortcut appears
+    for (String name : spine.used) {
+      List<String> links = spine.plan.get(name);
+      while (free.getOrDefault(name, 0) > 0 && links != null && !links.isEmpty()) {
+        links.add(links.get(rng.nextInt(links.size())));
+        free.put(name, free.get(name) - 1);
+        spine.links++;
+      }
+    }
+    spine.spare = free;
+    return spine;
+  }
+
+  /**
+   * Gives every wired socket an arrival payload that already arrives in its target room.
+   *
+   * The payload (position, stage, room, part) travels as one unit, exactly as the PC tool's Return/ files
+   * precompute it, so a door never lands somewhere illegal. Reserved rooms keep the disc's own payloads.
+   */
+  private static int applySpine(Map<String, Room> rooms, Spine spine, Map<String, Integer> kinds, Random rng) {
+    Map<String, List<Dest>> into = arrivals(rooms);
+    int wired = 0;
+    for (Map.Entry<String, List<String>> entry : spine.plan.entrySet()) {
+      Room room = rooms.get(entry.getKey());
+      if (room == null) continue;
+      boolean reserved = kinds.getOrDefault(room.name, KIND_REGULAR) == KIND_RESERVED;
+      List<Door> doors = new ArrayList<>();
+      for (Door door : room.doors) if (rooms.containsKey(door.dest.name())) doors.add(door);
+      List<String> targets = entry.getValue();
+      for (int i = 0; i < doors.size() && i < targets.size(); i++) {
+        if (reserved) continue;
+        List<Dest> pool = into.get(targets.get(i));
+        if (pool == null || pool.isEmpty()) continue;
+        doors.get(i).dest = pool.get(rng.nextInt(pool.size()));
+        wired++;
+      }
+    }
+    return wired;
+  }
+
+  /** Whether the map, walked forwards, reaches exactly the rooms the disc reaches forwards. */
+  private static boolean walkable(Map<String, Room> rooms, Set<String> forward) {
+    return reach(directed(rooms), rooms, gateIds(rooms)).equals(forward);
+  }
+
+  /**
+   * The PC randomizer's shape, then the same proven deal on top: a main path with branches, every socket given
+   * an arrival payload the disc already uses, the whole item pool dealt along that walk, and the result
+   * re-read and walked again before it is called proven.
+   */
+  static String dealSpine(File root, long seed, boolean allowCross) {
+    userPinned = RoomPins.load(root, RoomPins.DOORS);
+    Set<String> itemPinned = RoomPins.load(root, RoomPins.ITEMS);
+    Map<String, Room> rooms = scan(root);
+    if (rooms.isEmpty()) return "No collected rooms yet: collect the rooms first";
+    link(rooms);
+    Set<Integer> allGates = gateIds(rooms);
+    Set<String> forward = reach(directed(rooms), rooms, allGates);
+    if (forward.size() < MIN_UNIVERSE) {
+      return "The deal refused: only " + forward.size() + " rooms are reachable from " + START
+          + " walking the doors as they point; collect the rooms again and retry.";
+    }
+    Set<String> bridgeOnly = new TreeSet<>(reach(graph(rooms), rooms, allGates));
+    bridgeOnly.removeAll(forward);
+
+    Random rng = new Random(seed);
+    Map<String, Integer> kinds = new LinkedHashMap<>();
+    for (String name : forward) kinds.put(name, kindOf(rooms.get(name), rooms));
+
+    Spine best = null;
+    Map<String, Room> bestRooms = null;
+    int bestWired = 0;
+    for (int attempt = 0; attempt < 40; attempt++) {
+      Map<String, Room> trial = copyOf(rooms);
+      Spine spine = buildSpine(trial, forward, kinds, rng);
+      if (spine == null || spine.path.size() < PATH_MIN) continue;
+      int wired = applySpine(trial, spine, kinds, rng);
+      if (!walkable(trial, forward)) continue;
+      if (best == null || spine.path.size() > best.path.size()) {
+        best = spine;
+        bestRooms = trial;
+        bestWired = wired;
+      }
+    }
+    if (best == null || bestRooms == null) {
+      return "Seed " + seed + " refused: no main path of " + PATH_MIN
+          + " rooms keeps the disc's own rooms walkable; nothing was written. Try another seed.";
+    }
+    rooms = bestRooms;
+    Map<String, Set<String>> adj = directed(rooms);
+
+    // the items, on this door map: the same rule as dealAll
+    Set<Integer> modelled = ItemShuffle.modelIds(root);
+    List<Piece> pieces = new ArrayList<>();
+    for (String name : forward) {
+      if (itemPinned.contains(name) || userPinned.contains(name)) continue;
+      Room room = rooms.get(name);
+      for (ItemArea area : room.items) {
+        if (area.id == 0xFFFF) continue;
+        if (itemId(area.id) && !modelled.contains(area.id)) continue;
+        Piece piece = new Piece();
+        piece.room = room;
+        piece.area = area;
+        piece.oldId = area.id;
+        piece.oldNum = area.num;
+        piece.nowId = area.id;
+        piece.nowNum = area.num;
+        pieces.add(piece);
+      }
+    }
+    List<Piece> filled = new ArrayList<>();
+    for (Piece piece : pieces) if (itemId(piece.nowId)) filled.add(piece);
+    if (filled.isEmpty()) return "Nothing to deal: the reachable rooms hold no item the deal can move";
+    for (int k = filled.size() * 8; k > 0; k--) {
+      Piece one = filled.get(rng.nextInt(filled.size()));
+      Piece two = filled.get(rng.nextInt(filled.size()));
+      if (one == two) continue;
+      int id = one.nowId, num = one.nowNum;
+      one.nowId = two.nowId;
+      one.nowNum = two.nowNum;
+      two.nowId = id;
+      two.nowNum = num;
+    }
+    Set<Integer> gates = new TreeSet<>();
+    for (String name : forward) for (Integer gate : rooms.get(name).gates) if (realGate(gate)) gates.add(gate);
+    Set<Integer> held = new TreeSet<>();
+    Set<Integer> unmodelled = new TreeSet<>();
+    Map<Integer, String> gateRoom = new LinkedHashMap<>();
+    for (int round = 0; round < gates.size() + 6; round++) {
+      Set<String> seen = reach(adj, rooms, held);
+      Set<String> stuck = cannotLeave(rooms, adj, held);
+      Set<Integer> wanted = new TreeSet<>();
+      for (String name : seen) {
+        for (Integer gate : rooms.get(name).gates) if (realGate(gate) && !held.contains(gate)) wanted.add(gate);
+      }
+      if (wanted.isEmpty()) break;
+      boolean progress = false;
+      for (Integer gate : wanted) {
+        if (!modelled.contains(gate)) {
+          unmodelled.add(gate);
+          held.add(gate);
+          progress = true;
+          continue;
+        }
+        Piece holder = null, free = null, trade = null;
+        for (Piece piece : pieces) {
+          if (!seen.contains(piece.room.name) || stuck.contains(piece.room.name)) continue;
+          if (piece.nowId == gate && holder == null && !piece.hidden()) holder = piece;
+          if (piece.hidden()) continue;
+          if (free == null && piece.empty()) free = piece;
+          if (trade == null && itemId(piece.nowId) && piece.nowId != gate) trade = piece;
+        }
+        if (holder != null) {
+          held.add(gate);
+          progress = true;
+          continue;
+        }
+        Piece from = null;
+        for (Piece piece : filled) if (piece.nowId == gate) { from = piece; break; }
+        if (from == null) {
+          unmodelled.add(gate);
+          held.add(gate);
+          progress = true;
+          continue;
+        }
+        if (free != null) {
+          free.nowId = gate;
+          free.nowNum = from.nowNum;
+          from.nowId = 0;
+          from.nowNum = 0;
+        } else if (trade != null) {
+          int id = trade.nowId, num = trade.nowNum;
+          trade.nowId = gate;
+          trade.nowNum = from.nowNum;
+          from.nowId = id;
+          from.nowNum = num;
+        } else {
+          continue;
+        }
+        gateRoom.put(gate, free != null ? free.room.name : trade.room.name);
+        held.add(gate);
+        progress = true;
+      }
+      if (!progress) break;
+    }
+
+    Map<String, Map<Integer, int[]>> plan = new LinkedHashMap<>();
+    int areasPlanned = 0;
+    for (Piece piece : pieces) {
+      if (piece.nowId == piece.oldId && piece.nowNum == piece.oldNum) continue;
+      plan.computeIfAbsent(piece.room.name, k -> new LinkedHashMap<>())
+          .put(piece.area.at, new int[]{piece.nowId, piece.nowNum});
+      areasPlanned++;
+    }
+
+    int roomsWritten = 0;
+    try {
+      for (Room room : rooms.values()) {
+        boolean doorChanged = false;
+        for (Door door : room.doors) if (!same(door.dest, door.orig)) doorChanged = true;
+        if (!doorChanged) continue;
+        byte[] b = readAll(room.file);
+        for (Door door : room.doors) if (!same(door.dest, door.orig)) door.dest.into(b, door.at);
+        writeAll(room.file, b);
+        b = null;
+        roomsWritten++;
+      }
+      if (!snapshotFile(root).isFile()) writeSnapshot(root, rooms);
+    } catch (IOException | OutOfMemoryError e) {
+      Log.i(TAG, "the doors could not be written: " + e);
+      return "The deal stopped before it wrote the rooms: " + e;
+    }
+    String itemLine = ItemShuffle.writeDeal(root, plan);
+    try {
+      writeAll(markerFile(root), Long.toString(seed).getBytes(StandardCharsets.UTF_8));
+    } catch (IOException e) {
+      Log.i(TAG, "the marker could not be written: " + e);
+    }
+
+    Map<String, Room> after = scan(root);
+    link(after);
+    Set<Integer> got = new TreeSet<>();
+    Set<String> proven = new TreeSet<>();
+    int proofRounds = 0;
+    while (proofRounds < 400) {
+      proofRounds++;
+      proven = reach(directed(after), after, got);
+      boolean progress = false;
+      for (String name : proven) {
+        Room room = after.get(name);
+        if (room == null) continue;
+        for (ItemArea area : room.items) if (itemId(area.id) && got.add(area.id)) progress = true;
+      }
+      if (!progress) break;
+    }
+    List<String> lost = new ArrayList<>(forward);
+    lost.removeAll(proven);
+    List<Integer> gateShort = new ArrayList<>();
+    for (Integer gate : gates) if (!got.contains(gate) && !unmodelled.contains(gate)) gateShort.add(gate);
+    boolean provenOk = lost.isEmpty() && gateShort.isEmpty();
+
+    Map<String, Integer> kindCount = new LinkedHashMap<>();
+    for (Integer kind : kinds.values()) {
+      String label = kind == KIND_RESERVED ? "reserved" : kind == KIND_NEED_KEY ? "need key"
+          : kind == KIND_NEED_ITEM ? "need item" : kind == KIND_SINGLE ? "single door"
+          : kind == KIND_REGULAR ? "two doors" : "junction";
+      kindCount.merge(label, 1, Integer::sum);
+    }
+    StringBuilder log = new StringBuilder();
+    log.append("RE4 offline randomizer - PC-style spine, items and doors in one pass\n");
+    log.append("seed ").append(seed).append('\n');
+    log.append("verdict: ").append(provenOk ? "PROVEN - every room is reached and every gate is satisfiable"
+        : "NOT PROVEN - do not play this seed").append('\n');
+    log.append("main path (").append(best.path.size()).append(" rooms): ").append(String.join(" -> ", best.path))
+        .append('\n');
+    log.append("branches: ").append(best.used.size() - best.path.size()).append(" rooms hung on ")
+        .append(best.links).append(" links, ").append(bestWired).append(" sockets given an arrival payload\n");
+    log.append("room classes: ").append(kindCount).append('\n');
+    log.append("proof: walk ").append(proven.size()).append(" rooms of ").append(forward.size()).append(", ")
+        .append(gates.size()).append(" gates, ").append(proofRounds).append(" collection rounds\n");
+    if (!lost.isEmpty()) log.append("rooms the walk never reached: ").append(String.join(", ", lost)).append('\n');
+    if (!gateShort.isEmpty()) {
+      log.append("gates still unsatisfied: ");
+      for (Integer gate : gateShort) log.append(String.format(Locale.US, "0x%02x ", gate));
+      log.append('\n');
+    }
+    if (!unmodelled.isEmpty()) {
+      log.append("gate items the discs never place (script or shop, not modelled): ");
+      for (Integer gate : unmodelled) log.append(String.format(Locale.US, "0x%02x ", gate));
+      log.append('\n');
+    }
+    log.append("items: ").append(itemLine).append('\n');
+    log.append("pool: ").append(filled.size()).append(" movable items over ").append(pieces.size())
+        .append(" areas, ").append(areasPlanned).append(" areas written, ").append(roomsWritten)
+        .append(" rooms touched\n");
+    log.append("rooms: ").append(rooms.size()).append(" collected, ").append(forward.size())
+        .append(" walkable forwards, ").append(oneWay(after).size()).append(" one-way links; ");
+    if (bridgeOnly.isEmpty()) {
+      log.append("no room of this map needs one walked backwards\n");
+    } else {
+      log.append("only reached by walking a one-way link backwards: ")
+          .append(String.join(", ", bridgeOnly)).append('\n');
+    }
+    if (!userPinned.isEmpty()) {
+      log.append("rooms you keep vanilla (doors): ").append(String.join(", ", userPinned)).append('\n');
+    }
+    if (!itemPinned.isEmpty()) {
+      log.append("rooms you keep vanilla (items): ").append(String.join(", ", itemPinned)).append('\n');
+    }
+    log.append('\n').append("gate items, where they now sit:\n");
+    for (Integer gate : gates) {
+      String where = gateRoom.get(gate);
+      if (where == null) {
+        for (Piece piece : filled) if (piece.nowId == gate) where = piece.room.name;
+        if (where == null) where = unmodelled.contains(gate) ? "handed over by a script" : "nowhere";
+      }
+      log.append(String.format(Locale.US, "  0x%02x  %s%n", gate, where));
+    }
+    log.append('\n').append("not modelled by this proof (so not claimed):\n");
+    log.append("  locked doors: key_id 1/2 is a lock kind and key_flg is a script flag, not an item\n");
+    log.append("  one-way geometry: a drop or a lift the records do not describe\n");
+    log.append("  scripted room jumps (SceAtExecRoomJump) and chapter spawns\n");
+    log.append("  Ashley: her door check is off while randomizer/doors.active exists (port patch 0240)\n");
+    log.append("  enemy-carried items are dealt with the pool, but a gate item is never left on a holder\n");
+    log.append("  the PC tool can also inject return triggers; this port cannot, so both ends of a link are real\n");
+    try {
+      writeAll(logFile(root), log.toString().getBytes(StandardCharsets.UTF_8));
+    } catch (IOException e) {
+      Log.i(TAG, "the deal log could not be written: " + e);
+    }
+    String summary = (provenOk ? "Proven: " : "NOT proven: ") + proven.size() + " of " + forward.size()
+        + " rooms, " + gates.size() + " gates; main path " + best.path.size() + " rooms, " + best.links
+        + " links, " + itemLine + ". The walk is in randomizer/doors.txt";
+    Log.i(TAG, summary);
+    return summary;
+  }
+
+  /** A copy of the room metadata, so a refused attempt can be thrown away without rescanning the files. */
+  private static Map<String, Room> copyOf(Map<String, Room> rooms) {
+    Map<String, Room> out = new TreeMap<>();
+    for (Room room : rooms.values()) {
+      Room copy = new Room();
+      copy.name = room.name;
+      copy.file = room.file;
+      copy.models = room.models;
+      copy.gates.addAll(room.gates);
+      for (Door door : room.doors) {
+        Door d = new Door();
+        d.room = copy;
+        d.at = door.at;
+        d.area = door.area;
+        d.keyId = door.keyId;
+        d.keyFlg = door.keyFlg;
+        d.orig = door.orig;
+        d.dest = door.dest;
+        copy.doors.add(d);
+      }
+      for (ItemArea area : room.items) {
+        ItemArea a = new ItemArea();
+        a.at = area.at;
+        a.id = area.id;
+        a.num = area.num;
+        a.waiting = area.waiting;
+        a.ctrl = area.ctrl;
+        copy.items.add(a);
+      }
+      out.put(room.name, copy);
+    }
+    // door.dest and door.orig are immutable records (a fresh Dest per door), so sharing them is safe
+    for (Room room : out.values()) for (Door door : room.doors) door.room = room;
+    return out;
+  }
+
 }
