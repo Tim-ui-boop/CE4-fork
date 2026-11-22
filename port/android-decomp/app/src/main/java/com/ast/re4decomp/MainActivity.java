@@ -88,18 +88,19 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     newSeedEach.setText("New seed on every shuffle (untick to reuse the seed in the box)");
     newSeedEach.setChecked(true);
     body.addView(newSeedEach);
+    button(body, "Deal items and doors in one pass (proven walk)", this::dealAll);
     button(body, "Shuffle all room items (full shuffle)", this::shuffleRoomItems);
     button(body, "Restore original rooms", this::restoreRoomItems);
     button(body, "Item shuffle log (where each item went)", this::showShuffleLog);
     crossStage = new android.widget.CheckBox(this);
     crossStage.setText("One door pool for the whole game: village, castle and island mix (tick this for the full shuffle)");
-    crossStage.setChecked(false);
+    crossStage.setChecked(true);
     body.addView(crossStage);
-    button(body, "Shuffle with a spine (recommended)", this::shuffleDoorsSpine);
+    button(body, "Shuffle with a spine (old: can leave one-way traps)", this::shuffleDoorsSpine);
     button(body, "Shuffle doors and keys", this::shuffleDoors);
     button(body, "Rooms kept vanilla: doors", () -> roomPinsDialog(RoomPins.DOORS));
     button(body, "Rooms kept vanilla: items", () -> roomPinsDialog(RoomPins.ITEMS));
-    button(body, "Door shuffle log (where each door goes)", this::showDoorLog);
+    button(body, "Deal / door log (the walk that proves it)", this::showDoorLog);
     // the menu's only entry in the core mode was the disc import, which its launcher shows anyway
     if (!core) button(body, getString(R.string.browser_menu), this::showMenu);
     importPanel = new LinearLayout(this); importPanel.setOrientation(LinearLayout.VERTICAL);
@@ -169,6 +170,24 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       final String shown = result;
       runOnUiThread(() -> android.widget.Toast.makeText(this, shown, android.widget.Toast.LENGTH_LONG).show());
     }, "item-shuffle").start();
+  }
+
+  /** The combined deal: whole door pairs and the whole item pool in one pass, proved by walking the result. */
+  private void dealAll() {
+    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
+    final File root = imports.root;
+    final boolean cross = crossStage != null && crossStage.isChecked();
+    final long seed = seedForThisClick();
+    new Thread(() -> {
+      String result;
+      try {
+        result = DoorShuffle.dealAll(root, seed, cross);
+      } catch (RuntimeException | OutOfMemoryError e) {
+        result = "The deal stopped: " + e;
+      }
+      final String shown = result;
+      runOnUiThread(() -> Toast.makeText(this, shown, Toast.LENGTH_LONG).show());
+    }, "deal").start();
   }
 
   /** Deals the doors and the progression keys with a seed and writes randomizer/doors.txt. With cross-stage on

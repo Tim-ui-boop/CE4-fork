@@ -50,6 +50,7 @@ public final class ItemShuffle {
   /** The item records start after the ITA block's 0x10-byte header (sce_at.cpp SceAtInit). */
   private static final int ITA_RECORDS = 0x10;
   private static final int ITEM_ID = 0x78;
+  private static final int ITEM_NUM = 0x7C;
   /** SCE_AT_UNIT: 1 = held by an enemy list entry (a crate, a Ganado), 2 = etc model. */
   private static final int WAITING_TYPE = 0x46;
   /** SCE_AT_DATA_ITEM.ctrl_flag (0x5C + 0x28): bit0 = handed to an enemy, bit3 = save work. */
@@ -647,17 +648,54 @@ public final class ItemShuffle {
     Arrays.sort(checkA);
     Arrays.sort(checkB);
     boolean keptIds = Arrays.equals(checkA, checkB);
-    Map<String, Integer> changed = new HashMap<>();
+    Map<String, int[]> changed = new HashMap<>();
     for (int i = 0; i < movable.size(); i++) {
       Slot slot = movable.get(i);
-      if (dealt[i] != slot.id) changed.put(key(slot.file, slot.at), dealt[i]);
+      if (dealt[i] != slot.id) changed.put(key(slot.file, slot.at), new int[] {dealt[i], -1});
     }
+    Stats stats = write(files, index, changed, MERGE_MODELS, false);
+    String fingerprint = fingerprint(stats.mapping.toString());
+    String head = "RE4 offline randomizer - item shuffle\nseed " + seed + "   fingerprint " + fingerprint
+        + "\n" + stats.rooms + " rooms, " + stats.changedAreas + " item areas changed of " + stats.areas
+        + ", models merged: " + (MERGE_MODELS ? "yes" : "no") + "\n"
+        + "every id kept: " + (keptIds ? "yes" : "NO - TELL THE DEVELOPER") + "   swaps tried: " + swaps + "\n"
+        + "the seed holds: " + contents.toString().trim() + "\n"
+        + "  record  placement   position                 was -> now\n";
+    try {
+      writeAll(new File(root, "randomizer/items.txt"), (head + stats.body).getBytes(StandardCharsets.UTF_8));
+    } catch (IOException e) {
+      Log.i(TAG, "the shuffle log could not be written: " + e);
+    }
+    String summary = "Shuffled " + stats.changedAreas + " of " + stats.areas + " item areas in " + stats.rooms
+        + " rooms (seed " + seed + ", fingerprint " + fingerprint + "), models +" + Math.max(0, stats.added)
+        + " bytes, rooms +" + Math.max(0, stats.grew) + " bytes; the log is at randomizer/items.txt";
+    Log.i(TAG, summary);
+    return summary;
+  }
 
-    StringBuilder log = new StringBuilder();
-    int rooms = 0, areas = 0, added = 0, changedAreas = 0;
-    long grew = 0;
+  /** What one written plan did: the log body, the fingerprint's mapping and the numbers for the summary. */
+  private static final class Stats {
+    int rooms;
+    int areas;
+    int changedAreas;
+    int added;
+    long grew;
+    final StringBuilder body = new StringBuilder();
+    final StringBuilder mapping = new StringBuilder();
+  }
+
+  /**
+   * Writes a placement and returns what it changed. `changed` maps a record's key to {id, count}; a count of
+   * -1 keeps the record's own count. With `merge` the room's model pack grows to carry every model its new
+   * items need, which is what lets an item the disc never put in that room show up there.
+   *
+   * A changed item also gets glow colour 0, the value the engine reads as "derive this from the item id"
+   * (sceAtCheckItemEffectCol), so a herb no longer glows the colour of the ammo it replaced.
+   */
+  private static Stats write(List<File> files, Map<Integer, Model> index, Map<String, int[]> changed,
+      boolean merge, boolean clearEff) {
+    Stats stats = new Stats();
     Sources sources = new Sources();
-    StringBuilder mapping = new StringBuilder();
     for (File file : files) {
       try {
         byte[] original = readAll(file);
@@ -680,12 +718,13 @@ public final class ItemShuffle {
         for (int i = 0; i < count; i++) {
           int at = base + ITA_RECORDS + i * RECORD;
           int old = be16(patched, at + ITEM_ID);
-          int want = changed.containsKey(key(file, at)) ? changed.get(key(file, at)) : old;
+          int[] want = changed.get(key(file, at));
+          int wantId = want == null ? old : want[0];
           boolean held = (patched[at + WAITING_TYPE] & 0xFF) != 0;
           int eff = patched[at + EFF_TYPE] & 0xFF;
           String where = placement(held ? (patched[at + WAITING_TYPE] == 1 ? 1 : 2) : 0, eff);
-          if (!MERGE_MODELS && want != old && ownIndex(ownAll, want) < 0) {
-            want = old;   // the room has no model for it: keep the disc's own item
+          if (!merge && wantId != old && ownIndex(ownAll, wantId) < 0) {
+            wantId = old;   // the room has no model for it: keep the disc's own item
           }
           if (held && debugRoom(file)) {
             // the position names the crate: item_pos at 0x5C, three big-endian floats
@@ -693,48 +732,46 @@ public final class ItemShuffle {
                 + position(patched, at) + ")");
           }
           if (DEBUG_HELD_ROOMS.length > 0 && !debugHeld && held && old != 0 && old != 0xFFFF && debugRoom(file)) {
-            want = DEBUG_HELD_ITEM;   // debug: this room's first held record shows a known item
+            wantId = DEBUG_HELD_ITEM;   // debug: this room's first held record shows a known item
             debugHeld = true;
             Log.i(TAG, file.getName() + ": debug, the first held record (" + i + ") gets 0x"
                 + Integer.toHexString(DEBUG_HELD_ITEM));
           }
-          mapping.append(file.getParentFile().getName()).append('/').append(file.getName()).append(':').append(at)
-              .append(' ').append(old).append("->").append(want).append('\n');
-          if (want != old) {
+          stats.mapping.append(file.getParentFile().getName()).append('/').append(file.getName()).append(':')
+              .append(at).append(' ').append(old).append("->").append(wantId).append('\n');
+          if (wantId != old) {
             touched = true;
-            put16(patched, at + ITEM_ID, want);
+            put16(patched, at + ITEM_ID, wantId);
+            if (want != null && want[1] >= 0) put16(patched, at + ITEM_NUM, want[1]);
             // the holder spawns the item with the record's effect: a new item gets its own (0 = the id's own),
             // not the old one's (an 8 there hangs the item a metre above a crate that then looks empty)
+            if (clearEff || held) patched[at + EFF_TYPE] = 0;
             if (held) {
-              patched[at + EFF_TYPE] = 0;
               Log.i(TAG, file.getParentFile().getName() + "/" + file.getName() + ": held record " + i
                   + " at (" + position(patched, at) + ") 0x" + Integer.toHexString(old) + " -> 0x"
-                  + Integer.toHexString(want));
+                  + Integer.toHexString(wantId));
             }
             roomChanges++;
             roomLog.append(String.format("  %2d  %-11s (%s)  %s -> %s%n", i, where, position(patched, at),
-                itemLabel(old), itemLabel(want)));
+                itemLabel(old), itemLabel(wantId)));
           }
           // the room's own pack already carries it, or nothing on the discs can supply its model: leave it alone
-          if (ownIndex(ownAll, want) >= 0 || ownIndex(needed, want) >= 0) continue;
-          if (!index.containsKey(want)) {
-            // only a id the deal brought here is a surprise; an untouched marker (0x1002) needs no model
-            if (changed.containsKey(key(file, at)) && missing.size() < 8) {
-              missing.add(String.format("0x%02x", want));
-            }
+          if (ownIndex(ownAll, wantId) >= 0 || ownIndex(needed, wantId) >= 0) continue;
+          if (!index.containsKey(wantId)) {
+            // only an id the deal brought here is a surprise; an untouched marker (0x1002) needs no model
+            if (want != null && missing.size() < 8) missing.add(String.format("0x%02x", wantId));
             continue;
           }
-          needed[neededCount++] = want;
+          needed[neededCount++] = wantId;
         }
         if (roomChanges > 0) {
-          log.append('\n').append(file.getParentFile().getName()).append('/').append(file.getName())
+          stats.body.append('\n').append(file.getParentFile().getName()).append('/').append(file.getName())
               .append("  (").append(count).append(" areas, ").append(roomChanges).append(" changed)\n")
               .append(roomLog);
         }
-        changedAreas += roomChanges;
-        if (!missing.isEmpty()) {
-          Log.i(TAG, file.getParentFile().getName() + "/" + file.getName() + ": no model for " + missing);
-        }
+        stats.changedAreas += roomChanges;
+        if (!missing.isEmpty()) Log.i(TAG, file.getParentFile().getName() + "/" + file.getName()
+            + ": no model for " + missing);
         if (!touched) continue;
         // the room's own models first, then whatever its new items need
         int[] all = new int[neededCount + ownAll.length];
@@ -745,7 +782,7 @@ public final class ItemShuffle {
           all[used++] = needed[i];
         }
         all = Arrays.copyOf(all, used);
-        byte[] pack = !MERGE_MODELS || itmEntry < 0 ? null : buildPack(original, arc, itmEntry, all, index, sources);
+        byte[] pack = !merge || itmEntry < 0 ? null : buildPack(original, arc, itmEntry, all, index, sources);
         byte[] out = pack == null ? patched : rebuild(patched, arc, itmEntry, pack);
         Arc after = Arc.of(out);
         int beforeItm = itmEntry < 0 ? 0 : arc.end(original, itmEntry) - arc.offsets[itmEntry];
@@ -755,11 +792,11 @@ public final class ItemShuffle {
           Log.i(TAG, file.getName() + ": rebuilt archive does not parse, kept as it was");
           continue;
         }
-        if (pack != null) added += afterItm - beforeItm;
-        grew += out.length - original.length;
+        if (pack != null) stats.added += afterItm - beforeItm;
+        stats.grew += out.length - original.length;
         writeAll(file, out);
-        areas += count;
-        rooms++;
+        stats.areas += count;
+        stats.rooms++;
         Log.i(TAG, file.getParentFile().getName() + "/" + file.getName() + ": " + count + " areas, pack "
             + (itmEntry < 0 ? "none" : beforeItm + " -> " + afterItm + " bytes") + ", room "
             + original.length + " -> " + out.length + " bytes");
@@ -767,24 +804,39 @@ public final class ItemShuffle {
         Log.i(TAG, file.getParentFile().getName() + "/" + file.getName() + ": " + e);
       }
     }
-    String fingerprint = fingerprint(mapping.toString());
-    String head = "RE4 offline randomizer - item shuffle\nseed " + seed + "   fingerprint " + fingerprint
-        + "\n" + rooms + " rooms, " + changedAreas + " item areas changed of " + areas
-        + ", models merged: " + (MERGE_MODELS ? "yes" : "no") + "\n"
-        + "every id kept: " + (keptIds ? "yes" : "NO - TELL THE DEVELOPER") + "   swaps tried: " + swaps + "\n"
-        + "the seed holds: " + contents.toString().trim() + "\n"
-        + "  record  placement   position                 was -> now\n";
-    try {
-      writeAll(new File(root, "randomizer/items.txt"), (head + log).getBytes(StandardCharsets.UTF_8));
-    } catch (IOException e) {
-      Log.i(TAG, "the shuffle log could not be written: " + e);
+    return stats;
+  }
+
+  /**
+   * Writes the deal the door planner chose: every area it names gets its id and count, and a room's pack grows
+   * to carry what it can now show. Returns a one-line summary; the walk that proves the deal is the caller's.
+   */
+  static String writeDeal(File root, Map<String, Map<Integer, int[]>> plan) {
+    List<File> files = sidecars(root);
+    if (files.isEmpty()) return "No collected rooms yet: collect the rooms first";
+    Map<Integer, Model> index = modelIndex(files);
+    Map<String, int[]> changed = new HashMap<>();
+    for (File file : files) {
+      Map<Integer, int[]> room = plan.get(roomOf(file));
+      if (room == null) continue;
+      for (Map.Entry<Integer, int[]> entry : room.entrySet()) {
+        changed.put(key(file, entry.getKey()), entry.getValue());
+      }
     }
-    String summary = "Shuffled " + changedAreas + " of " + areas + " item areas in " + rooms + " rooms (seed " + seed
-        + ", fingerprint "
-        + fingerprint + "), models +" + Math.max(0, added) + " bytes, rooms +" + Math.max(0, grew)
-        + " bytes; the log is at randomizer/items.txt";
-    Log.i(TAG, summary);
-    return summary;
+    Stats stats = write(files, index, changed, true, true);
+    String line = stats.changedAreas + " item areas changed in " + stats.rooms + " rooms, models +"
+        + Math.max(0, stats.added) + " bytes, rooms +" + Math.max(0, stats.grew) + " bytes";
+    Log.i(TAG, "deal: " + line);
+    return line;
+  }
+
+  /** The item ids the collected rooms can show a model for: what the deal may move anywhere. */
+  static Set<Integer> modelIds(File root) {
+    Set<Integer> ids = new java.util.TreeSet<>();
+    for (Map.Entry<Integer, Model> entry : modelIndex(sidecars(root)).entrySet()) {
+      if (entry.getValue().bytes() <= MODEL_CAP) ids.add(entry.getKey());
+    }
+    return ids;
   }
 
   /** The record's item position (item_pos at 0x5C, three big-endian floats), for the debug log. */

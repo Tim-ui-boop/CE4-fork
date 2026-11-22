@@ -217,10 +217,11 @@ public final class DoorShuffle {
     Door pair;
   }
 
-  /** One item area, only what the key placement needs. */
+  /** One item area, only what the key placement and the deal need. */
   private static final class ItemArea {
     int at;
     int id;
+    int num;
     int waiting;
     int ctrl;
 
@@ -287,6 +288,7 @@ public final class DoorShuffle {
             ItemArea item = new ItemArea();
             item.at = at;
             item.id = be16(bytes, at + ITEM_ID);
+            item.num = be16(bytes, at + ITEM_NUM);
             item.waiting = bytes[at + WAITING] & 0xFF;
             item.ctrl = bytes[at + CTRL] & 0xFF;
             room.items.add(item);
@@ -425,6 +427,11 @@ public final class DoorShuffle {
     }
   }
 
+  /** A use area names a real item: 0 and the "nothing" markers are not gates, they must never block a room. */
+  private static boolean realGate(int id) {
+    return id > 0 && id < 0x1000;
+  }
+
   private static Set<String> oneWay(Map<String, Room> rooms) {
     Set<String> fixed = new TreeSet<>();
     for (Room room : rooms.values()) {
@@ -464,7 +471,7 @@ public final class DoorShuffle {
       if (held != null) {
         Room r = rooms.get(room);
         boolean blocked = false;
-        for (Integer gate : r.gates) if (!held.contains(gate)) blocked = true;
+        for (Integer gate : r.gates) if (realGate(gate) && !held.contains(gate)) blocked = true;
         if (blocked) continue;
       }
       stack.addAll(adj.getOrDefault(room, new TreeSet<>()));
@@ -1161,4 +1168,400 @@ public final class DoorShuffle {
     return settle(root, seed, allowCross, "RE4 offline randomizer - spine shuffle", rooms, universe,
         head, rng, "Spine: " + build.spine.size() + " rooms on the main path, ");
   }
+  // ---- the combined deal: doors and items in one pass ---------------------------------------------------
+
+  /** Every item a room's use area names: holding it is what lets you leave that room. */
+  private static Set<Integer> gateIds(Map<String, Room> rooms) {
+    Set<Integer> ids = new TreeSet<>();
+    for (Room room : rooms.values()) {
+      for (Integer gate : room.gates) if (realGate(gate)) ids.add(gate);
+    }
+    return ids;
+  }
+
+  /** The door graph as it points, with no reverse help: the only walk this deal trusts. */
+  private static Map<String, Set<String>> directed(Map<String, Room> rooms) {
+    Map<String, Set<String>> adj = new HashMap<>();
+    for (Room room : rooms.values()) {
+      Set<String> next = adj.computeIfAbsent(room.name, k -> new TreeSet<>());
+      for (Door door : room.doors) {
+        String target = door.dest.name();
+        if (rooms.containsKey(target) && !target.equals(room.name)) next.add(target);
+      }
+    }
+    return adj;
+  }
+
+  /** A door in `from` leading to `to`: a pair must be found by where a door points now, not by an old link. */
+  private static Door leadsBack(Map<String, Room> rooms, String from, String to) {
+    Room room = rooms.get(from);
+    if (room == null) return null;
+    for (Door door : room.doors) if (door.dest.name().equals(to)) return door;
+    return null;
+  }
+
+  /** The rooms of the reachable set that cannot be left yet: their use area needs an item not held. */
+  private static Set<String> cannotLeave(Map<String, Room> rooms, Map<String, Set<String>> adj,
+      Set<Integer> held) {
+    Set<String> out = new TreeSet<>();
+    for (String name : reach(adj, rooms, held)) {
+      Room room = rooms.get(name);
+      for (Integer gate : room.gates) {
+        if (realGate(gate) && !held.contains(gate)) {
+          out.add(name);
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
+  /** An item of the world (not the "nothing" marker and not a scene marker). */
+  private static boolean itemId(int id) {
+    return id > 0 && id < 0x1000;
+  }
+
+  /** One item area the deal may write, and what it held before and after. */
+  private static final class Piece {
+    Room room;
+    ItemArea area;
+    int oldId;
+    int oldNum;
+    int nowId;
+    int nowNum;
+
+    boolean empty() {
+      return nowId == 0 || nowId >= 0x1000;
+    }
+
+    /** A crate/enemy record or a flag-gated one: the item there may not be lying on the floor to pick up. */
+    boolean hidden() {
+      return area.waiting != 0 || (area.ctrl & 0x50) != 0;
+    }
+  }
+
+  /**
+   * Deals the doors and the whole item pool in one pass, then proves the result by walking it.
+   *
+   * Why not the spine: the spine wired doors one socket at a time, so repointing A's door to B left the door
+   * that used to lead back to A pointing at a room A no longer leads to. Each of those leftovers is a one-way
+   * link, and the reach guard "fixed" them by walking one-way links backwards - so a map the guard called
+   * complete could in fact be walked forwards only 10 of 97 rooms. This deals whole door *pairs* instead
+   * (A<->B and C<->D become A<->D and C<->B), so every link stays two-way, and the guard now walks the map
+   * strictly forwards: a swap is kept only when the rooms reachable afterwards are exactly the rooms the disc
+   * itself reaches forwards. Nothing opens that the disc keeps closed.
+   *
+   * Then the items: the whole pool is dealt over those rooms, and every gate item is pulled to a room the
+   * same forward walk reaches before its gate. Model merging is on, which is what lets an item the disc never
+   * put in a room appear there (its model is copied into that room's own pack, not a master pack).
+   *
+   * Finally the written rooms are read back and walked again: the verdict in randomizer/deal.txt comes from
+   * that walk, not from the plan.
+   */
+  static String dealAll(File root, long seed, boolean allowCross) {
+    userPinned = RoomPins.load(root, RoomPins.DOORS);
+    Set<String> itemPinned = RoomPins.load(root, RoomPins.ITEMS);
+    Map<String, Room> rooms = scan(root);
+    if (rooms.isEmpty()) return "No collected rooms yet: collect the rooms first";
+    link(rooms);
+    Set<Integer> allGates = gateIds(rooms);
+    Map<String, Set<String>> adj = directed(rooms);
+    Set<String> forward = reach(adj, rooms, allGates);      // every gate in hand: pure geometry, forwards only
+    if (forward.size() < MIN_UNIVERSE) {
+      String why = "The deal refused: only " + forward.size() + " rooms are reachable from " + START
+          + " walking the doors as they point, so the collected rooms do not form the map; nothing was "
+          + "written. Collect the rooms again and retry.";
+      Log.i(TAG, why);
+      return why;
+    }
+    // rooms the disc only reaches by crossing one of its own one-way links backwards: kept, never claimed
+    Set<String> bridgeOnly = new TreeSet<>(reach(graph(rooms), rooms, allGates));
+    bridgeOnly.removeAll(forward);
+    Set<Integer> gates = new TreeSet<>();
+    for (String name : forward) for (Integer gate : rooms.get(name).gates) if (realGate(gate)) gates.add(gate);
+
+    // ---- 1. the doors: whole pairs, guarded by the forward walk ------------------------------------------
+    Random rng = new Random(seed);
+    Map<String, Integer> dist = distanceMap(adj);
+    int swaps = 0, rejected = 0, cross = 0;
+    int rounds = Math.max(2000, rooms.size() * 32);
+    for (int n = 0; n < rounds; n++) {
+      Door a = randomDoor(rooms, rng);
+      Door c = randomDoor(rooms, rng);
+      if (a == null || c == null || a == c || a.room == c.room) continue;
+      String ar = a.room.name, br = a.dest.name(), cr = c.room.name, dr = c.dest.name();
+      if (!rooms.containsKey(br) || !rooms.containsKey(dr) || br.equals(dr)) continue;
+      if (chapterDoor(ar, a.area) || chapterDoor(cr, c.area)) continue;
+      if (roomPinned(ar) || roomPinned(cr) || roomPinned(br) || roomPinned(dr)) continue;
+      Door b = leadsBack(rooms, br, ar);
+      Door d = leadsBack(rooms, dr, cr);
+      if (b == null || d == null || b.room == d.room) continue;
+      if (!allowCross) {
+        if (stageOf(ar) != stageOf(dr) || stageOf(cr) != stageOf(br)) {
+          rejected++;
+          continue;
+        }
+      } else {
+        int distA = dist.getOrDefault(ar, 99), distD = dist.getOrDefault(dr, 99);
+        int distC = dist.getOrDefault(cr, 99), distB = dist.getOrDefault(br, 99);
+        if ((distA <= OPENING_DIST && distD >= LATE_DIST) || (distC <= OPENING_DIST && distB >= LATE_DIST)) {
+          rejected++;
+          continue;
+        }
+      }
+      Dest da = a.dest, db = b.dest, dc = c.dest, dd = d.dest;
+      a.dest = dc;      // A -> D
+      d.dest = db;      // D -> A
+      b.dest = dd;      // B -> C
+      c.dest = da;      // C -> B
+      boolean ok = a.dest.name().equals(dr) && c.dest.name().equals(br);
+      if (!ok || !reach(directed(rooms), rooms, allGates).equals(forward)) {
+        a.dest = da;
+        b.dest = db;
+        c.dest = dc;
+        d.dest = dd;
+        rejected++;
+        continue;
+      }
+      swaps++;
+      if (stageOf(ar) != stageOf(dr)) cross++;
+    }
+    if (swaps == 0) {
+      String why = "Seed " + seed + " refused: no door swap keeps the disc's own forward-walkable rooms"
+          + " walkable; nothing was written. Try another seed.";
+      Log.i(TAG, why);
+      return why;
+    }
+    adj = directed(rooms);          // the doors moved: every later walk has to see the map as it now points
+
+    // ---- 2. the items: the whole pool, every gate item in front of its gate ---------------------------
+    Set<Integer> modelled = ItemShuffle.modelIds(root);
+    List<Piece> pieces = new ArrayList<>();
+    for (String name : forward) {
+      if (itemPinned.contains(name) || userPinned.contains(name)) continue;
+      Room room = rooms.get(name);
+      for (ItemArea area : room.items) {
+        if (area.id == 0xFFFF) continue;
+        Piece piece = new Piece();
+        piece.room = room;
+        piece.area = area;
+        piece.oldId = area.id;
+        piece.oldNum = area.num;
+        piece.nowId = area.id;
+        piece.nowNum = area.num;
+        if (itemId(area.id) && !modelled.contains(area.id)) continue;                    // no model to show it
+        pieces.add(piece);
+      }
+    }
+    List<Piece> filled = new ArrayList<>();
+    for (Piece piece : pieces) if (itemId(piece.nowId)) filled.add(piece);
+    if (filled.isEmpty()) return "Nothing to deal: the reachable rooms hold no item the deal can move";
+    for (int k = filled.size() * 8; k > 0; k--) {
+      Piece one = filled.get(rng.nextInt(filled.size()));
+      Piece two = filled.get(rng.nextInt(filled.size()));
+      if (one == two) continue;
+      int id = one.nowId, num = one.nowNum;
+      one.nowId = two.nowId;
+      one.nowNum = two.nowNum;
+      two.nowId = id;
+      two.nowNum = num;
+    }
+    Set<Integer> held = new TreeSet<>();
+    Set<Integer> unmodelled = new TreeSet<>();
+    Map<Integer, String> gateRoom = new LinkedHashMap<>();
+    for (int round = 0; round < gates.size() + 6; round++) {
+      Set<String> seen = reach(adj, rooms, held);
+      Set<String> stuck = cannotLeave(rooms, adj, held);
+      Set<Integer> wanted = new TreeSet<>();
+      for (String name : seen) {
+        for (Integer gate : rooms.get(name).gates) if (realGate(gate) && !held.contains(gate)) wanted.add(gate);
+      }
+      if (wanted.isEmpty()) break;
+      boolean progress = false;
+      for (Integer gate : wanted) {
+        if (!modelled.contains(gate)) {
+          unmodelled.add(gate);          // the discs never place it: a script or a shop hands it over
+          held.add(gate);
+          progress = true;
+          continue;
+        }
+        Piece holder = null, free = null, trade = null;
+        for (Piece piece : pieces) {
+          if (!seen.contains(piece.room.name) || stuck.contains(piece.room.name)) continue;
+          // only a slot lying on the floor counts: an item on an enemy or behind a flag may never drop, and the
+          // proof must not call that obtainable. Such a gate item is moved to a floor slot below.
+          if (piece.nowId == gate && holder == null && !piece.hidden()) holder = piece;
+          if (piece.hidden()) continue;
+          if (free == null && piece.empty()) free = piece;
+          if (trade == null && itemId(piece.nowId) && piece.nowId != gate) trade = piece;
+        }
+        if (holder != null) {
+          held.add(gate);
+          progress = true;
+          continue;
+        }
+        Piece from = null;
+        for (Piece piece : filled) if (piece.nowId == gate) { from = piece; break; }
+        if (from == null) {
+          unmodelled.add(gate);   // nothing on the discs puts it in a room: a script or a shop hands it over
+          held.add(gate);
+          progress = true;
+          continue;
+        }
+        if (free != null) {
+          free.nowId = gate;
+          free.nowNum = from.nowNum;
+          from.nowId = 0;                                // the item moved: its old area is empty now
+          from.nowNum = 0;
+        } else if (trade != null) {
+          int id = trade.nowId, num = trade.nowNum;
+          trade.nowId = gate;
+          trade.nowNum = from.nowNum;
+          from.nowId = id;
+          from.nowNum = num;
+        } else {
+          continue;
+        }
+        gateRoom.put(gate, free != null ? free.room.name : trade.room.name);
+        held.add(gate);
+        progress = true;
+      }
+      if (!progress) break;
+    }
+
+    Map<String, Map<Integer, int[]>> plan = new LinkedHashMap<>();
+    int areasPlanned = 0;
+    for (Piece piece : pieces) {
+      if (piece.nowId == piece.oldId && piece.nowNum == piece.oldNum) continue;
+      plan.computeIfAbsent(piece.room.name, k -> new LinkedHashMap<>())
+          .put(piece.area.at, new int[]{piece.nowId, piece.nowNum});
+      areasPlanned++;
+    }
+
+    // ---- 3. write the doors, then the items (ItemShuffle owns the model packs) -----------------------
+    int roomsWritten = 0;
+    try {
+      for (Room room : rooms.values()) {
+        boolean doorChanged = false;
+        for (Door door : room.doors) if (!same(door.dest, door.orig)) doorChanged = true;
+        if (!doorChanged) continue;
+        byte[] b = readAll(room.file);
+        for (Door door : room.doors) if (!same(door.dest, door.orig)) door.dest.into(b, door.at);
+        writeAll(room.file, b);
+        b = null;
+        roomsWritten++;
+      }
+      if (!snapshotFile(root).isFile()) writeSnapshot(root, rooms);
+    } catch (IOException | OutOfMemoryError e) {
+      Log.i(TAG, "the doors could not be written: " + e);
+      return "The deal stopped before it wrote the rooms: " + e;
+    }
+    String itemLine = ItemShuffle.writeDeal(root, plan);
+    try {
+      writeAll(markerFile(root), Long.toString(seed).getBytes(StandardCharsets.UTF_8));   // patch 0240 reads this
+    } catch (IOException e) {
+      Log.i(TAG, "the marker could not be written: " + e);
+    }
+
+    // ---- 4. the proof: read the written rooms back and walk them ------------------------------------
+    Map<String, Room> after = scan(root);
+    link(after);
+    Map<String, Set<String>> afterAdj = directed(after);
+    Set<Integer> got = new TreeSet<>();
+    Set<String> proven = new TreeSet<>();
+    int proofRounds = 0;
+    while (proofRounds < 400) {
+      proofRounds++;
+      proven = reach(afterAdj, after, got);
+      boolean progress = false;
+      for (String name : proven) {
+        Room room = after.get(name);
+        if (room == null) continue;
+        for (ItemArea area : room.items) if (itemId(area.id) && got.add(area.id)) progress = true;
+      }
+      if (!progress) break;
+    }
+    List<String> lost = new ArrayList<>(forward);
+    lost.removeAll(proven);
+    List<Integer> gateShort = new ArrayList<>();
+    for (Integer gate : gates) if (!got.contains(gate) && !unmodelled.contains(gate)) gateShort.add(gate);
+    boolean provenOk = lost.isEmpty() && gateShort.isEmpty();
+
+    StringBuilder log = new StringBuilder();
+    log.append("RE4 offline randomizer - item and door deal (one pass)\n");
+    log.append("seed ").append(seed).append('\n');
+    log.append("verdict: ").append(provenOk ? "PROVEN - every room is reached and every gate is satisfiable"
+        : "NOT PROVEN - do not play this seed").append('\n');
+    log.append("proof: walk ").append(proven.size()).append(" rooms of ").append(forward.size())
+        .append(", ").append(gates.size()).append(" gates, ").append(proofRounds)
+        .append(" collection rounds\n");
+    if (!lost.isEmpty()) log.append("rooms the walk never reached: ").append(String.join(", ", lost)).append('\n');
+    if (!gateShort.isEmpty()) {
+      log.append("gates still unsatisfied: ");
+      for (Integer gate : gateShort) log.append(String.format(Locale.US, "0x%02x ", gate));
+      log.append('\n');
+    }
+    if (!unmodelled.isEmpty()) {
+      log.append("gate items the discs never place (script or shop, not modelled): ");
+      for (Integer gate : unmodelled) log.append(String.format(Locale.US, "0x%02x ", gate));
+      log.append('\n');
+    }
+    log.append('\n').append("doors: ").append(swaps).append(" pair swaps kept of ")
+        .append(swaps + rejected).append(" tried, ").append(cross).append(" across stages\n");
+    log.append("rooms: ").append(rooms.size()).append(" collected, ").append(forward.size())
+        .append(" walkable forwards, ").append(oneWay(after).size()).append(" one-way links; ");
+    if (bridgeOnly.isEmpty()) {
+      log.append("no room of this map needs one walked backwards\n");
+    } else {
+      log.append("only reached by walking a one-way link backwards: ")
+          .append(String.join(", ", bridgeOnly)).append('\n');
+    }
+    log.append("items: ").append(itemLine).append('\n');
+    log.append("pool: ").append(filled.size()).append(" movable items over ").append(pieces.size())
+        .append(" areas, ").append(areasPlanned).append(" areas written, ").append(roomsWritten)
+        .append(" rooms touched\n");
+    if (!userPinned.isEmpty()) {
+      log.append("rooms you keep vanilla (doors): ").append(String.join(", ", userPinned)).append('\n');
+    }
+    if (!itemPinned.isEmpty()) {
+      log.append("rooms you keep vanilla (items): ").append(String.join(", ", itemPinned)).append('\n');
+    }
+    log.append('\n').append("gate items, where they now sit:\n");
+    for (Integer gate : gates) {
+      String where = gateRoom.get(gate);
+      if (where == null) {
+        String at = null;
+        for (Piece piece : filled) if (piece.nowId == gate) at = piece.room.name;
+        where = at == null ? (unmodelled.contains(gate) ? "handed over by a script" : "nowhere") : at;
+      }
+      log.append(String.format(Locale.US, "  0x%02x  %s%n", gate, where));
+    }
+    log.append('\n').append("not modelled by this proof (so not claimed):\n");
+    log.append("  locked doors: key_id 1/2 is a lock kind and key_flg is a script flag, not an item\n");
+    log.append("  one-way geometry: a drop or a lift the records do not describe\n");
+    log.append("  scripted room jumps (SceAtExecRoomJump) and chapter spawns\n");
+    log.append("  Ashley: her door check is off while randomizer/doors.active exists (port patch 0240)\n");
+    log.append("  enemy-carried items are dealt with the pool, but a gate item is never left on a holder\n");
+    try {
+      writeAll(logFile(root), log.toString().getBytes(StandardCharsets.UTF_8));
+    } catch (IOException e) {
+      Log.i(TAG, "the deal log could not be written: " + e);
+    }
+    String summary = (provenOk ? "Proven: " : "NOT proven: ") + proven.size() + " of " + forward.size()
+        + " rooms walkable, " + gates.size() + " gates; " + swaps + " door swaps, " + itemLine
+        + ". The walk is in randomizer/doors.txt";
+    Log.i(TAG, summary);
+    return summary;
+  }
+
+  private static Door randomDoor(Map<String, Room> rooms, Random rng) {
+    int pick = rng.nextInt(Math.max(1, rooms.size()));
+    for (Room room : rooms.values()) {
+      if (pick-- > 0) continue;
+      if (room.doors.isEmpty()) return null;
+      return room.doors.get(rng.nextInt(room.doors.size()));
+    }
+    return null;
+  }
+
 }
