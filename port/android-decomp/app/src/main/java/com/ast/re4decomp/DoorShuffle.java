@@ -1262,7 +1262,7 @@ public final class DoorShuffle {
     userPinned = RoomPins.load(root, RoomPins.DOORS);
     Set<String> itemPinned = RoomPins.load(root, RoomPins.ITEMS);
     Map<String, Room> rooms = scan(root);
-    if (rooms.isEmpty()) return "No collected rooms yet: collect the rooms first";
+    if (rooms.isEmpty()) return refuse("No collected rooms yet: collect the rooms first");
     link(rooms);
     Set<Integer> allGates = gateIds(rooms);
     Map<String, Set<String>> adj = directed(rooms);
@@ -1355,7 +1355,7 @@ public final class DoorShuffle {
     }
     List<Piece> filled = new ArrayList<>();
     for (Piece piece : pieces) if (itemId(piece.nowId)) filled.add(piece);
-    if (filled.isEmpty()) return "Nothing to deal: the reachable rooms hold no item the deal can move";
+    if (filled.isEmpty()) return refuse("Nothing to deal: the reachable rooms hold no item the deal can move");
     for (int k = filled.size() * 8; k > 0; k--) {
       Piece one = filled.get(rng.nextInt(filled.size()));
       Piece two = filled.get(rng.nextInt(filled.size()));
@@ -1554,6 +1554,18 @@ public final class DoorShuffle {
     return summary;
   }
 
+  /**
+   * A refusal the player sees and logcat keeps.
+   *
+   * Every refusal used to be returned without a log line, so "I keep getting refused seeds" arrived with an
+   * empty log: the reason existed only in a toast that had already faded. A refusal is the most useful thing
+   * this feature can report, so it goes to logcat under the same tag as the rest.
+   */
+  private static String refuse(String why) {
+    Log.i(TAG, why);
+    return why;
+  }
+
   private static Door randomDoor(Map<String, Room> rooms, Random rng) {
     int pick = rng.nextInt(Math.max(1, rooms.size()));
     for (Room room : rooms.values()) {
@@ -1573,6 +1585,8 @@ public final class DoorShuffle {
   private static final int KIND_SINGLE = 3;      // one socket: can only end a path
   private static final int KIND_REGULAR = 4;     // two sockets: a corridor
   private static final int KIND_HUB = 5;         // more than two: a junction
+  /** A room the player keeps vanilla: one entrance only, and its own doors are never written. */
+  private static final int KIND_KEEP = 6;
 
   /** How many rooms the main path aims for (the PC list has 25) and the shortest that is still a spine. */
   private static final int PATH_TARGET = 22;
@@ -1586,7 +1600,8 @@ public final class DoorShuffle {
       sockets++;
       if (door.keyId != 0) key = true;
     }
-    if (roomPinned(room.name) || chapterRoom(room.name)) return KIND_RESERVED;
+    if (roomPinned(room.name)) return KIND_KEEP;      // a kept room is a leaf, never a source
+    if (chapterRoom(room.name)) return KIND_RESERVED;
     if (key) return KIND_NEED_KEY;
     for (Integer gate : room.gates) if (realGate(gate)) return KIND_NEED_ITEM;
     if (sockets <= 1) return KIND_SINGLE;
@@ -1594,7 +1609,8 @@ public final class DoorShuffle {
     return KIND_HUB;
   }
 
-  private static int socketsOf(Room room, Map<String, Room> rooms) {
+  private static int socketsOf(Room room, Map<String, Room> rooms, int kind) {
+    if (kind == KIND_KEEP) return 1;      // one entrance: the room is reached, its own doors stay vanilla
     int n = 0;
     for (Door door : room.doors) if (rooms.containsKey(door.dest.name())) n++;
     return n;
@@ -1637,7 +1653,9 @@ public final class DoorShuffle {
       Random rng) {
     Spine spine = new Spine();
     Map<String, Integer> free = new LinkedHashMap<>();
-    for (String name : universe) free.put(name, socketsOf(rooms.get(name), rooms));
+    for (String name : universe) {
+      free.put(name, socketsOf(rooms.get(name), rooms, kinds.getOrDefault(name, KIND_REGULAR)));
+    }
     if (!universe.contains(START) || free.getOrDefault(START, 0) <= 0) return null;
     spine.used.add(START);
     spine.path.add(START);
@@ -1645,7 +1663,7 @@ public final class DoorShuffle {
     while (spine.path.size() < PATH_TARGET) {
       String here = spine.path.get(spine.path.size() - 1);
       if (free.getOrDefault(here, 0) <= 0) break;
-      boolean longEnough = spine.path.size() + 1 >= PATH_MIN;
+      boolean longEnough = spine.path.size() >= PATH_MIN;
       List<String> near = new ArrayList<>();
       for (Door door : rooms.get(here).doors) {
         String target = door.dest.name();
@@ -1656,14 +1674,16 @@ public final class DoorShuffle {
       List<String> any = new ArrayList<>();
       for (String name : universe) {
         if (spine.used.contains(name) || free.getOrDefault(name, 0) <= 0) continue;
-        if (!longEnough && kinds.getOrDefault(name, KIND_REGULAR) == KIND_SINGLE) continue;
+        int kind = kinds.getOrDefault(name, KIND_REGULAR);
+        if (!longEnough && (kind == KIND_SINGLE || kind == KIND_KEEP)) continue;
         any.add(name);
       }
       List<String> pick;
       if (!near.isEmpty()) {
         pick = new ArrayList<>();
         for (String name : near) {
-          if (longEnough || kinds.getOrDefault(name, KIND_REGULAR) != KIND_SINGLE) pick.add(name);
+          int kind = kinds.getOrDefault(name, KIND_REGULAR);
+          if (longEnough || (kind != KIND_SINGLE && kind != KIND_KEEP)) pick.add(name);
         }
       } else {
         pick = any;
@@ -1732,11 +1752,12 @@ public final class DoorShuffle {
       Room room = rooms.get(entry.getKey());
       if (room == null) continue;
       boolean reserved = kinds.getOrDefault(room.name, KIND_REGULAR) == KIND_RESERVED;
+      boolean keep = kinds.getOrDefault(room.name, KIND_REGULAR) == KIND_KEEP;
       List<Door> doors = new ArrayList<>();
       for (Door door : room.doors) if (rooms.containsKey(door.dest.name())) doors.add(door);
       List<String> targets = entry.getValue();
       for (int i = 0; i < doors.size() && i < targets.size(); i++) {
-        if (reserved) continue;
+        if (reserved || keep) continue;
         List<Dest> pool = into.get(targets.get(i));
         if (pool == null || pool.isEmpty()) continue;
         doors.get(i).dest = pool.get(rng.nextInt(pool.size()));
@@ -1760,13 +1781,13 @@ public final class DoorShuffle {
     userPinned = RoomPins.load(root, RoomPins.DOORS);
     Set<String> itemPinned = RoomPins.load(root, RoomPins.ITEMS);
     Map<String, Room> rooms = scan(root);
-    if (rooms.isEmpty()) return "No collected rooms yet: collect the rooms first";
+    if (rooms.isEmpty()) return refuse("No collected rooms yet: collect the rooms first");
     link(rooms);
     Set<Integer> allGates = gateIds(rooms);
     Set<String> forward = reach(directed(rooms), rooms, allGates);
     if (forward.size() < MIN_UNIVERSE) {
-      return "The deal refused: only " + forward.size() + " rooms are reachable from " + START
-          + " walking the doors as they point; collect the rooms again and retry.";
+      return refuse("The deal refused: only " + forward.size() + " rooms are reachable from " + START
+          + " walking the doors as they point; collect the rooms again and retry.");
     }
     Set<String> bridgeOnly = new TreeSet<>(reach(graph(rooms), rooms, allGates));
     bridgeOnly.removeAll(forward);
@@ -1791,8 +1812,8 @@ public final class DoorShuffle {
       }
     }
     if (best == null || bestRooms == null) {
-      return "Seed " + seed + " refused: no main path of " + PATH_MIN
-          + " rooms keeps the disc's own rooms walkable; nothing was written. Try another seed.";
+      return refuse("Seed " + seed + " refused: no main path of " + PATH_MIN
+          + " rooms keeps the disc's own rooms walkable; nothing was written. Try another seed.");
     }
     rooms = bestRooms;
     Map<String, Set<String>> adj = directed(rooms);
@@ -1818,7 +1839,7 @@ public final class DoorShuffle {
     }
     List<Piece> filled = new ArrayList<>();
     for (Piece piece : pieces) if (itemId(piece.nowId)) filled.add(piece);
-    if (filled.isEmpty()) return "Nothing to deal: the reachable rooms hold no item the deal can move";
+    if (filled.isEmpty()) return refuse("Nothing to deal: the reachable rooms hold no item the deal can move");
     for (int k = filled.size() * 8; k > 0; k--) {
       Piece one = filled.get(rng.nextInt(filled.size()));
       Piece two = filled.get(rng.nextInt(filled.size()));
