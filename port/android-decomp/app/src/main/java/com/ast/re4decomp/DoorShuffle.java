@@ -245,6 +245,18 @@ public final class DoorShuffle {
   // ---- scan: one room at a time, keep metadata only ---------------------------------------------------------
 
   private static Map<String, Room> scan(File root) {
+    return scan(root, true);
+  }
+
+  /**
+   * Read the collected rooms.
+   *
+   * With {@code resetDest} the vanilla record puts the doors back where the disc had them, so a new deal
+   * always starts from the same map instead of shuffling the last shuffle again. The final proof must pass
+   * {@code false}: there the doors on disk ARE the deal, and overwriting them with the vanilla record would
+   * walk the snapshot instead of what the player will actually see.
+   */
+  private static Map<String, Room> scan(File root, boolean resetDest) {
     Map<String, Room> rooms = new TreeMap<>();
     for (String stage : STORY) {
       File[] files = new File(new File(root, "randomizer"), stage).listFiles();
@@ -300,7 +312,7 @@ public final class DoorShuffle {
         }
       }
     }
-    applySnapshot(root, rooms);
+    applySnapshot(root, rooms, resetDest);
     return rooms;
   }
 
@@ -323,7 +335,7 @@ public final class DoorShuffle {
     return new File(root, "randomizer/doors.active");
   }
 
-  private static void applySnapshot(File root, Map<String, Room> rooms) {
+  private static void applySnapshot(File root, Map<String, Room> rooms, boolean resetDest) {
     File file = snapshotFile(root);
     if (!file.isFile()) return;
     try {
@@ -342,7 +354,7 @@ public final class DoorShuffle {
             d.part = Integer.parseInt(parts[5]);
             byte[] pos = hex(parts[6]);
             if (pos != null && pos.length == DOOR_POS_LEN) System.arraycopy(pos, 0, d.pos, 0, DOOR_POS_LEN);
-            door.dest = d;
+            if (resetDest) door.dest = d;   // only a NEW deal resets the map to the disc's own doors
             door.orig = d;
           }
         } else if ("i".equals(parts[0]) && parts.length >= 4) {
@@ -1464,7 +1476,7 @@ public final class DoorShuffle {
     }
 
     // ---- 4. the proof: read the written rooms back and walk them ------------------------------------
-    Map<String, Room> after = scan(root);
+    Map<String, Room> after = scan(root, false);   // walk what was written, NOT the vanilla snapshot
     link(after);
     Map<String, Set<String>> afterAdj = directed(after);
     Set<Integer> got = new TreeSet<>();
@@ -1962,7 +1974,7 @@ public final class DoorShuffle {
       Log.i(TAG, "the marker could not be written: " + e);
     }
 
-    Map<String, Room> after = scan(root);
+    Map<String, Room> after = scan(root, false);  // walk what was written, NOT the vanilla snapshot
     link(after);
     Set<Integer> got = new TreeSet<>();
     Set<String> proven = new TreeSet<>();
