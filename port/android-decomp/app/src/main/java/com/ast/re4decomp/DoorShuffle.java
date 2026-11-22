@@ -109,10 +109,11 @@ public final class DoorShuffle {
    * before it runs the crank/moat/bridge sequence for Ashley, so a shuffled arrival drops the player at the
    * far end and skips it - played on the phone.
    *
-   * r30a plays its s00 event and then jumps the player to room 0x316 by script (`SceAtExecRoomJump`), whatever
-   * its door says, so shuffling it only produces a one-way surprise.
+   * r30a (the island lift) and r309 are deliberately NOT in this list any more (player's decision, 22.11.2026):
+   * one-way and sequence-prone rooms are not to be solved by growing a list of vanilla rooms. That belongs to
+   * the item+door deal - place what is needed before the place that needs it - so they keep their doors.
    */
-  private static final String[] KEEP_VANILLA_ROOMS = {"r11b", "r10f", "r208", "r30a"};
+  private static final String[] KEEP_VANILLA_ROOMS = {"r11b", "r10f", "r208"};
   /** Rooms the player ticked on the launcher's "rooms kept vanilla" screen; reloaded at every shuffle. */
   private static Set<String> userPinned = new TreeSet<>();
   /** Vanilla door-graph distance: the first rooms of the game (0..2 hops from the start) and the closing ones. */
