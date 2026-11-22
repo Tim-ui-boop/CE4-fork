@@ -1580,6 +1580,7 @@ public final class DoorShuffle {
 
   /** The PC tool's room classes, read from what the disc wires. See RE4RND_v2's DoorRandomizerData. */
   private static final int KIND_RESERVED = 0;    // chapter spawns, pinned puzzle rooms: payloads untouched
+                                               // ...and therefore a leaf: one entrance, own doors never written
   private static final int KIND_NEED_KEY = 1;    // TwoDoorOneWayRooms/NeedKey
   private static final int KIND_NEED_ITEM = 2;   // a use area: the room cannot be left without an item
   private static final int KIND_SINGLE = 3;      // one socket: can only end a path
@@ -1609,8 +1610,23 @@ public final class DoorShuffle {
     return KIND_HUB;
   }
 
+  /**
+   * A room that may only ever end a link: a single-socket room, a kept room, or a reserved one.
+   *
+   * A reserved room is a chapter spawn or a pinned puzzle room. Its own door records must survive untouched
+   * (the chapter end reads the very record of the area SceSetChapterEnd named), so it is wired in through one
+   * entrance and never written. That is the same shape as a kept room, which is why it shares the rule.
+   */
+  private static boolean leaf(int kind) {
+    return kind == KIND_SINGLE || kind == KIND_KEEP || kind == KIND_RESERVED;
+  }
+
   private static int socketsOf(Room room, Map<String, Room> rooms, int kind) {
-    if (kind == KIND_KEEP) return 1;      // one entrance: the room is reached, its own doors stay vanilla
+    // one entrance: the room is reached, its own doors stay exactly as the disc has them
+    if (kind == KIND_KEEP || kind == KIND_RESERVED) {
+      for (Door door : room.doors) if (rooms.containsKey(door.dest.name())) return 1;
+      return 0;                           // no usable door of its own: it can only be reached from outside
+    }
     int n = 0;
     for (Door door : room.doors) if (rooms.containsKey(door.dest.name())) n++;
     return n;
@@ -1675,7 +1691,7 @@ public final class DoorShuffle {
       for (String name : universe) {
         if (spine.used.contains(name) || free.getOrDefault(name, 0) <= 0) continue;
         int kind = kinds.getOrDefault(name, KIND_REGULAR);
-        if (!longEnough && (kind == KIND_SINGLE || kind == KIND_KEEP)) continue;
+        if (!longEnough && leaf(kind)) continue;
         any.add(name);
       }
       List<String> pick;
@@ -1683,7 +1699,7 @@ public final class DoorShuffle {
         pick = new ArrayList<>();
         for (String name : near) {
           int kind = kinds.getOrDefault(name, KIND_REGULAR);
-          if (longEnough || (kind != KIND_SINGLE && kind != KIND_KEEP)) pick.add(name);
+          if (longEnough || !leaf(kind)) pick.add(name);
         }
       } else {
         pick = any;
