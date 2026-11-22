@@ -56,6 +56,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       // under the name (CubeEvil4 since 18.10.2026): own discs needed, not the original's maker
       centered(body, getString(R.string.core_notice), 12, false, dp(2));
       line(body, dp(10));
+      button(body, "Randomizer", this::openRandomizer);
       start = button(body, getString(R.string.core_start), this::startOriginalTitle);
       heading(body, getString(R.string.core_import_heading));
     } else {
@@ -64,7 +65,8 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       TextView title = new TextView(this); title.setText(getString(R.string.app_title) + " · " + versionName()); title.setTextSize(25); body.addView(title);
       TextView note = new TextView(this); note.setText(R.string.browser_notice);
       note.setPadding(0, dp(8), 0, dp(12)); body.addView(note);
-      button(body,"Start game",this::startOriginalTitle);
+      button(body, "Randomizer", this::openRandomizer);
+      start = button(body,"Start game",this::startOriginalTitle);
     }
     // The room browser opens the app's own game modules; the core mode has none.
     Button browse = button(body, getString(R.string.launch_rooms), () -> {
@@ -78,30 +80,6 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     roomNote = new TextView(this); roomNote.setPadding(0, dp(8), 0, dp(8)); roomBrowser.addView(roomNote);
     open = button(roomBrowser, getString(R.string.room_open_selected), this::openSelected);
     status = new TextView(this); status.setPadding(0, dp(8), 0, dp(8)); body.addView(status);
-    button(body, "Collect rooms for the randomizer", this::startRoomTour);
-    button(body, "Swap room items (test the patching)", this::swapRoomItems);
-    seedField = new android.widget.EditText(this);
-    seedField.setHint("seed (empty = a new one each time)");
-    seedField.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-    body.addView(seedField);
-    newSeedEach = new android.widget.CheckBox(this);
-    newSeedEach.setText("New seed on every shuffle (untick to reuse the seed in the box)");
-    newSeedEach.setChecked(true);
-    body.addView(newSeedEach);
-    button(body, "Deal items and doors, PC-style main path (proven walk)", this::dealSpine);
-    button(body, "Deal items and doors in one pass (random doors, proven walk)", this::dealAll);
-    button(body, "Shuffle all room items (full shuffle)", this::shuffleRoomItems);
-    button(body, "Restore original rooms", this::restoreRoomItems);
-    button(body, "Item shuffle log (where each item went)", this::showShuffleLog);
-    crossStage = new android.widget.CheckBox(this);
-    crossStage.setText("One door pool for the whole game: village, castle and island mix (tick this for the full shuffle)");
-    crossStage.setChecked(true);
-    body.addView(crossStage);
-    button(body, "Shuffle with a spine (old: can leave one-way traps)", this::shuffleDoorsSpine);
-    button(body, "Shuffle doors and keys", this::shuffleDoors);
-    button(body, "Rooms kept vanilla: doors", () -> roomPinsDialog(RoomPins.DOORS));
-    button(body, "Rooms kept vanilla: items", () -> roomPinsDialog(RoomPins.ITEMS));
-    button(body, "Deal / door log (the walk that proves it)", this::showDoorLog);
     // the menu's only entry in the core mode was the disc import, which its launcher shows anyway
     if (!core) button(body, getString(R.string.browser_menu), this::showMenu);
     importPanel = new LinearLayout(this); importPanel.setOrientation(LinearLayout.VERTICAL);
@@ -123,12 +101,135 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     catch (IOException e) { status.setText(e.getMessage()); }
     category.setOnItemSelectedListener(selected(this::fillRooms)); rooms.setOnItemSelectedListener(selected(this::roomChanged));
     mode.setOnItemSelectedListener(selected(this::updateOpenState)); fillRooms();
-    ScrollView scroll = new ScrollView(this); scroll.addView(body); setContentView(scroll);
+    launcher = new ScrollView(this); launcher.addView(body); setContentView(launcher);
+    if (state != null && state.getBoolean("randomizer")) {
+      openRandomizer();
+      pairs.setChecked(state.getBoolean("pairs"));
+      newSeedEach.setChecked(state.getBoolean("fresh", true));
+      seedField.setText(state.getString("seed", ""));
+      crossStage.setChecked(state.getBoolean("cross", true));
+      doorMix.setChecked(state.getBoolean("doorMix", true));
+    }
     findViewById(android.R.id.content).setOnApplyWindowInsetsListener((v, insets) -> {
       v.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(), insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom()); return insets;
     });
   }
-  /** The randomizer's room collection (branch feature/offline-randomizer): one room per game start. */
+  private ScrollView launcher, setup;
+  private RadioButton pairs;
+  private CheckBox doorMix;
+  private android.window.OnBackInvokedCallback setupBack;
+  private TextView outcome;
+  private static volatile boolean writing;
+  private static volatile String lastResult = "";
+
+  private void openRandomizer() {
+    if (setup == null) buildRandomizer();
+    setContentView(setup);
+    if (android.os.Build.VERSION.SDK_INT >= 33 && setupBack == null) {
+      setupBack = this::closeRandomizer;
+      getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, setupBack);
+    }
+    refreshResult();
+  }
+
+  private void closeRandomizer() {
+    if (writing) { Toast.makeText(this, "Wait for the current shuffle to finish.", Toast.LENGTH_SHORT).show(); return; }
+    if (android.os.Build.VERSION.SDK_INT >= 33 && setupBack != null) {
+      getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(setupBack);
+      setupBack = null;
+    }
+    setContentView(launcher);
+  }
+
+  @Override public void onBackPressed() {
+    if (setup != null && setup.isAttachedToWindow()) closeRandomizer(); else super.onBackPressed();
+  }
+
+  private void buildRandomizer() {
+    setup = new ScrollView(this);
+    LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
+    page.setPadding(dp(20), dp(12), dp(20), dp(24)); setup.addView(page);
+    button(page, "Back to launcher", this::closeRandomizer);
+    centered(page, "Randomizer", 28, true, dp(12));
+    heading(page, "Room collection");
+    note(page, "Collect editable room copies from your imported discs. Existing copies stay as they are.");
+    action(page, "Collect rooms", this::startRoomTour);
+    heading(page, "Route layout");
+    RadioGroup layouts = new RadioGroup(this); page.addView(layouts);
+    RadioButton path = new RadioButton(this); pairs = new RadioButton(this);
+    for (RadioButton choice : new RadioButton[]{path, pairs}) { choice.setId(View.generateViewId()); layouts.addView(choice); }
+    path.setText("Main path with branches"); pairs.setText("Swap door pairs"); path.setChecked(true);
+    crossStage = new CheckBox(this); crossStage.setText("Mix village, castle and island");
+    crossStage.setChecked(true); page.addView(crossStage); crossStage.setVisibility(View.GONE);
+    layouts.setOnCheckedChangeListener((g, id) -> crossStage.setVisibility(pairs.isChecked() ? View.VISIBLE : View.GONE));
+    newSeedEach = new CheckBox(this); newSeedEach.setText("New random seed"); newSeedEach.setChecked(true); page.addView(newSeedEach);
+    seedField = new EditText(this); seedField.setSingleLine(true); seedField.setHint("Seed to reuse");
+    seedField.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);
+    page.addView(seedField); seedField.setVisibility(View.GONE);
+    newSeedEach.setOnCheckedChangeListener((b, on) -> seedField.setVisibility(on ? View.GONE : View.VISIBLE));
+    action(page, "Shuffle items and doors", () -> { if (pairs.isChecked()) dealAll(); else dealSpine(); });
+    outcome = note(page, ""); outcome.setTextIsSelectable(true); outcome.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+    note(page, "The route check follows doors and keys. It does not test drops, lifts or story events.");
+    if (core) note(page, "Enemy settings are separate: open Cheats & Mods → Game during play.");
+    LinearLayout extra = new LinearLayout(this); extra.setOrientation(LinearLayout.VERTICAL);
+    Button toggle = button(page, "Show advanced options", () -> {});
+    toggle.setOnClickListener(v -> { boolean show = extra.getVisibility() != View.VISIBLE; extra.setVisibility(show ? View.VISIBLE : View.GONE); toggle.setText(show ? "Hide advanced options" : "Show advanced options"); });
+    extra.setVisibility(View.GONE); page.addView(extra);
+    heading(extra, "Individual shuffles");
+    action(extra, "Shuffle items only", this::shuffleRoomItems);
+    doorMix = new CheckBox(this); doorMix.setText("Mix regions for doors and keys"); doorMix.setChecked(true); extra.addView(doorMix);
+    action(extra, "Shuffle doors and keys", () -> shuffleDoors(doorMix.isChecked()));
+    heading(extra, "Room exceptions");
+    action(extra, "Keep original doors in selected rooms", () -> roomPinsDialog(RoomPins.DOORS));
+    action(extra, "Keep original items in selected rooms", () -> roomPinsDialog(RoomPins.ITEMS));
+    heading(extra, "Reports"); action(extra, "Door and route report", this::showDoorLog); action(extra, "Item placement report", this::showShuffleLog);
+    if (core) {
+      heading(extra, "Opening forest playtest");
+      action(extra, "Seed 100: enemy, items and exit…", () -> {
+        boolean active = ForestTrial.marker(imports.root).exists();
+        new AlertDialog.Builder(this).setTitle(active ? "Turn off the forest trial?" : "Test all three changes in the forest?")
+            .setMessage(active ? "Your existing room collection will be used on the next game start." : "This changes an ambush Ganado, exchanges the two crow rewards and connects the exit to r102. Start a new game with item and enemy mods off. Your shuffled rooms are ignored, not deleted, during the trial.")
+            .setNegativeButton("Cancel", null).setPositiveButton(active ? "Turn off" : "Enable trial", (d,w) -> runWriter("Forest trial", () -> ForestTrial.toggle(imports.root, NativeBridge::decodeRoom))).show();
+      });
+    }
+    heading(extra, "Manage collected rooms"); action(extra, "Delete collected rooms…", this::restoreRoomItems);
+  }
+
+  private TextView note(LinearLayout page, String message) {
+    TextView t = new TextView(this); t.setText(message); t.setPadding(0, dp(6), 0, dp(6)); page.addView(t); return t;
+  }
+
+  private void action(LinearLayout page, String label, Runnable run) {
+    Button b = button(page, label, () -> {
+      if (writing) { refreshResult(); return; }
+      if (!gameReady() || imports.busy || loading) {
+        closeRandomizer(); importPanel.setVisibility(View.VISIBLE);
+        Toast.makeText(this, "Finish importing the required discs first.", Toast.LENGTH_LONG).show(); return;
+      }
+      run.run();
+    }); b.setAllCaps(false);
+  }
+
+  private final Runnable resultRefresh = this::refreshResult;
+  private void refreshResult() {
+    main.removeCallbacks(resultRefresh);
+    if (destroyed || outcome == null) return;
+    boolean busy = writing;
+    String text = busy ? "Working on the collected rooms…" : lastResult;
+    outcome.setText(text); outcome.setVisibility(text.isEmpty() ? View.GONE : View.VISIBLE);
+    if (busy) main.postDelayed(resultRefresh, 350);
+  }
+
+  private void runWriter(String label, java.util.concurrent.Callable<String> operation) {
+    if (writing) return;
+    writing = true; refreshResult();
+    new Thread(() -> {
+      try { lastResult = label + "\n" + operation.call(); }
+      catch (Exception | OutOfMemoryError e) { lastResult = label + " stopped: " + e; }
+      finally { writing = false; }
+    }, "randomizer-write").start();
+  }
+
   /** The randomizer's first patch (branch feature/offline-randomizer): exchange the items lying in the rooms. */
   private void swapRoomItems() {
     if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
@@ -138,95 +239,29 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       runOnUiThread(() -> android.widget.Toast.makeText(this, result, android.widget.Toast.LENGTH_LONG).show());
     }, "sidecar-swap").start();
   }
-  /** The seed this click uses: a fresh roll while the switch is on, otherwise the number in the box (a roll
-   *  when the box is empty or holds something that is not a number). The box always shows the seed that ran. */
-  private long seedForThisClick() {
-    final boolean fresh = newSeedEach == null || newSeedEach.isChecked();
-    final String typed = seedField.getText().toString().trim();
-    long parsed = 0L;
-    if (!fresh && !typed.isEmpty()) {
-      try {
-        parsed = Long.parseLong(typed);
-      } catch (NumberFormatException e) {
-        parsed = 0L;   // not a number: roll instead of failing
-      }
-    }
-    final long seed = parsed == 0L ? new java.util.Random().nextLong() : parsed;
-    seedField.setText(Long.toString(seed));
-    return seed;
+  private Long seedForThisClick() {
+    long seed;
+    if (newSeedEach.isChecked()) seed = new Random().nextLong();
+    else try { seed = Long.parseLong(seedField.getText().toString().trim()); }
+    catch (NumberFormatException e) { seedField.setError("Enter a signed whole number or choose a new random seed."); return null; }
+    seedField.setText(Long.toString(seed)); return seed;
   }
 
-  /** The randomizer's full shuffle (branch feature/offline-randomizer): every room item dealt anew, with models. */
   private void shuffleRoomItems() {
-    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
-    final java.io.File root = imports.root;
-    final long seed = seedForThisClick();
-    new Thread(() -> {
-      String result;
-      try {
-        result = ItemShuffle.shuffleAll(root, seed);
-      } catch (RuntimeException | OutOfMemoryError e) {
-        result = "The shuffle stopped: " + e;
-      }
-      final String shown = result;
-      runOnUiThread(() -> android.widget.Toast.makeText(this, shown, android.widget.Toast.LENGTH_LONG).show());
-    }, "item-shuffle").start();
+    final File root = imports.root; final Long seed = seedForThisClick(); if (seed == null) return;
+    runWriter("Items · seed " + seed, () -> ItemShuffle.shuffleAll(root, seed));
   }
-
-  /** The PC randomizer's shape: an ordered main path with branches, then the same proven item deal. */
   private void dealSpine() {
-    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
-    final File root = imports.root;
-    final boolean cross = crossStage != null && crossStage.isChecked();
-    final long seed = seedForThisClick();
-    new Thread(() -> {
-      String result;
-      try {
-        result = DoorShuffle.dealSpine(root, seed, cross);
-      } catch (RuntimeException | OutOfMemoryError e) {
-        result = "The deal stopped: " + e;
-      }
-      final String shown = result;
-      runOnUiThread(() -> Toast.makeText(this, shown, Toast.LENGTH_LONG).show());
-    }, "deal-spine").start();
+    final File root = imports.root; final Long seed = seedForThisClick(); if (seed == null) return;
+    runWriter("Main path · seed " + seed, () -> DoorShuffle.dealSpine(root, seed, true));
   }
-
-  /** The combined deal: whole door pairs and the whole item pool in one pass, proved by walking the result. */
   private void dealAll() {
-    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
-    final File root = imports.root;
-    final boolean cross = crossStage != null && crossStage.isChecked();
-    final long seed = seedForThisClick();
-    new Thread(() -> {
-      String result;
-      try {
-        result = DoorShuffle.dealAll(root, seed, cross);
-      } catch (RuntimeException | OutOfMemoryError e) {
-        result = "The deal stopped: " + e;
-      }
-      final String shown = result;
-      runOnUiThread(() -> Toast.makeText(this, shown, Toast.LENGTH_LONG).show());
-    }, "deal").start();
+    final File root = imports.root; final boolean mix = crossStage.isChecked(); final Long seed = seedForThisClick(); if (seed == null) return;
+    runWriter("Door pairs · seed " + seed, () -> DoorShuffle.dealAll(root, seed, mix));
   }
-
-  /** Deals the doors and the progression keys with a seed and writes randomizer/doors.txt. With cross-stage on
-   *  every stage is one pool (a village door may open into the castle or the island); the stage switch is
-   *  honoured by port patch 0239. */
-  private void shuffleDoors() {
-    if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
-    final File root = imports.root;
-    final boolean cross = crossStage != null && crossStage.isChecked();
-    final long seed = seedForThisClick();
-    new Thread(() -> {
-      String result;
-      try {
-        result = DoorShuffle.shuffleAll(root, seed, cross);
-      } catch (RuntimeException | OutOfMemoryError e) {
-        result = "The door shuffle stopped: " + e;
-      }
-      final String shown = result;
-      runOnUiThread(() -> Toast.makeText(this, shown, Toast.LENGTH_LONG).show());
-    }, "door-shuffle").start();
+  private void shuffleDoors(boolean mix) {
+    final File root = imports.root; final Long seed = seedForThisClick(); if (seed == null) return;
+    runWriter("Doors and keys · seed " + seed, () -> DoorShuffle.shuffleAll(root, seed, mix));
   }
 
   /** The PC-style shuffle: a main path first, branches hung on it, doors written afterwards. */
@@ -317,13 +352,10 @@ public final class MainActivity extends Activity implements ImportManager.Listen
   private void restoreRoomItems() {
     if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
     new android.app.AlertDialog.Builder(this)
-        .setMessage("Remove the collected rooms? The discs stay untouched; collect the rooms again to play them as "
-            + "the discs have them.")
+        .setTitle("Delete collected rooms?")
+        .setMessage("This removes the editable room copies and their changes. Collect the rooms again to rebuild them. Imported discs and saves stay untouched.")
         .setNegativeButton("Cancel", null)
-        .setPositiveButton("Remove", (dialog, which) -> new Thread(() -> {
-          final String result = ItemShuffle.restore(imports.root);
-          runOnUiThread(() -> android.widget.Toast.makeText(this, result, android.widget.Toast.LENGTH_LONG).show());
-        }, "item-restore").start())
+        .setPositiveButton("Delete copies", (dialog, which) -> runWriter("Room collection", () -> ItemShuffle.restore(imports.root)))
         .show();
   }
 
@@ -331,8 +363,16 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     if (!gameReady()) { importPanel.setVisibility(View.VISIBLE); return; }
     startActivity(new Intent(this, RoomTourActivity.class));
   }
-  private void startOriginalTitle(){if(!loading&&!imports.busy&&gameReady()){startupShown=true;Intent start=new Intent(this,core?CoreActivity.class:StartupActivity.class);if(core)start.putExtra("coreSettings",getIntent().getStringExtra("coreSettings"));startActivity(start);}else importPanel.setVisibility(View.VISIBLE);}
-  @Override protected void onSaveInstanceState(Bundle state){state.putBoolean("startupShown",startupShown);super.onSaveInstanceState(state);}
+  private void startOriginalTitle(){if(!writing&&!loading&&!imports.busy&&gameReady()){startupShown=true;Intent start=new Intent(this,core?CoreActivity.class:StartupActivity.class);if(core)start.putExtra("coreSettings",getIntent().getStringExtra("coreSettings"));startActivity(start);}else importPanel.setVisibility(View.VISIBLE);}
+  @Override protected void onSaveInstanceState(Bundle state) {
+    state.putBoolean("startupShown", startupShown);
+    if (setup != null && setup.isAttachedToWindow()) {
+      state.putBoolean("randomizer", true); state.putBoolean("pairs", pairs.isChecked());
+      state.putBoolean("fresh", newSeedEach.isChecked()); state.putString("seed", seedField.getText().toString());
+      state.putBoolean("cross", crossStage.isChecked()); state.putBoolean("doorMix", doorMix.isChecked());
+    }
+    super.onSaveInstanceState(state);
+  }
   private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
   private String versionName() {
     try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }

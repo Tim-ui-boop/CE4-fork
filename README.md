@@ -2,6 +2,8 @@
 
 # CubeEvil4
 
+Fork development: [Offline randomizer status, opening forest test and roadmap](port/docs/OFFLINE-RANDOMIZER.md).
+
 ![Beta](https://img.shields.io/badge/Status-Beta-E67E22)
 ![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)
 ![ARM 32/64-bit](https://img.shields.io/badge/ARM-32%2F64--bit-0091BD?logo=arm&logoColor=white)

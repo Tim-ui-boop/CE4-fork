@@ -1,5 +1,7 @@
 # The spine generator — how the door randomizer should work next
 
+Current status: [Offline randomizer handoff](OFFLINE-RANDOMIZER.md). This document records the earlier design.
+
 Branch `feature/offline-randomizer`. Written 21.11.2026 after the pair-swap build (309b68eb) was played on the
 phone. The user's decision: **stop swapping pairs, build a PC-style ordered main path ("spine") with branches
 attached to it**, because swapping creates room orders the game scripts cannot survive.

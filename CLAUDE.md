@@ -2,6 +2,8 @@
 
 ## Zusammenarbeit
 
+Zum Offline-Randomizer: [Forschungsstand, r100-Spieltest und nächste Schritte](port/docs/OFFLINE-RANDOMIZER.md).
+
 - Der Projektinhaber programmiert nicht selbst. Antworten auf Deutsch, per Du,
   ohne Fachjargon. Fachbegriffe kurz erklären.
 - Texte, die wir in App oder Spiel einbauen (Menüs, Meldungen, Fehlerbericht,

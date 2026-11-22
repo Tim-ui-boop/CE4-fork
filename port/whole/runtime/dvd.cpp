@@ -459,6 +459,24 @@ s32 entryForStart(const Disc& d, u32 startAddr, u32 length)
 
 // Reads `length` bytes at `offset` of the file; beyond its end the drive
 // would return the next sectors of the disc, the port returns zeros.
+// The launcher writes a verified trial list before gameplay. Validate the whole list
+// before serving even a partial DVD read; a damaged or absent trial falls back to retail.
+static unsigned char crowBytes[8160];
+static bool crowEnabled;
+static bool crowTrial(unsigned char (&bytes)[8160])
+{
+    char path[1200];
+    snprintf(path, sizeof(path), "%s/randomizer/r100-threeway/emleon00.esl", gDataDir);
+    FILE* f = fopen(path, "rb");
+    if (!f) return false;
+    bool ok = fread(bytes, 1, sizeof(bytes), f) == sizeof(bytes) && fgetc(f) == EOF && !ferror(f);
+    fclose(f);
+    if (!ok) return false;
+    u32 fingerprint = 2166136261u;
+    for (unsigned char b : bytes) fingerprint = (fingerprint ^ b) * 16777619u;
+    return fingerprint == 0xc773b4f0u;
+}
+
 s32 readFile(DVDFileInfo* fi, void* dst, s32 length, s32 offset)
 {
     Disc* d = current();
@@ -491,6 +509,16 @@ s32 readFile(DVDFileInfo* fi, void* dst, s32 length, s32 offset)
     }
     char path[2048];
     entryPath(*d, (u32) entry, path, sizeof(path));
+    if (crowEnabled && d == &gDiscs[0] && d->release == RE4_DISC_RETAIL_US &&
+        fi->length == sizeof(crowBytes) && !strcasecmp(entryName(*d, entry), "emleon00.esl") &&
+        !strcasecmp(entryName(*d, d->parent[entry]), "etc")) {
+        size_t n = (unsigned)offset < sizeof(crowBytes) ? sizeof(crowBytes) - (unsigned)offset : 0;
+        if (n > (unsigned)length) n = (unsigned)length;
+        if (n) memcpy(dst, crowBytes + offset, n);
+        if (n < (unsigned)length) memset((char*)dst+n, 0, (unsigned)length-n);
+        re4_log("r100 seed 100: enemy list served, offset %d, bytes %d", offset, length);
+        return length;
+    }
     FILE* f = fopen(path, "rb");
     if (!f) {
         re4_log("DVD: cannot open %s", path);
@@ -603,6 +631,7 @@ int re4_dvd_header_check(const void* table, const char* name, unsigned offset, u
 void re4_set_data_dir(const char* dir)
 {
     snprintf(gDataDir, sizeof(gDataDir), "%s", dir);
+    crowEnabled = crowTrial(crowBytes);
     for (Disc& d : gDiscs) {
         free(d.fst);
         free(d.parent);
@@ -630,6 +659,11 @@ int re4_disc_release(void)
 {
     Disc* d = current();
     return d ? d->release : RE4_DISC_UNKNOWN;
+}
+
+extern "C" int re4_crow_trial_active(void)
+{
+    return crowEnabled && gCurrent == 0 && re4_disc_release() == RE4_DISC_RETAIL_US;
 }
 
 int re4_disc_retail_eu(void)

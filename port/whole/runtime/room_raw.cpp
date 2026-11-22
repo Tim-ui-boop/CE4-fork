@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 
 extern "C" const char* re4_data_dir(void);
+extern "C" int re4_crow_trial_active(void);
 
 namespace {
 
@@ -48,6 +49,10 @@ bool sidecarPath(const char* name, char* out, size_t outSize)
 
     if (dir == 0 || *dir == 0 || name == 0 || *name == 0) {
         return false;
+    }
+    if (re4_crow_trial_active()) {
+        snprintf(out, outSize, "%s/randomizer/r100-threeway/%s.raw", dir, name);
+        return true;
     }
     snprintf(out, outSize, "%s/randomizer/%s.raw", dir, name);
     return true;
@@ -177,6 +182,7 @@ extern "C" int re4_randomizer_doors(void)
     char path[1400];
     const char* dir;
 
+    if (re4_crow_trial_active()) return 0;
     if (cached < 0) {
         dir = re4_data_dir();
         if (dir == 0 || *dir == 0) {
