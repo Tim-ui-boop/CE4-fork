@@ -474,7 +474,7 @@ static bool crowTrial(unsigned char (&bytes)[8160])
     if (!ok) return false;
     u32 fingerprint = 2166136261u;
     for (unsigned char b : bytes) fingerprint = (fingerprint ^ b) * 16777619u;
-    return fingerprint == 0xc773b4f0u;
+    return fingerprint == 0x51020330u;
 }
 
 s32 readFile(DVDFileInfo* fi, void* dst, s32 length, s32 offset)
