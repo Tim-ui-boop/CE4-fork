@@ -120,7 +120,16 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       v.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(), insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom()); return insets;
     });
   }
-  private void startOriginalTitle(){if(warnFirst())return;if(!loading&&!imports.busy&&gameReady()){startupShown=true;Intent start=new Intent(this,core?CoreActivity.class:StartupActivity.class);if(core)start.putExtra("coreSettings",getIntent().getStringExtra("coreSettings"));startActivity(start);}else importPanel.setVisibility(View.VISIBLE);}
+  private void startOriginalTitle(){if(warnFirst())return;if(!loading&&!imports.busy&&gameReady()){
+      // sync enemy randomizer seed + options to the core's prefs so the native side sees them
+      android.content.SharedPreferences rand = getSharedPreferences(RAND_PREFS, MODE_PRIVATE);
+      long seed = rand.getLong(RAND_SEED, 1L);
+      int opts = rand.getInt(RAND_OPTIONS, EnemyShuffle.DEFAULT_OPTIONS);
+      getSharedPreferences(CoreActivity.GAME_PREFS, MODE_PRIVATE).edit()
+          .putInt(CoreActivity.ENEMY_SEED, (int)seed)
+          .putInt(CoreActivity.ENEMY_OPTIONS, opts)
+          .apply();
+      startupShown=true;Intent start=new Intent(this,core?CoreActivity.class:StartupActivity.class);if(core)start.putExtra("coreSettings",getIntent().getStringExtra("coreSettings"));startActivity(start);}else importPanel.setVisibility(View.VISIBLE);}
   @Override protected void onSaveInstanceState(Bundle state){state.putBoolean("startupShown",startupShown);super.onSaveInstanceState(state);}
   private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
   private String versionName() {
