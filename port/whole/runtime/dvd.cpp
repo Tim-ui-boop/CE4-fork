@@ -491,6 +491,16 @@ s32 readFile(DVDFileInfo* fi, void* dst, s32 length, s32 offset)
     }
     char path[2048];
     entryPath(*d, (u32) entry, path, sizeof(path));
+    /* The offline enemy randomizer: a dealt enemy list the launcher wrote is served here
+       instead of the disc's (runtime/enemy_sidecar.cpp). Only the eleven etc/*.esl names,
+       only a whole-list read at offset 0, and only when its records pass the checks there;
+       anything else falls through to the disc below. */
+    if (offset == 0 && length == 0x2000) {
+        const char* files = strstr(path, "/files/");
+        if (files != 0 && re4_enemy_sidecar_read(files + 7, dst, length) == 1) {
+            return length;
+        }
+    }
     FILE* f = fopen(path, "rb");
     if (!f) {
         re4_log("DVD: cannot open %s", path);

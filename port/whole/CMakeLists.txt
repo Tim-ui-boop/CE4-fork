@@ -218,6 +218,7 @@ add_library(re4_platform_obj OBJECT
     runtime/card_files.cpp
     runtime/dolphin_os.cpp
     runtime/dvd.cpp
+    runtime/enemy_sidecar.cpp
     runtime/game_window.cpp
     runtime/gci.cpp
     runtime/gx_fifo.cpp
