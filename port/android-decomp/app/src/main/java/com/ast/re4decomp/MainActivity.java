@@ -25,6 +25,8 @@ public final class MainActivity extends Activity implements ImportManager.Listen
   /** Opened from the game (LauncherRestartActivity: "Import other discs"): the launcher stays, the game does not
    *  start at once with the discs there; "Start game" starts it. */
   static final String SHOW_LAUNCHER = "showLauncher";
+  /** The offline enemy randomizer's own prefs: the last seed and the option bits. */
+  private static final String RAND_PREFS = "enemyRandomizer", RAND_SEED = "seed", RAND_OPTIONS = "options";
   private final ExecutorService worker = Executors.newSingleThreadExecutor();
   private final Handler main = new Handler(Looper.getMainLooper());
   private volatile boolean destroyed;
@@ -63,6 +65,8 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       centered(body, getString(R.string.core_notice), 12, false, dp(2));
       line(body, dp(10));
       start = button(body, getString(R.string.core_start), this::startOriginalTitle);
+      // the offline enemy randomizer: a seed dealt BEFORE play, beside the disc import
+      randomizerSection(body);
       // the flavour sideload (1.0, DataFolder): where the data go, before the discs are imported
       if (DataFolder.enabled) dataFolderSection(body);
       heading(body, getString(R.string.core_import_heading));
@@ -145,6 +149,110 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     lp.topMargin = margin; lp.bottomMargin = margin; body.addView(rule(new TextView(this).getCurrentTextColor()), lp);
   }
   /** A centred heading with a line on its left and right. */
+  /** The offline enemy randomizer (the project owner, 22.11.2026: "make it offline patching and
+   *  through the launcher"). A seed is dealt BEFORE play into private copies of the enemy lists;
+   *  the core serves those instead of the disc's (runtime/enemy_sidecar.cpp). The import and the
+   *  saves are never written, and "Turn off" removes the copies so the disc is played as it is. */
+  private void randomizerSection(LinearLayout body) {
+    heading(body, getString(R.string.launch_randomizer));
+    TextView note = new TextView(this);
+    note.setText(R.string.launch_randomizer_note);
+    note.setTextSize(12);
+    note.setPadding(0, dp(4), 0, dp(6));
+    body.addView(note);
+
+    LinearLayout seedRow = new LinearLayout(this);
+    seedRow.setOrientation(LinearLayout.HORIZONTAL);
+    seedRow.setGravity(Gravity.CENTER_VERTICAL);
+    TextView seedLabel = new TextView(this);
+    seedLabel.setText(R.string.launch_randomizer_seed);
+    seedRow.addView(seedLabel, new LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    EditText seedField = new EditText(this);
+    seedField.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+    seedField.setSingleLine(true);
+    seedField.setText(String.valueOf(getSharedPreferences(RAND_PREFS, MODE_PRIVATE)
+        .getLong(RAND_SEED, 1L)));
+    LinearLayout.LayoutParams fieldLp = new LinearLayout.LayoutParams(
+        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    fieldLp.leftMargin = dp(12);
+    seedRow.addView(seedField, fieldLp);
+    body.addView(seedRow);
+
+    // the options, as the PC randomizer's enemy toggles: each keeps the others
+    final int[] flags = {EnemyShuffle.SAW, EnemyShuffle.GARRADOR, EnemyShuffle.JJ, EnemyShuffle.SUPER,
+        EnemyShuffle.VARIETY, EnemyShuffle.HELMET, EnemyShuffle.SHIELD, EnemyShuffle.PLAGA,
+        EnemyShuffle.DYNAMITE, EnemyShuffle.MIXED, EnemyShuffle.SAFE_CABIN};
+    final int[] labels = {R.string.launch_rand_saw, R.string.launch_rand_garrador, R.string.launch_rand_jj,
+        R.string.launch_rand_super, R.string.launch_rand_variety, R.string.launch_rand_helmets,
+        R.string.launch_rand_shields, R.string.launch_rand_plagas, R.string.launch_rand_dynamite,
+        R.string.launch_rand_mixed, R.string.launch_rand_safe_cabin};
+    int stored = getSharedPreferences(RAND_PREFS, MODE_PRIVATE)
+        .getInt(RAND_OPTIONS, EnemyShuffle.DEFAULT_OPTIONS);
+    final int[] options = {stored};
+    LinearLayout grid = new LinearLayout(this);
+    grid.setOrientation(LinearLayout.VERTICAL);
+    for (int i = 0; i < flags.length; i += 2) {
+      LinearLayout row = new LinearLayout(this);
+      row.setOrientation(LinearLayout.HORIZONTAL);
+      for (int k = i; k < Math.min(i + 2, flags.length); k++) {
+        final int flag = flags[k];
+        CheckBox box = new CheckBox(this);
+        box.setText(labels[k]);
+        box.setTextSize(13);
+        box.setChecked((options[0] & flag) != 0);
+        box.setOnCheckedChangeListener((v, on) -> {
+          options[0] = on ? options[0] | flag : options[0] & ~flag;
+          getSharedPreferences(RAND_PREFS, MODE_PRIVATE).edit().putInt(RAND_OPTIONS, options[0]).apply();
+        });
+        row.addView(box, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+      }
+      grid.addView(row);
+    }
+    body.addView(grid);
+
+    final TextView randStatus = new TextView(this);
+    randStatus.setTextSize(12);
+    randStatus.setPadding(0, dp(6), 0, dp(6));
+    body.addView(randStatus);
+    Runnable refresh = () -> randStatus.setText(EnemyShuffle.active(AppStorage.base(this))
+        ? getString(R.string.launch_rand_active) : getString(R.string.launch_rand_inactive));
+    refresh.run();
+
+    halfButton(body, getString(R.string.launch_rand_deal), () -> {
+      long seed;
+      try {
+        seed = Long.parseLong(seedField.getText().toString().trim());
+      } catch (NumberFormatException ex) {
+        randStatus.setText(R.string.launch_rand_bad_seed);
+        return;
+      }
+      if (seed <= 0) {
+        randStatus.setText(R.string.launch_rand_bad_seed);
+        return;
+      }
+      getSharedPreferences(RAND_PREFS, MODE_PRIVATE).edit().putLong(RAND_SEED, seed).apply();
+      File data = AppStorage.base(this);
+      File disc = new File(new File(data, "game"), "disc1/files");
+      if (!disc.isDirectory()) {
+        randStatus.setText(R.string.launch_rand_no_disc);
+        return;
+      }
+      randStatus.setText(R.string.launch_rand_working);
+      final long s = seed;
+      final int opts = options[0];
+      // off the UI thread: eight lists are read, dealt, written and re-read
+      new Thread(() -> {
+        EnemyShuffle.Result r = EnemyShuffle.deal(data, disc, s, opts);
+        runOnUiThread(() -> randStatus.setText(r.ok
+            ? getString(R.string.launch_rand_done, r.message) : r.message));
+      }, "enemy-deal").start();
+    }, null);
+    halfButton(body, getString(R.string.launch_rand_off), () -> {
+      randStatus.setText(EnemyShuffle.clear(AppStorage.base(this)));
+    }, null);
+  }
+
   private void heading(LinearLayout body, String text) {
     LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER_VERTICAL);
     TextView t = new TextView(this); t.setText(text); t.setTextSize(16); t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
