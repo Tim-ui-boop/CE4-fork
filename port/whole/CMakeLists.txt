@@ -302,7 +302,7 @@ add_library(re4_gamehooks_obj OBJECT runtime/state_trace.cpp runtime/core_bridge
     runtime/gx_owner.cpp runtime/potato.cpp runtime/aim_options.cpp
     runtime/sound_volume.cpp runtime/minimap.cpp runtime/laser_colour.cpp runtime/benchmark.cpp
     runtime/glow_check.cpp runtime/view_distance.cpp runtime/cpu_skip.cpp runtime/wheel_zoom.cpp
-    runtime/enemy_random.cpp runtime/rt_shadow.cpp runtime/ashley_catchup.cpp runtime/health_bars.cpp runtime/mouse_menu.cpp
+    runtime/enemy_random.cpp runtime/enemy_types.cpp runtime/rt_shadow.cpp runtime/ashley_catchup.cpp runtime/health_bars.cpp runtime/mouse_menu.cpp
     runtime/title_skip.cpp
     runtime/photo_mode.cpp)
 target_link_libraries(re4_gamehooks_obj PRIVATE re4_game_flags)

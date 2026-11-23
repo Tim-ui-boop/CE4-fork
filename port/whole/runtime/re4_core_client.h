@@ -81,6 +81,8 @@ void re4ipc_set_leon_jacket(int on);
 void re4ipc_zoom(int notches);
 void re4ipc_set_enemy_random(int seed);
 void re4ipc_set_more_enemies(int seed);  // 1.1.0
+void re4ipc_set_enemy_types(int seed);   // the enemy TYPE randomizer (patch 0255)
+void re4ipc_set_enemy_options(unsigned bits);
 void re4ipc_set_gentle_qte(int on);
 int re4ipc_rt_shadows(void);
 void re4ipc_swipe(int dir);

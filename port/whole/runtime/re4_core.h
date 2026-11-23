@@ -392,6 +392,13 @@ void re4_core_zoom(int notches);
 void re4_core_set_enemy_random(int seed);
 /* 1.1.0: the cheat "More enemies" (runtime/enemy_random.cpp): its seed, 0 off; from the next room. Any thread. */
 void re4_core_set_more_enemies(int seed);
+/* The enemy TYPE randomizer (runtime/enemy_types.cpp, patch 0255; the PC RE4 Randomizer's "Randomize Enemies"
+ * adapted): its seed (20 bits), 0 off; from the next room on. Any thread. */
+void re4_core_set_enemy_types(int seed);
+/* Its options, one word of bits (runtime/enemy_types.cpp): Dr. Salvador among the villagers, Garradors, JJ, super
+ * Salvador, other model variants, helmets, shields, plagas, dynamite, the mixed pool, Luis's cabin kept safe,
+ * Don José. Any thread. */
+void re4_core_set_enemy_options(unsigned bits);
 /* "Gentler QTEs" (cores since 14.11.2026, 0.99.15; runtime/qte_touch.cpp re4_qte_level, patch 0232): on, the quick-time
  * events of Professional take the time windows and press counts of Normal; damage, enemies and the rest stay
  * Professional's. Any thread. */
