@@ -37,12 +37,14 @@ extern "C" const char* re4_data_dir(void);
 
 namespace {
 
-const int kListBytes = 0x2000;  // what the game asks for: 256 entries of 32 (EM_LIST, include/global.h:211)
+const int kListBytes = 0x2000;  // a full 256 entries of 32 bytes (EM_LIST, include/global.h:211)
+/* 255 entries: what the eight story lists are on the disc (the FST says 0x1FE0). readEmList asks
+   DvdReadN for size 0, so cDvdQueue::readInit sets the length from the file itself and readMain
+   reads 0x1FE0; the drive zero-fills the missing 256th entry. A read of the whole list therefore
+   arrives here as 0x1FE0, NOT as 0x2000 — the earlier check for 0x2000 alone never matched, which
+   is why a dealt list was written and then silently ignored. */
+const int kStoryListBytes = 255 * 32;
 const int kEntryBytes = 32;
-/* The story lists on the disc are 8160 bytes (255 entries), not 8192: the game reads 0x2000
-   and the drive zero-fills the last entry (runtime/dvd.cpp readFile). emleon08/09 are the
-   full 8192. So a sidecar may be either, and a short one is zero-filled exactly as the
-   disc read does — never the other way round. */
 const int kMinListBytes = 255 * kEntryBytes;
 
 /* The eleven names src/game/stage.cpp emlist_name[] asks for. Nothing else is served. */
@@ -122,7 +124,11 @@ bool recordsSane(const unsigned char* p, int bytes)
 
 /* Serves the launcher's dealt enemy list `name` into `dst` instead of the disc's:
  * 1 when it was served, 0 to read the disc as usual. Called by runtime/dvd.cpp readFile
- * for a whole-file read at offset 0. Any thread the drive reads on. */
+ * for a whole-file read at offset 0. Any thread the drive reads on.
+ *
+ * `length` is what the drive was asked for: 0x1FE0 for the eight story lists and 0x2000 for
+ * emleon08/09. Both are served; the copy is exactly `length` bytes, so the destination is
+ * written exactly as far as the game expects and no further. */
 extern "C" int re4_enemy_sidecar_read(const char* name, void* dst, int length)
 {
     char path[1400];
@@ -131,7 +137,8 @@ extern "C" int re4_enemy_sidecar_read(const char* name, void* dst, int length)
     size_t got;
     static int told;
 
-    if (dst == 0 || length != kListBytes || !sidecarPath(name, path, sizeof(path))) {
+    if (dst == 0 || (length != kStoryListBytes && length != kListBytes) ||
+        !sidecarPath(name, path, sizeof(path))) {
         return 0;
     }
     f = fopen(path, "rb");
@@ -148,11 +155,13 @@ extern "C" int re4_enemy_sidecar_read(const char* name, void* dst, int length)
         }
         return 0;
     }
-    /* the last entry of a 255-entry list: zeros, exactly as the drive's short read gives */
-    memset(head + got, 0, sizeof(head) - got);
-    memcpy(dst, head, (size_t) kListBytes);
+    /* a dealt copy shorter than the read: zeros, exactly as the drive's short read gives */
+    if ((size_t) length > got) {
+        memset(head + got, 0, (size_t) length - got);
+    }
+    memcpy(dst, head, (size_t) length);
     if (told++ < 8) {
-        re4_log("randomizer: %s: the launcher's dealt enemy list", name);
+        re4_log("randomizer: %s: the launcher's dealt enemy list (%d bytes)", name, length);
     }
     return 1;
 }

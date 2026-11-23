@@ -12,8 +12,17 @@
 #include <stdlib.h>
 
 static const int kListBytes = 0x2000;
+/* 0x1FE0: the length the eight story lists reach readFile with (readEmList passes size 0, so the
+   queue takes the file's own length). The old sidecar only accepted 0x2000, so it never fired. */
+static const int kStoryListBytes = 255 * 32;
 static const int kEntryBytes = 32;
 static const int kMinListBytes = 255 * kEntryBytes;
+
+/* the read length the sidecar serves: a whole-list read at offset 0 */
+static bool lengthOk(int length)
+{
+    return length == kStoryListBytes || length == kListBytes;
+}
 
 static bool sizeOk(long n)
 {
@@ -88,6 +97,13 @@ int main(int argc, char** argv)
     check(!sizeOk(0x4000), "an oversized file is refused");
     check(sizeOk(8192), "a full 256-entry list is accepted");
 
+    /* the length gate: the bug that made a dealt list be silently ignored */
+    check(lengthOk(kStoryListBytes), "a whole read of a story list (0x1FE0) is served");
+    check(lengthOk(kListBytes), "a whole read of emleon08/09 (0x2000) is served");
+    check(!lengthOk(0x400), "a part-table read is NOT served");
+    check(!lengthOk(0x1000), "a partial list read is NOT served");
+    check(!lengthOk(0x20000), "a room-archive-sized read is NOT served");
+
     /* a dealt list: change id/type/flag only, as the deal does */
     static unsigned char dealt[kListBytes];
     memcpy(dealt, buf, sizeof(dealt));
@@ -112,13 +128,17 @@ int main(int argc, char** argv)
 
     memcpy(bad, buf, sizeof(bad));
     for (int i = 0; i < 256; i++) {
-        if (bad[i * 32 + 1]) { bad[i * 32 + 0x18] = 9; break; }  /* stage 9 */
+        /* a LIVE record (be_flag bit0 set) with an id: a bare id in a dead slot is skipped
+           by recordsSane, so damaging one proved nothing. */
+        if (bad[i * 32 + 1] && (bad[i * 32] & 1)) { bad[i * 32 + 0x18] = 9; break; }  /* stage 9 */
     }
     check(!recordsSane(bad, (int) got), "a record moved to a nonexistent stage is refused");
 
     memcpy(bad, buf, sizeof(bad));
     for (int i = 0; i < 256; i++) {
-        if (bad[i * 32 + 1]) { bad[i * 32 + 0x18] = 0; bad[i * 32 + 0x19] = 0; break; }
+        if (bad[i * 32 + 1] && (bad[i * 32] & 1)) {
+            bad[i * 32 + 0x18] = 0; bad[i * 32 + 0x19] = 0; break;
+        }
     }
     check(!recordsSane(bad, (int) got), "a record with no room is refused");
 

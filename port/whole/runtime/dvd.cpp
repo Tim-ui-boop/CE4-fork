@@ -494,8 +494,11 @@ s32 readFile(DVDFileInfo* fi, void* dst, s32 length, s32 offset)
     /* The offline enemy randomizer: a dealt enemy list the launcher wrote is served here
        instead of the disc's (runtime/enemy_sidecar.cpp). Only the eleven etc/*.esl names,
        only a whole-list read at offset 0, and only when its records pass the checks there;
-       anything else falls through to the disc below. */
-    if (offset == 0 && length == 0x2000) {
+       anything else falls through to the disc below.
+       The eight story lists are 0x1FE0 bytes on the disc and readEmList passes size 0, so the
+       queue takes the length from the file: their whole-list read arrives as 0x1FE0, not 0x2000
+       (emleon08/09 are 0x2000). Both are offered to the sidecar. */
+    if (offset == 0 && (length == 0x1FE0 || length == 0x2000)) {
         const char* files = strstr(path, "/files/");
         if (files != 0 && re4_enemy_sidecar_read(files + 7, dst, length) == 1) {
             return length;

@@ -319,8 +319,9 @@ void re4_gx_wide(int on);
 int re4_gx_wide_now(void);
 /* The offline enemy randomizer (runtime/enemy_sidecar.cpp): serves the launcher's dealt
  * enemy list `name` ("etc/emleon00.esl") into `dst` instead of the disc's, 1 when served.
- * Only the eleven enemy-list names, only a whole 0x2000-byte read, only with the
- * launcher's randomizer/enemies/active marker and records that pass its checks. */
+ * Only the eleven enemy-list names, only a whole-list read at offset 0 (0x1FE0 for the eight
+ * story lists, 0x2000 for emleon08/09), only with the launcher's randomizer/enemies/active
+ * marker and records that pass its checks. */
 int re4_enemy_sidecar_read(const char* name, void* dst, int length);
 
 #ifdef __cplusplus

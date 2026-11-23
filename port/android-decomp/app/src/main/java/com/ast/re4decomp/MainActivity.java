@@ -228,7 +228,10 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     randStatus.setTextSize(12);
     randStatus.setPadding(0, dp(6), 0, dp(6));
     body.addView(randStatus);
-    Runnable refresh = () -> randStatus.setText(EnemyShuffle.active(AppStorage.base(this))
+    // The dealt lists live beside the import (imports.root, = <data>/game), because that is the
+    // folder the core is started with: CoreBridge.start(imports.root). AppStorage.base(this) is one
+    // level above it, so a marker written there was never found and the deal looked inactive.
+    Runnable refresh = () -> randStatus.setText(imports.root != null && EnemyShuffle.active(imports.root)
         ? getString(R.string.launch_rand_active) : getString(R.string.launch_rand_inactive));
     refresh.run();
 
@@ -245,8 +248,12 @@ public final class MainActivity extends Activity implements ImportManager.Listen
         return;
       }
       getSharedPreferences(RAND_PREFS, MODE_PRIVATE).edit().putLong(RAND_SEED, seed).apply();
-      File data = AppStorage.base(this);
-      File disc = new File(new File(data, "game"), "disc1/files");
+      File data = imports.root;
+      if (data == null) {
+        randStatus.setText(R.string.launch_rand_no_disc);
+        return;
+      }
+      File disc = new File(data, "disc1/files");
       if (!disc.isDirectory()) {
         randStatus.setText(R.string.launch_rand_no_disc);
         return;
@@ -262,7 +269,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       }, "enemy-deal").start();
     }, null);
     halfButton(body, getString(R.string.launch_rand_off), () -> {
-      randStatus.setText(EnemyShuffle.clear(AppStorage.base(this)));
+      randStatus.setText(EnemyShuffle.clear(imports.root));
     }, null);
   }
 
