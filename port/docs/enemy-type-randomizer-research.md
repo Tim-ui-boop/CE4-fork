@@ -230,6 +230,117 @@ faces and weapons.**
 - Behaviour in Assignment Ada / Mercenaries (`omake*.esl`) was surveyed but not designed for; the
   recommendation is story-only, matching the item randomizer.
 
+---
+
+## 8. The PC randomizer in this workspace (`Rnd_April_11_B`) — added 22.11.2026
+
+The workspace already contains the PC RE4 Randomizer (April 11th 2026 build). It is a far better
+reference than anything inferred from the decompilation, because it has shipped this exact feature for
+years. Read-only inspection of `RE4_PC_Randomizer/` (profiles, localization, `EslData/`, and the .NET
+string/metadata heap of `RE4RND_v2.exe`).
+
+### 8.1 Its ESL data is byte-compatible with our disc
+
+`RE4_PC_Randomizer/EslData/` holds the same 11 story/omake lists we read from the disc, plus 7 more
+omake lists. Same 8160 bytes (255 × 32), same `EM_LIST` layout — **only the byte order differs**: the PC
+port is little-endian, the GameCube is big-endian.
+
+Verified on `emleon00.esl`: after swapping endianness, **all 255 entries match the disc exactly** on
+`id`, `room`, `type`, `set`, `hp`, `pos`, `guard` and `flag`. So the PC data can be used directly as a
+reference table for our offline pass, and its enemy ids are our enemy ids.
+
+### 8.2 It does swap enemy types, and its names map to our ids
+
+The UI names carry the id in hex. From the exe's string heap:
+
+| PC label | our id | our name (`t_emlist.cpp`) |
+|---|---|---|
+| Villager 12 / 13 / 15 / 16 / 17 | 0x12, 0x13, 0x15, 0x16, 0x17 | Ganado 1-c, 1+w, 1+c, 1+c2, 1-c2 |
+| Villager 42 / 44 / 45 / 46 | 0x42, 0x44, 0x45, 0x46 | PC-only extra villagers (not on our disc) |
+| Zealots 11 / 14 / 19 / 1A | 0x11, 0x14, 0x19, 0x1A | Ganado 2, 2+w, 2+A, 2+R |
+| Zealots 1B or Garrador | 0x1B | Ganado 2+cm |
+| Zealots 1C or Garrador | 0x1C | Ganado 2+cm2 |
+| Military 1D / 1E / 1F / 20 | 0x1D, 0x1E, 0x1F, 0x20 | Ganado 3+GM (JJ), 3+W, 3, 3+G+C |
+| Military men or JJ | 0x1D | the gatling Ganado |
+| Military men or Super Salvador | 0x20 | Ganado 3+G+C |
+
+So **"villager → JJ" is `0x12 → 0x1D`, and "super Salvador" is id 0x20** — both are ordinary Ganado-family
+ids inside the `SceCountEmAlive(0x10, 0x20)` range, exactly as §5 hoped. The PC randomizer also has
+`Super Salvador Mace`, `Super Salvador Plaga`, `JJ Plaga` variants, i.e. it uses `type`/`flag` on top of
+the id, which is the two-layer design recommended in §6.
+
+Note the PC build has villagers 0x42–0x46 that our GameCube disc does not; those must not be copied over.
+Verified: no live entry on either of our discs uses 0x42/0x44/0x45/0x46. Also **0x20 (super Salvador)
+never appears as a live enemy on our disc**, although the `em20` module is present on both discs — so
+that id is available headroom rather than something we would be overwriting.
+
+### 8.3 Its safety rules — the "do not touch" list the user asked about
+
+These are the shipped, battle-tested exclusions. Method names in the assembly:
+`ShouldExcludeEnemy`, `GetNonSafeEnemies`, `GetSafeSelectedEnemy`, `GetSafeSelectedGanado`,
+`IsEnemyAllowedForCurrentRoomShuffle`, `IsEnemyGanado`, `GetSelectedGanados` / `GetSelectedNonGanados`.
+
+Rules taken from its own tooltips and log strings:
+
+1. **Per-room pools and default enemies.** *"A few rooms may have their own enemy pool or default
+   enemies to prevent softlocks."* This is the direct confirmation that a room-level guard list is
+   required, not optional.
+2. **Max enemy types per room** (`enemyVarietyTrackBar`, default **3**). Tooltip: *"Previous versions of
+   the rando had a limit of 3 different enemies per room… values greater than 6 can be unstable…
+   Novistadors may cause random crashes so these are disabled by default. Other enemies such as crows
+   and U3 were disabled temporarily."* Our disc has a hard limit of 4 modules (§2); the PC tool's
+   default of 3 is the conservative choice and matches it.
+3. **Luis cabin** (`safeLuisCabinCheckBox`): *"Prevents spawn of certain enemies that can kill Luis:
+   Gigante, Regenerators, Iron Maiden and Dr. Salvador."* → our r11c/r11d must exclude those ids.
+4. **Bingo room r101** (`safeBingoRoomSpawnsCheckBox`): *"the enemies close to the exit door will be
+   moved to a safe position… both day and night versions."* It also ships `Tools/AEV_Fixes/r101/0000.AEV`
+   — a patched area file for that room.
+5. **R106 spiders and bats disabled** (log string: *"Spiders and bats from R106 disabled."*).
+6. **Boss rooms are swapped deliberately, not randomly.** Log strings name r119 (Gigante 1),
+   r11E (Gigante 2), r11F (Mendez), r221 (Verdugo) as explicit *"Boss enemy swap"* cases, and
+   `ChosenJJOrSuperSalvador`, `ChosenKrauser`, `ChosenVerdugoOrMendez`, `ChosenTrap`,
+   `ChosenCrowCowChickenGroup` show it picks **one** representative per group per seed rather than
+   rolling each entry independently.
+7. **Key items never on invincible/non-dropping enemies.** *"The randomizer will never assign key items
+   to enemies that are invincible or won't drop items like drones, traps or NPC enemies."* Directly
+   relevant to our item deal: `NPC Salazar (Invincible)` is in its pool but must never hold a gate item.
+8. **Ratios, not uniform swaps.** `salvadorToVillagerRatioTrackBar=12`, `jjToMilitaryRatioTrackBar=2`,
+   `garradorToZealotRatioTrackBar=8`, `megasToMilitaryRatioTrackBar=8`,
+   `hammerManToMilitaryRatioTrackBar=10`. Tooltip: *"a 1:9 ratio for Dr. Salvador means… for 9 regular
+   villagers there will be a Dr. Salvador (10% chance)"*. Sub-bosses are **salted into** the ordinary
+   population, never a wholesale replacement. This is the answer to "how much" — and it is why the PC
+   rando stays playable.
+9. **Family-aware pairing.** The ratio names pair *within* a family: Salvador↔Villager,
+   Garrador↔Zealot, JJ/Megas/HammerMan↔Military. It does not put a JJ in a village room by default.
+10. **A reroll escape hatch.** `rerollEnemiesButton`: *"useful if a specific area has permanent crashes
+    caused by a bad enemy spawn."* Even the mature PC tool cannot guarantee every seed; it gives the
+    player a way out. Our equivalent is re-dealing the seed.
+11. **Per-room enable/disable list** (`enableRoomsLabel`) with known trouble rooms documented: r21d
+    crushers, r31b (U3 area, *"may potentially break the path if the cable tram is used before the
+    containers section"*), r324, r317, r320 (*"all ground item drops were removed because of the
+    infinite item spawn"*).
+
+### 8.4 What this changes in our plan
+
+- §6's two-layer design is **confirmed correct** by a shipped implementation: id swap within a family,
+  plus `type`/`flag` variants on top.
+- §4's "only r20d has two Ganado kinds, so id swaps are invisible" is still true of the *disc*, but the
+  conclusion changes: the PC tool does not swap *between the room's existing kinds* — it **replaces**
+  entries from a global pool, family-matched, at a ratio. That is visible everywhere, and it is what we
+  should copy.
+- The 4-module ceiling (§2) is the real constraint the PC tool manages with its variety limit of 3.
+  Our offline pass must count distinct ids per room **after** the deal and refuse a seed that exceeds 4
+  (or 3, to match the PC default and leave room for Ashley/Luis).
+- Adopt its exclusions verbatim where the room exists on our disc: Luis cabin ids, r101 exit-door
+  positions, r106 spiders/bats, boss rooms handled explicitly, invincible NPCs never holding keys.
+
+### 8.5 Not yet done
+
+The PC tool's actual per-room pool tables live in its compiled code and `Tools/` data, not in a readable
+list; only the rules and the room names above were recovered. Extracting the exact per-room pools would
+need decompiling the .NET method bodies (`IsEnemyAllowedForCurrentRoomShuffle`, `ShouldExcludeEnemy`),
+which was not attempted here.
+
 ## Reproduce
 
 ```
@@ -237,4 +348,6 @@ python3 .harness/analysis/enemy_kinds_survey.py   # kinds per room -> enemy_kind
 python3 .harness/analysis/enemy_type_scope.py     # model types + saw scope -> enemy_type_scope.json
 ```
 
-Both are read-only and need the two disc images in the workspace root.
+Both are read-only and need the two disc images in the workspace root. The PC reference is
+`Rnd_April_11_B/RE4_PC_Randomizer/` (profiles in `Profiles/PC/`, tooltips in `Localization/en_US.txt`,
+enemy lists in `EslData/`).
