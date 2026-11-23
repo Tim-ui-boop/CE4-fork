@@ -95,6 +95,28 @@ Both were found by *running* the code on the actual disc, not by reading it:
 
 Both fixes are in the Java dealer and the C++ loader, and both are covered by tests.
 
+### 4b. Why a dealt set was still ignored after that (fixed 23.11.2026)
+
+The deal was right the whole time — `rehearse.py` holds every invariant on real disc lists. The
+lists were dealt, verified, written, and then never loaded. Two more problems, again only visible
+by following the bytes from the launcher to `readFile`:
+
+3. **The hook waited for a read that never happens.** `readEmList` calls
+   `DvdReadN(name, pG->Em_list, 0, 0, 0, …)` — the size is **0**, so `cDvdQueue::readInit` sets
+   `length = fileGetLength()` and `readMain` reads the file's own length. The eight story lists are
+   **0x1FE0** (255 entries; the disc's file table says so), so they arrive at `readFile` as 0x1FE0
+   and never as 0x2000. Both the `dvd.cpp` hook and the sidecar demanded exactly 0x2000. Neither
+   could ever fire for a story list. Both now accept 0x1FE0 and 0x2000, and the copy is exactly
+   `length` bytes so the destination is written as far as the game expects and no further.
+4. **The launcher and the core disagreed by one folder.** `EnemyShuffle` wrote and checked
+   `AppStorage.base(this)/randomizer/enemies`, but the core is started with `imports.root`
+   (`CoreBridge.start(imports.root)`, = `<data>/game`) and that is what `re4_data_dir()` returns.
+   The marker and the lists sat one directory above where the loader looked, so the status line
+   said "off" and the sidecar found nothing. The launcher now uses `imports.root` throughout.
+
+Point 3 is why the feature looked completely dead: with no match in `readFile` the game simply read
+the disc, exactly as if no seed had been dealt. The deal's own report was always honest.
+
 ## 5. What was verified
 
 | check | result |
@@ -103,7 +125,8 @@ Both fixes are in the Java dealer and the C++ loader, and both are covered by te
 | `enemy_types.cpp`, `enemy_random.cpp` (game flags, 32-bit) | **clean**, 0 errors |
 | `dvd.cpp` before vs after the hook | **identical** pre-existing header error, none added |
 | `EnemyShuffle.java` `javac -Xlint:all` | **0 warnings, 0 errors** |
-| sidecar decision logic vs real + damaged lists | **22/22 pass** |
+| sidecar decision logic vs real + damaged lists | **26/26 pass** |
+| the length gate (0x1FE0, 0x2000 served; 0x400, 0x1000, 0x20000 refused) | **covered by the same test** |
 | the real Java deal on the real disc lists | **6 seed/option combinations pass** |
 | every written byte vs its source | **only id/type/flag differ** |
 | same seed → identical files | **deterministic** |
