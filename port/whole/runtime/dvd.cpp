@@ -30,6 +30,7 @@
 #include <string.h>
 #include <strings.h>
 #include <dirent.h>
+#include <sys/stat.h>
 
 #include <atomic>
 
@@ -509,6 +510,12 @@ s32 readFile(DVDFileInfo* fi, void* dst, s32 length, s32 offset)
     }
     char path[2048];
     entryPath(*d, (u32) entry, path, sizeof(path));
+    if (strstr(path, "em/em1b.drs") != 0 || strstr(path, "em/em10.drs") != 0) {
+        struct stat st;
+        bool present = stat(path, &st) == 0;
+        re4_log("DVD diag: entry=%d length=%u device=%s size=%lld path=%s", (int) entry,
+                (unsigned) fi->length, present ? "yes" : "no", present ? (long long) st.st_size : -1LL, path);
+    }
     if (crowEnabled && d == &gDiscs[0] && d->release == RE4_DISC_RETAIL_US &&
         fi->length == sizeof(crowBytes) && !strcasecmp(entryName(*d, entry), "emleon00.esl") &&
         !strcasecmp(entryName(*d, d->parent[entry]), "etc")) {
