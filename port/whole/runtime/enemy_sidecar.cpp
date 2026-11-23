@@ -108,8 +108,8 @@ bool recordsSane(const unsigned char* p, int bytes)
         if (id > 0x60) {
             return false;  // the game's enemy ids end well below this (em.cpp)
         }
-        if (id == 0) {
-            continue;  // an empty entry: the rest is unused
+        if (id == 0 || (e[0] & 1) == 0) {
+            continue;  // an empty or unused slot: emleon07 entry 155 has an id but no room
         }
         if (room == 0 || (room >> 8) > 4) {
             return false;  // stage 1..3 of the story, 4 of the extra games

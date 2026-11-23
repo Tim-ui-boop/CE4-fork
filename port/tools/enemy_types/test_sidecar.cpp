@@ -43,7 +43,7 @@ static bool recordsSane(const unsigned char* p, int bytes)
         const unsigned room = (unsigned) e[0x18] << 8 | e[0x19];
 
         if (id > 0x60) return false;
-        if (id == 0) continue;
+        if (id == 0 || (e[0] & 1) == 0) continue;
         if (room == 0 || (room >> 8) > 4) return false;
     }
     return true;
