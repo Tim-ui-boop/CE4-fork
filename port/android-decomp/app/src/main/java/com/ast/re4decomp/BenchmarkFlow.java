@@ -92,7 +92,7 @@ final class BenchmarkFlow {
 
   /** The first start's benchmark is to come (FIRST_PENDING) and was not offered in this run yet. */
   boolean firstDue() {
-    return state == IDLE && !offeredThisRun
+    return !PerfProfile.OFF && state == IDLE && !offeredThisRun
         && host.graphics().getInt(PerfProfile.FIRST, PerfProfile.FIRST_NONE) == PerfProfile.FIRST_PENDING;
   }
 

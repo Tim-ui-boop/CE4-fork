@@ -52,6 +52,10 @@ final class PerfProfile {
   /** 1 the first start's benchmark is to come, 2 the menu asks once (an update), 0 nothing (FIRST_*). */
   static final String FIRST = "benchFirst";
   static final int FIRST_NONE = 0, FIRST_PENDING = 1, FIRST_ASK = 2;
+  /** OFF: the benchmark's offers at the title screen are turned off for this fork (project owner, 23.11.2026: the
+   *  popup at the title screen shall not come). The measurement stays reachable by hand in the ingame menu's
+   *  "Performance profile" row. Set OFF to false to bring the first start's offer and the update's question back. */
+  static final boolean OFF = true;
 
   /** The settings a profile sets, in this order (booleans as 0/1). */
   static final String[] KEYS = {"scaleHalves", "samples", "fxaa", "anisotropy", "smooth60", CoreMenu.FRAME_SKIP,
@@ -142,7 +146,7 @@ final class PerfProfile {
 
   /** When redoDue: the first start's benchmark once more (FIRST_PENDING), marked for this version; true when so. */
   static boolean scheduleRedo(SharedPreferences g) {
-    if (!redoDue(g)) return false;
+    if (OFF || !redoDue(g)) return false;
     g.edit().putInt(FIRST, FIRST_PENDING).putInt(BENCH_REDO, REDO_RESERVE).apply();
     return true;
   }

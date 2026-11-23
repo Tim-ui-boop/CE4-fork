@@ -957,7 +957,7 @@ final class CoreMenu extends Dialog {
     sourceSection();
     main.post(() -> { if (isShowing() && page == HOME && !working) refreshInstant(); });
     // an update to 0.99.10: the menu asks once whether to measure now (decision of the project owner, 11.11.2026)
-    if (host != null && !updateAsked && graphics.getInt(PerfProfile.FIRST, PerfProfile.FIRST_NONE) == PerfProfile.FIRST_ASK) {
+    if (host != null && !PerfProfile.OFF && !updateAsked && graphics.getInt(PerfProfile.FIRST, PerfProfile.FIRST_NONE) == PerfProfile.FIRST_ASK) {
       updateAsked = true;
       main.post(this::askMeasureAfterUpdate);
     }

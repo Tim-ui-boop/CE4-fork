@@ -25,12 +25,16 @@ public final class MainActivity extends Activity implements ImportManager.Listen
   /** Opened from the game (LauncherRestartActivity: "Import other discs"): the launcher stays, the game does not
    *  start at once with the discs there; "Start game" starts it. */
   static final String SHOW_LAUNCHER = "showLauncher";
+  /** Only LauncherRestartActivity's way back into the game (BACK_TO_GAME: the menu's renderer) starts the game by
+   *  itself. Every other start shows the launcher and waits for "Start game" (project owner, 23.11.2026: with the
+   *  discs imported the app went into the game at once, and the launcher could not be reached any more). */
+  static final String AUTO_START = "autoStart";
   /** The offline enemy randomizer's own prefs: the last seed and the option bits. */
   private static final String RAND_PREFS = "enemyRandomizer", RAND_SEED = "seed", RAND_OPTIONS = "options";
   private final ExecutorService worker = Executors.newSingleThreadExecutor();
   private final Handler main = new Handler(Looper.getMainLooper());
   private volatile boolean destroyed;
-  private boolean loading, startupShown;
+  private boolean loading, startupShown, autoStart;
   /** The warning of an unofficial build while it shows (warnFirst). */
   private AlertDialog warning;
   /** Core flavor: the original game core runs the game (CoreActivity). */
@@ -50,7 +54,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
   private static boolean folderNoted;  // the note of a folder that cannot be used: once a start
   private static final int REQUEST_TREE = 40, REQUEST_STORAGE = 41;
   @Override public void onCreate(Bundle state) {
-    super.onCreate(state); startupShown=state!=null&&state.getBoolean("startupShown",false); imports = ((Re4Application)getApplication()).imports;
+    super.onCreate(state); startupShown=state!=null&&state.getBoolean("startupShown",false); autoStart=getIntent().getBooleanExtra(AUTO_START,false); imports = ((Re4Application)getApplication()).imports;
     if (getIntent().getBooleanExtra(SHOW_LAUNCHER, false)) startupShown = true;
     core = getResources().getBoolean(R.bool.core_mode);
     LinearLayout body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL);
@@ -577,7 +581,9 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     showFolder();
     if (imports.busy || loading) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     updateOpenState();
-    if(!startupShown&&gameReady()&&!imports.busy&&!loading)startOriginalTitle();
+    // no self-start: the launcher stays after an import and at every cold start (AUTO_START only for the way back
+    // into the game); the discs there no longer pull the app into the game
+    if(autoStart&&!startupShown&&gameReady()&&!imports.busy&&!loading)startOriginalTitle();
   }
   @Override public boolean dispatchKeyEvent(KeyEvent e) {
     if ((e.getSource() & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD &&

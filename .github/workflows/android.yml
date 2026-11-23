@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the whole history: the versionCode comes from the commit count
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -31,6 +33,31 @@ jobs:
           java-version: "17"
           cache: gradle
           cache-dependency-path: port/android-decomp/**/*.gradle*
+
+      - name: Signing key
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RE4_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RE4_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RE4_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RE4_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # A permanent key so each build installs OVER the one before it (Gradle's signingConfigs.re4 reads these
+          # names, port/android-decomp/docs/signing-key.md). Without the secret the build keeps the throwaway debug
+          # key and has to be installed by uninstalling first.
+          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+            echo "::warning::RE4_KEYSTORE_BASE64 is not set: this APK gets a throwaway debug key and will not install over an existing build."
+            exit 0
+          fi
+          ks="$RUNNER_TEMP/re4-release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$ks"
+          echo "RE4_KEYSTORE_FILE=$ks" >> "$GITHUB_ENV"
+          echo "RE4_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "RE4_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "RE4_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          keytool -list -v -keystore "$ks" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" \
+            | grep -E "Alias|SHA256:" | sed 's/^/  /'
 
       - name: Use runner Android SDK and install pinned tools
         shell: bash
@@ -78,7 +105,12 @@ jobs:
         shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon :app:assembleCoreDebug
+          # versionCode from the commit count so every build is newer than the last (Android refuses an update
+          # whose versionCode is not higher)
+          COUNT=$(git rev-list --count HEAD)
+          VERSION_CODE=$((2000 + COUNT))
+          echo "versionCode $VERSION_CODE (commit count $COUNT)"
+          ./gradlew --no-daemon :app:assembleCoreDebug -Pre4.versionCode="$VERSION_CODE"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

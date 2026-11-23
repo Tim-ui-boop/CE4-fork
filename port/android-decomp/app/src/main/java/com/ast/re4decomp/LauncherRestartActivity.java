@@ -34,6 +34,7 @@ public final class LauncherRestartActivity extends Activity {
     }
     final boolean toGame = getIntent().getBooleanExtra(BACK_TO_GAME, false);
     startActivity(new Intent(this, MainActivity.class).putExtra(MainActivity.SHOW_LAUNCHER, !toGame)
+        .putExtra(MainActivity.AUTO_START, toGame)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
     finish();
     overridePendingTransition(0, 0);
