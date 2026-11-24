@@ -494,6 +494,150 @@ final class EnemyShuffle {
     return r;
   }
 
+  /**
+   * Fixed test for room 1-01, the village square. All 46 enemy records become castle enemies:
+   * zealots and Garradors share module 0x1B (type 10 is the Garrador), two rows become Verdugos
+   * (0x2C). The room itself still loads em15 / em26 for its event data, so the four module slots
+   * are full. Unlike the r100 test, the enemy sound banks are deliberately left ON.
+   */
+  static Result dealR101Test(File dataRoot, File discFiles) {
+    Result r = new Result();
+    final String name = "etc/emleon00.esl";
+    byte[] src = read(new File(discFiles, name));
+    if (src == null || src.length < MIN_BYTES || src.length > LIST_BYTES || src.length % ENTRY != 0) {
+      r.message = "The imported disc has no usable " + name + ". Import both discs again, then try.";
+      Log.i(TAG, r.message);
+      return r;
+    }
+    byte[] out = new byte[LIST_BYTES];
+    System.arraycopy(src, 0, out, 0, src.length);
+
+    int n = 0, zealots = 0, garradors = 0, verdugos = 0;
+    for (int no = 0; no < ENTRIES; no++) {
+      int at = no * ENTRY;
+      if (at + ENTRY > src.length) break;
+      if (u16(out, at + ROOM) != 0x0101) continue;
+      int id = u8(out, at + ID);
+      if (id != 0x15 && id != 0x26 && id != 0x28) continue;
+      int flag = u32(out, at + FLAG);
+      if (n == 11 || n == 37) {
+        // both are dormant rows, so the bell's initial Ganado count stays intact
+        putU8(out, at + ID, 0x2C);
+        putU8(out, at + TYPE, 0);
+        verdugos++;
+      } else if (n == 3 || n == 12 || n == 19 || n == 27 || n == 35 || n == 43) {
+        putU8(out, at + ID, 0x1B);
+        putU8(out, at + TYPE, 10);
+        garradors++;
+      } else {
+        putU8(out, at + ID, 0x1B);
+        putU8(out, at + TYPE, 7 + (n & 1));
+        zealots++;
+      }
+      putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
+      putU16(out, at + HP, 1200);
+      n++;
+    }
+    if (n != 46 || zealots != 38 || garradors != 6 || verdugos != 2) {
+      r.message = "r101 is not the disc layout this test expects (" + n + " enemies, "
+          + zealots + " zealots, " + garradors + " Garradors, " + verdugos
+          + " Verdugos). Nothing was written.";
+      Log.i(TAG, r.message);
+      return r;
+    }
+    String why = verifyR101(src, out);
+    if (why != null) {
+      r.message = why + " Nothing was written.";
+      Log.i(TAG, r.message);
+      return r;
+    }
+
+    File dir = outDir(dataRoot);
+    File stage = new File(dir, "staging");
+    deleteTree(stage);
+    try {
+      File staged = new File(stage, name);
+      staged.getParentFile().mkdirs();
+      writeAll(staged, out);
+      byte[] back = read(staged);
+      if (back == null || !java.util.Arrays.equals(back, out)) {
+        r.message = "The test list did not read back as written. Nothing was activated.";
+        Log.i(TAG, r.message);
+        deleteTree(stage);
+        return r;
+      }
+      marker(dataRoot).delete();
+      // r100's silent-enemy marker must not leak into this test: sounds stay on here.
+      new File(dir, "r100-no-sound").delete();
+      File target = new File(dir, name);
+      target.getParentFile().mkdirs();
+      if (target.exists() && !target.delete()) {
+        r.message = "Could not replace the previous " + name + ". Nothing was activated.";
+        Log.i(TAG, r.message);
+        return r;
+      }
+      if (!staged.renameTo(target)) {
+        r.message = "Could not put the test list in place. Nothing was activated.";
+        Log.i(TAG, r.message);
+        return r;
+      }
+      deleteTree(stage);
+      r.ok = true;
+      r.message = "r101 test ready: 38 castle zealots, 6 Garradors, 2 Verdugos, sounds on. "
+          + "Start the game and go to the village square.";
+      writeAll(logFile(dataRoot), (r.message + "\n").getBytes(StandardCharsets.UTF_8));
+      writeAll(marker(dataRoot), "r101-test".getBytes(StandardCharsets.UTF_8));
+      Log.i(TAG, "r101 test files: " + target + ", marker " + marker(dataRoot));
+      Log.i(TAG, r.message);
+    } catch (IOException ex) {
+      r.message = "Could not write the test list: " + ex.getMessage() + ". Nothing was activated.";
+      Log.e(TAG, r.message);
+      deleteTree(stage);
+    }
+    return r;
+  }
+
+  /** r101's check: only its records, only the fields the test claims to change. */
+  private static String verifyR101(byte[] src, byte[] out) {
+    // r101 loads em15 and em26 itself for its events, whether or not their records remain.
+    java.util.Set<Integer> kinds = new java.util.HashSet<>();
+    kinds.add(0x15);
+    kinds.add(0x26);
+    for (int no = 0; no < ENTRIES; no++) {
+      int at = no * ENTRY;
+      if (at + ENTRY > src.length) {
+        if (u8(out, at + ID) != 0) return "entry " + no + " was invented past the disc's end";
+        continue;
+      }
+      if (u16(out, at + ROOM) != 0x0101) {
+        for (int k = 0; k < ENTRY; k++) {
+          if (src[at + k] != out[at + k]) return "entry " + no + " outside r101 changed";
+        }
+        continue;
+      }
+      if (u8(src, at + BE_FLAG) != u8(out, at + BE_FLAG)
+          || u8(src, at + SET) != u8(out, at + SET)
+          || u8(src, at + CHARACTER) != u8(out, at + CHARACTER)
+          || u8(src, at + 0x0A) != u8(out, at + 0x0A)
+          || u16(src, at + ROOM) != u16(out, at + ROOM)
+          || u16(src, at + GUARD) != u16(out, at + GUARD)) {
+        return "entry " + no + " changed a protected field";
+      }
+      for (int k = POS; k < ROOM; k++) {
+        if (src[at + k] != out[at + k]) return "entry " + no + " moved or was retargeted";
+      }
+      int id = u8(out, at + ID);
+      if (id != 0 && id != 0x1B && id != 0x2C && id != 0x15 && id != 0x26) {
+        return "entry " + no + " has an unexpected kind " + id;
+      }
+      if (id != 0) kinds.add(id);
+    }
+    if (kinds.size() > 4) {
+      return "the test would need " + kinds.size() + " enemy modules in r101";
+    }
+    return null;
+  }
+
   /** The test's own check: only r100 records, only the fields the test claims to change. */
   private static String verifyTest(byte[] src, byte[] out) {
     java.util.Set<Integer> kinds = new java.util.HashSet<>();

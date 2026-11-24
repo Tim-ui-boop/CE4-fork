@@ -284,6 +284,19 @@ public final class MainActivity extends Activity implements ImportManager.Listen
         runOnUiThread(() -> randStatus.setText(r.message));
       }, "r100-test").start();
     });
+    // r101 (village square): castle zealots, Garradors and Verdugos, with sound banks on.
+    button(body, getString(R.string.launch_rand_test_r101), () -> {
+      File data = imports.root;
+      if (data == null || !new File(data, "disc1/files").isDirectory()) {
+        randStatus.setText(R.string.launch_rand_no_disc);
+        return;
+      }
+      randStatus.setText(R.string.launch_rand_working);
+      new Thread(() -> {
+        EnemyShuffle.Result r = EnemyShuffle.dealR101Test(data, new File(data, "disc1/files"));
+        runOnUiThread(() -> randStatus.setText(r.message));
+      }, "r101-test").start();
+    });
   }
 
   private void heading(LinearLayout body, String text) {

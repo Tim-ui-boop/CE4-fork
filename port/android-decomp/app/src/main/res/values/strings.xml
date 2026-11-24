@@ -117,6 +117,7 @@
     <string name="launch_rand_deal">Deal enemies</string>
     <string name="launch_rand_off">Turn off</string>
     <string name="launch_rand_test_r100">Test r100 randomizer</string>
+    <string name="launch_rand_test_r101">Test r101 randomizer</string>
     <string name="launch_rand_active">A dealt set is active. Start game to play it.</string>
     <string name="launch_rand_inactive">Off: the game reads the disc as it is.</string>
     <string name="launch_rand_working">Dealing and checking the enemy lists…</string>
