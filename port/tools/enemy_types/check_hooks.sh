@@ -31,7 +31,7 @@ FLAGS=(
 
 FILES=("$@")
 if [ ${#FILES[@]} -eq 0 ]; then
-  FILES=(port/whole/runtime/enemy_types.cpp port/whole/runtime/enemy_random.cpp)
+  FILES=(port/whole/runtime/enemy_sidecar.cpp port/whole/runtime/dvd.cpp)
 fi
 
 cd "$REPO" || exit 1

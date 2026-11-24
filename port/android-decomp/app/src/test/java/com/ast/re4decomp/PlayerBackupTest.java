@@ -77,7 +77,7 @@ public class PlayerBackupTest {
     prefs(CoreActivity.INPUT_PREFS).edit().putInt(CoreActivity.TOUCH_MODE, 2).putBoolean(CoreActivity.GYRO_AIM, true)
         .putFloat(CoreActivity.AIM_SPEED, 1.1f).putString(CoreActivity.BINDINGS_CONTROLLER, "a=1;b=2")
         .putStringSet("someSet", new HashSet<>(Arrays.asList("x", "y"))).commit();
-    prefs(CoreActivity.GAME_PREFS).edit().putInt(CoreActivity.CHEATS, 1 | 4).putInt(CoreActivity.ENEMY_SEED, 777).commit();
+    prefs(CoreActivity.GAME_PREFS).edit().putInt(CoreActivity.CHEATS, 1 | 4).commit();
     prefs(CoreActivity.GRAPHICS_PREFS).edit().putInt("scaleHalves", 5).putString(CoreActivity.RENDERER, "vulkan")
         .putInt("musicVolume", 40).putLong(PerfProfile.BENCH_DATE, 1731500000000L).putInt(CoreMenu.CRT_LEVEL, 2)
         .putBoolean(VulkanGuard.STARTING, true).putInt(VulkanGuard.PID, 4321).commit();
@@ -115,7 +115,6 @@ public class PlayerBackupTest {
     assertEquals("a=1;b=2", input.getString(CoreActivity.BINDINGS_CONTROLLER, null));
     assertEquals(new HashSet<>(Arrays.asList("x", "y")), input.getStringSet("someSet", null));
     assertEquals(5, prefs(CoreActivity.GAME_PREFS).getInt(CoreActivity.CHEATS, 0));
-    assertEquals(777, prefs(CoreActivity.GAME_PREFS).getInt(CoreActivity.ENEMY_SEED, 0));
     assertEquals(5, g.getInt("scaleHalves", 0));
     assertEquals(1731500000000L, g.getLong(PerfProfile.BENCH_DATE, 0));
     assertFalse("the device's own guard is kept", g.getBoolean(VulkanGuard.STARTING, true));

@@ -139,19 +139,10 @@ final class CoreMenu extends Dialog {
     /** The cheat switches: bit 1 infinite health, 2 infinite ammo, 4 one-hit kill, 8 automatic QTEs, 16 the
      *  extra games kept unlocked (CoreActivity.CHEATS holds them). */
     void cheatsChanged(int bits);
-    /** The cheat "Random enemies" (0.99.12): a new seed each time it goes on, 0 off (CoreActivity.ENEMY_SEED holds
-     *  it). */
-    void enemyRandomChanged(int seed);
     /** The cheat "Stack items" (1.1.0, GENERAL AND INVENTORY; CoreActivity.STACK_MAX holds it): 0 Standard, 250, 500, 999. */
     void stackItemsChanged(int max);
     /** "Enemy health bars" (1.1.0, ENEMIES AND WORLD; CoreActivity.HEALTH_BARS holds it). */
     void healthBarsChanged(boolean on);
-    /** "More enemies" (1.1.0, ENEMIES AND WORLD): a new seed each time it goes on, 0 off (CoreActivity.MORE_ENEMIES). */
-    void moreEnemiesChanged(int seed);
-    /** The enemy TYPE randomizer (ENEMIES AND WORLD; CoreActivity.ENEMY_TYPES): a new seed each time it goes on, 0 off. */
-    default void enemyTypesChanged(int seed) { }
-    /** Its options, one word of bits (CoreActivity.ENEMY_OPT_*): which enemies and equipment may be dealt. */
-    default void enemyOptionsChanged(int bits) { }
     /** "Photo mode" switched on and photo mode not on yet: the header's button starts it (1.1.0, the way on touch). */
     default boolean photoAvailable() { return false; }
     /** The header's "Photo mode": the menu closes, photo mode comes. */
@@ -2193,73 +2184,21 @@ final class CoreMenu extends Dialog {
     indentedView(cheatStatus);
     // ENEMIES AND WORLD (1.1.0, wish of the project owner, 19.11.2026): "Enemy health bars", off by default
     heading(R.string.ingame_cheat_section_world);
-    // "Random items" (wish of the project owner, 07.11.2026, GitHub issue #161): a new seed each time it goes on; with
-    // "Random enemies" the first row of ENEMIES AND WORLD (1.1.0, the project owner, 21.11.2026)
+    // "Random items" (wish of the project owner, 07.11.2026, GitHub issue #161): a new seed each time it goes on;
+    // the first row of ENEMIES AND WORLD (1.1.0, the project owner, 21.11.2026)
     MenuLayout.Buttons items = cheatRow(labelledOptions(R.string.ingame_side_random));
     toggle(items, R.string.ingame_cheat_random_items, (cheatBits & RANDOM_ITEMS_BIT) != 0, on -> {
       cheatBits = withRandomItems(cheatBits, on, new java.util.Random().nextInt(1 << 20));
       host.cheatsChanged(cheatBits);
     });
-    // "Random enemies" next to it (decision of the project owner, 12.11.2026; port/docs/gegner-randomizer-plan.md
-    // stage 1): a seed of its own, a new one each time it goes on
-    toggle(items, R.string.ingame_cheat_random_enemies, game.getInt(CoreActivity.ENEMY_SEED, 0) != 0, on -> {
-      int seed = on ? 1 + new java.util.Random().nextInt((1 << 20) - 1) : 0;
-      game.edit().putInt(CoreActivity.ENEMY_SEED, seed).apply();
-      host.enemyRandomChanged(seed);
-    });
     MenuLayout.Buttons world = cheatRow(labelledOptions(R.string.ingame_side_advanced));
     toggle(world, R.string.ingame_health_bars, game.getBoolean(CoreActivity.HEALTH_BARS, false),
         on -> host.healthBarsChanged(on));
-    // "More enemies" beside it (1.1.0, wish of the project owner, 19.11.2026): a seed of its own, a new one each time
-    toggle(world, R.string.ingame_more_enemies, game.getInt(CoreActivity.MORE_ENEMIES, 0) != 0, on ->
-        host.moreEnemiesChanged(on ? 1 + new java.util.Random().nextInt((1 << 20) - 1) : 0));
-    enemyTypes(world, game);
     help(R.string.ingame_cheat_random_items_help);
-    help(R.string.ingame_cheat_random_enemies_help);
     help(R.string.ingame_health_bars_help);
-    help(R.string.ingame_more_enemies_help);
     help(R.string.ingame_cheats_help);
     playerCharacter();
     mods();
-  }
-
-  /** The enemy TYPE randomizer and its options (the project owner's wish of 22.11.2026: "adapt the PC version enemy
-   *  randomizer and its toggles/settings control for enemies as much as possible"; port/docs/enemy-type-randomizer-
-   *  research.md, port/docs/pc-randomizer-decompile-findings.md). The PC tool's own toggles, as far as this disc has
-   *  the enemies for them: the sub-bosses at its ratios (Dr. Salvador 1:12 of the villagers, Garrador 1:8 of the
-   *  zealots, JJ 1:2 of the island soldiers, super Salvador 1:8), the model variants, helmets, shields, plagas and
-   *  dynamite, the mixed pool and Luis's cabin kept safe. Its per-enemy population caps and spawn chances are not
-   *  here: this deal keeps the room's own number, so a cap would have nothing to cap. */
-  private void enemyTypes(MenuLayout.Buttons world, android.content.SharedPreferences g) {
-    toggle(world, R.string.ingame_enemy_types, g.getInt(CoreActivity.ENEMY_TYPES, 0) != 0, on ->
-        host.enemyTypesChanged(on ? 1 + new java.util.Random().nextInt((1 << 20) - 1) : 0));
-    int bits = CoreActivity.enemyOptions(g);
-    // one switch per option, each keeps the others (the PC tool's enemy pool checkboxes)
-    int[] flags = {CoreActivity.ENEMY_OPT_SAW, CoreActivity.ENEMY_OPT_GARRADOR, CoreActivity.ENEMY_OPT_JJ,
-        CoreActivity.ENEMY_OPT_SUPER, CoreActivity.ENEMY_OPT_VARIETY, CoreActivity.ENEMY_OPT_HELMET,
-        CoreActivity.ENEMY_OPT_SHIELD, CoreActivity.ENEMY_OPT_PLAGA, CoreActivity.ENEMY_OPT_DYNAMITE,
-        CoreActivity.ENEMY_OPT_MIXED, CoreActivity.ENEMY_OPT_SAFE_CABIN};
-    int[] labels = {R.string.ingame_enemy_saw, R.string.ingame_enemy_garrador, R.string.ingame_enemy_jj,
-        R.string.ingame_enemy_super, R.string.ingame_enemy_variety, R.string.ingame_enemy_helmets,
-        R.string.ingame_enemy_shields, R.string.ingame_enemy_plagas, R.string.ingame_enemy_dynamite,
-        R.string.ingame_enemy_mixed, R.string.ingame_enemy_safe_cabin};
-    int[] helps = {R.string.ingame_enemy_saw_help, R.string.ingame_enemy_garrador_help, R.string.ingame_enemy_jj_help,
-        R.string.ingame_enemy_super_help, R.string.ingame_enemy_variety_help, R.string.ingame_enemy_helmets_help,
-        R.string.ingame_enemy_shields_help, R.string.ingame_enemy_plagas_help, R.string.ingame_enemy_dynamite_help,
-        R.string.ingame_enemy_mixed_help, R.string.ingame_enemy_safe_cabin_help};
-    MenuLayout.Buttons row = cheatRow(labelledOptions(R.string.ingame_enemy_types));
-    for (int i = 0; i < flags.length; i++) {
-      final int flag = flags[i];
-      toggle(row, labels[i], (bits & flag) != 0, on -> {
-        int now = CoreActivity.enemyOptions(
-            getContext().getSharedPreferences(CoreActivity.GAME_PREFS, android.content.Context.MODE_PRIVATE));
-        host.enemyOptionsChanged(on ? now | flag : now & ~flag);
-      });
-    }
-    help(R.string.ingame_enemy_types_help);
-    for (int id : helps) {
-      help(id);
-    }
   }
 
   /** "Mods" under the cheats (wish of the project owner, 12.11.2026, the page is "Cheats & Mods" since;

@@ -82,7 +82,6 @@ enum MsgType : uint32_t {
     kSetViewDistance = 41, // a = percent of the room's view (no reply; re4_core_set_view_distance, patch 0223)
     kSetCpuSkip = 42,      // a = on: the game's own frame skip (no reply; re4_core_set_cpu_skip, patch 0227)
     kZoom = 43,            // a = notches of the mouse wheel, up positive (no reply; re4_core_zoom, 0.99.12)
-    kSetEnemyRandom = 44,  // a = the seed of "Random enemies", 0 off (no reply; re4_core_set_enemy_random, 0.99.12)
     kSetGentleQte = 45,    // a = on: Professional's quick-time events as Normal's (no reply; re4_core_set_gentle_qte, 0.99.15)
     kRtShadows = 46,       // -> a = the real-time shadows the core knows (re4_core_rt_shadows; an older core process
                            // replies -1 "unknown command")
@@ -90,9 +89,6 @@ enum MsgType : uint32_t {
     kLeonJacket = 48,      // a = on: the cheat "Leon's jacket" (no reply; re4_core_set_leon_jacket, 1.0)
     kPhotoInput = 53,      // a, b, c = the free camera's input (no reply; re4_core_photo_input, 1.1.0)
     kPhotoMode = 52,       // a = op (1 on, 0 off, 2 mask), b = the mask (no reply; re4_core_photo_mode, 1.1.0)
-    kSetMoreEnemies = 51,  // a = the seed of "More enemies", 0 off (no reply; re4_core_set_more_enemies, 1.1.0)
-    kSetEnemyTypes = 54,   // a = the seed of "Randomize enemy types", 0 off (no reply; re4_core_set_enemy_types)
-    kSetEnemyOptions = 55, // a = the enemy option bits (no reply; re4_core_set_enemy_options)
     kQuickReload = 50,     // one reload without the aim (no reply; re4_core_quick_reload, 1.1.0)
     kMouseMenu = 49,       // a, b = the pointer's u, v as float bits, c = a click (no reply; re4_core_mouse_menu, 1.1.0)
 };

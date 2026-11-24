@@ -392,16 +392,6 @@ public final class CoreBridge {
    * them. Cores before 12.11.2026 ignore it.
    */
   public static native void zoom(int notches);
-  /** The cheat "Random enemies" (CoreMenu, 0.99.12): its seed (20 bits), 0 off; from the next room on. */
-  public static native void setEnemyRandom(int seed);
-  /** The cheat "More enemies" (1.1.0): about 40 % more of a room's ordinary Ganados at random places; its seed, 0 off. */
-  public static native void setMoreEnemies(int seed);
-  /** The enemy TYPE randomizer (patch 0255): a village Ganado as Dr. Salvador, an island soldier as JJ. Its seed
-   *  (20 bits), 0 off; from the next room on. Cores without it ignore the call. */
-  public static native void setEnemyTypes(int seed);
-  /** Its options, one word of bits (see CoreActivity's ENEMY_OPT_* constants): which enemies and equipment may be
-   *  dealt. Sent before the seed so the first room already uses them. */
-  public static native void setEnemyOptions(int bits);
   /** "Gentler QTEs" (CoreMenu, comfort controls, 0.99.15): Professional's quick-time events as Normal's
    *  (runtime/qte_touch.cpp re4_qte_level, patch 0232); cores before 0.99.15 leave it out. */
   public static native void setGentleQte(boolean on);

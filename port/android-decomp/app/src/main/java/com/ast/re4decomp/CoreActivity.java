@@ -196,8 +196,6 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   static final String CHEATS = "cheats";
   /** The cheat "Costumes · Leon's jacket" (1.0, GAME_PREFS; CoreBridge.setLeonJacket): Leon keeps his brown jacket. */
   static final String LEON_JACKET = "leonJacket";
-  /** The cheat "Random enemies" (0.99.12): its seed, 0 off (CoreBridge.setEnemyRandom). */
-  static final String ENEMY_SEED = "enemySeed";
   /** "Enemy health bars" (1.1.0, GAME_PREFS; CoreBridge.setHealthBars): off by default. */
   static final String HEALTH_BARS = "enemyHealthBars";
   /** The cheat "Stack items" (1.1.0, GAME_PREFS; CoreBridge.setStackItems, patch 0254): until the arrow selector a switch
@@ -208,21 +206,6 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
   static int stackMax(android.content.SharedPreferences g) {
     if (g.contains(STACK_MAX)) return STACK_STEPS[CoreMenu.stepOf(STACK_STEPS, g.getInt(STACK_MAX, 0))];
     return g.getBoolean(STACK_ITEMS, false) ? 999 : 0;
-  }
-  /** "More enemies" (1.1.0, GAME_PREFS; CoreBridge.setMoreEnemies): its seed, 0 off. */
-  static final String MORE_ENEMIES = "moreEnemiesSeed";
-  /** The enemy TYPE randomizer (GAME_PREFS; CoreBridge.setEnemyTypes, patch 0255): its seed, 0 off. A village Ganado
-   *  can come as Dr. Salvador with the saw, an island soldier as JJ with the minigun. */
-  static final String ENEMY_TYPES = "enemyTypesSeed";
-  /** Its options (CoreBridge.setEnemyOptions): one word of bits, the PC RE4 Randomizer's enemy toggles. */
-  static final String ENEMY_OPTIONS = "enemyOptions";
-  static final int ENEMY_OPT_SAW = 1, ENEMY_OPT_GARRADOR = 1 << 1, ENEMY_OPT_JJ = 1 << 2, ENEMY_OPT_SUPER = 1 << 3,
-      ENEMY_OPT_VARIETY = 1 << 4, ENEMY_OPT_HELMET = 1 << 5, ENEMY_OPT_SHIELD = 1 << 6, ENEMY_OPT_PLAGA = 1 << 7,
-      ENEMY_OPT_DYNAMITE = 1 << 8, ENEMY_OPT_MIXED = 1 << 9, ENEMY_OPT_SAFE_CABIN = 1 << 10, ENEMY_OPT_DON_JOSE = 1 << 11;
-  /** The defaults: Dr. Salvador among the villagers, other model variants, Luis's cabin kept safe. */
-  static final int ENEMY_OPT_DEFAULT = ENEMY_OPT_SAW | ENEMY_OPT_VARIETY | ENEMY_OPT_SAFE_CABIN;
-  static int enemyOptions(android.content.SharedPreferences g) {
-    return g.getInt(ENEMY_OPTIONS, ENEMY_OPT_DEFAULT);
   }
   private static final int REQUEST_EXPORT_ALL = 2, REQUEST_IMPORT = 3, REQUEST_REPORT = 4, REQUEST_TEXTURES = 5,
       REQUEST_EXPORT_ZIP = 6;
@@ -615,18 +598,6 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
         if (jacket) Log.i(TAG, "cheats: Leon's jacket");
         CoreBridge.setLeonJacket(jacket);
       }
-      int enemySeed = getSharedPreferences(GAME_PREFS, MODE_PRIVATE).getInt(ENEMY_SEED, 0);
-      if (enemySeed != 0) Log.i(TAG, "cheats: random enemies with seed " + enemySeed);
-      CoreBridge.setEnemyRandom(enemySeed);
-      int moreSeed = getSharedPreferences(GAME_PREFS, MODE_PRIVATE).getInt(MORE_ENEMIES, 0);
-      if (moreSeed != 0) Log.i(TAG, "cheats: more enemies with seed " + moreSeed);
-      CoreBridge.setMoreEnemies(moreSeed);
-      // the enemy TYPE randomizer: its options first, so the first room already uses them
-      int enemyOpts = enemyOptions(getSharedPreferences(GAME_PREFS, MODE_PRIVATE));
-      CoreBridge.setEnemyOptions(enemyOpts);
-      int typeSeed = getSharedPreferences(GAME_PREFS, MODE_PRIVATE).getInt(ENEMY_TYPES, 0);
-      if (typeSeed != 0) Log.i(TAG, "cheats: enemy types with seed " + typeSeed + ", options " + Integer.toHexString(enemyOpts));
-      CoreBridge.setEnemyTypes(typeSeed);
       boolean bars = getSharedPreferences(GAME_PREFS, MODE_PRIVATE).getBoolean(HEALTH_BARS, false);
       if (bars) Log.i(TAG, "enemy health bars on");
       CoreBridge.setHealthBars(bars);
@@ -1443,35 +1414,11 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       CoreBridge.setLeonJacket(on);
     }
 
-    @Override public void enemyRandomChanged(int seed) {
-      getSharedPreferences(GAME_PREFS, MODE_PRIVATE).edit().putInt(ENEMY_SEED, seed).apply();
-      Log.i(TAG, "cheats: random enemies " + (seed != 0 ? "on with seed " + seed : "off"));
-      CoreBridge.setEnemyRandom(seed);
-    }
-
     @Override public boolean photoAvailable() { return photoWanted() && !photo.busy(); }
 
     @Override public void startPhotoMode() {
       // after the menu's dismissal (the core runs again first)
       main.postDelayed(() -> { if (menu == null && !photo.busy()) photo.request("the menu's button"); }, 150);
-    }
-
-    @Override public void moreEnemiesChanged(int seed) {
-      getSharedPreferences(GAME_PREFS, MODE_PRIVATE).edit().putInt(MORE_ENEMIES, seed).apply();
-      Log.i(TAG, "cheats: more enemies " + (seed != 0 ? "on with seed " + seed : "off"));
-      CoreBridge.setMoreEnemies(seed);
-    }
-
-    @Override public void enemyTypesChanged(int seed) {
-      getSharedPreferences(GAME_PREFS, MODE_PRIVATE).edit().putInt(ENEMY_TYPES, seed).apply();
-      Log.i(TAG, "cheats: enemy types " + (seed != 0 ? "on with seed " + seed : "off"));
-      CoreBridge.setEnemyTypes(seed);
-    }
-
-    @Override public void enemyOptionsChanged(int bits) {
-      getSharedPreferences(GAME_PREFS, MODE_PRIVATE).edit().putInt(ENEMY_OPTIONS, bits).apply();
-      Log.i(TAG, "cheats: enemy options " + Integer.toHexString(bits));
-      CoreBridge.setEnemyOptions(bits);
     }
 
     @Override public void stackItemsChanged(int max) {

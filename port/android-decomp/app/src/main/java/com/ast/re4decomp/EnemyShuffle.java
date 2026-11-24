@@ -285,7 +285,8 @@ final class EnemyShuffle {
     Set<Integer> k = new LinkedHashSet<>();
     if (room == 0x100) { k.add(0x12); k.add(0x1D); k.add(0x21); }
     if (room == 0x101) { k.add(0x15); k.add(0x26); k.add(0x1B); }
-    if (room == 0x103) { k.add(0x12); k.add(0x26); k.add(0x28); }
+    // r103 keeps em12 for its corpse models and uses em1d for the changed Ganados; two slots stay free
+    if (room == 0x103) { k.add(0x12); k.add(0x1D); }
     if (room == 0x104) k.add(0x13);
     return k;
   }
@@ -324,10 +325,92 @@ final class EnemyShuffle {
     base.add(id);
   }
 
+  /** Writes a whole group of rows. A massive enemy may only take the first row; the rest fall back. */
+  private static void writeRows(byte[] out, int[] allowed, List<Integer> rows, Member m, long seed,
+      int salt, int options, int fallback, Set<String> silent, Set<Integer> base) {
+    for (int k = 0; k < rows.size(); k++) {
+      int no = rows.get(k);
+      if (m.massive && k > 0) {
+        int at = no * ENTRY;
+        int[] ft = TYPES.get(fallback);
+        putU8(out, at + ID, fallback);
+        putU8(out, at + TYPE, ft[(k + 1) % ft.length]);
+        putU32(out, at + FLAG, u32(out, at + FLAG) & ~TEST_WEAPON_MASK);
+        putU8(out, at + SET, 0);
+        allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_SET);
+        base.add(fallback);
+      } else {
+        writeMember(out, allowed, no, m, seed, salt, options, silent, base);
+      }
+    }
+  }
+
+  /** The farm: all six chickens and all six cows change kind; the five Ganados become island soldiers. */
+  private static void applyFarm(byte[] out, int[] allowed, long seed, int options,
+      Set<String> silent, StringBuilder report, int i) {
+    List<Integer> cows = new ArrayList<>(), chickens = new ArrayList<>();
+    for (int no = 0; no < ENTRIES; no++) {
+      int at = no * ENTRY;
+      if (u16(out, at + ROOM) != 0x103) continue;
+      int id = u8(out, at + ID);
+      if (id == 0x21) {
+        // The single dog becomes a Ganado, freeing em21 for the two pool picks.
+        putU8(out, at + ID, 0x12);
+        putU8(out, at + TYPE, 0);
+        putU32(out, at + FLAG, u32(out, at + FLAG) & ~TEST_WEAPON_MASK);
+        putU8(out, at + SET, 0);
+        allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_SET);
+      } else if (id == 0x26) cows.add(no);
+      else if (id == 0x28) chickens.add(no);
+    }
+    Set<Integer> base = baseKinds(0x103);
+    int s1 = i * 100 + 1, s2 = i * 100 + 2;
+    Member elite = choose(ELITES, seed, s1, options, base, false);
+    Member boss = choose(BOSSES, seed, s2, options, base, elite != null && elite.massive);
+    if (elite != null && !chickens.isEmpty()) {
+      writeRows(out, allowed, chickens, elite, seed, s1, options, 0x1D, silent, base);
+    }
+    if (boss != null && !cows.isEmpty()) {
+      writeRows(out, allowed, cows, boss, seed, s2, options, 0x1D, silent, base);
+    }
+    report.append("r103: ").append(chickens.size()).append(" chickens as ")
+        .append(elite == null ? "none" : elite.name).append(", ").append(cows.size())
+        .append(" cows as ").append(boss == null ? "none" : boss.name).append('\n');
+  }
+
+  /** The village square: the plain Ganado rows are split between the two pool picks. */
+  private static void applyVillage(byte[] out, int[] allowed, long seed, int options,
+      Set<String> silent, StringBuilder report, int i) {
+    List<Integer> rows = new ArrayList<>();
+    for (int no = 0; no < ENTRIES; no++) {
+      int at = no * ENTRY;
+      if (u16(out, at + ROOM) != 0x104 || u8(out, at + ID) == 0) continue;
+      if (u8(out, at + SET) == 0 && (u32(out, at + FLAG) & FLAG_BOMB) == 0) rows.add(no);
+    }
+    Set<Integer> base = baseKinds(0x104);
+    int s1 = i * 100 + 1, s2 = i * 100 + 2;
+    Member elite = choose(ELITES, seed, s1, options, base, false);
+    Member boss = choose(BOSSES, seed, s2, options, base, elite != null && elite.massive);
+    int half = rows.size() / 2;
+    if (elite != null && boss != null && half > 0) {
+      writeRows(out, allowed, rows.subList(0, half), elite, seed, s1, options, 0x13, silent, base);
+      writeRows(out, allowed, rows.subList(half, rows.size()), boss, seed, s2, options, 0x13, silent, base);
+    } else if (elite != null) {
+      writeRows(out, allowed, rows, elite, seed, s1, options, 0x13, silent, base);
+    } else if (boss != null) {
+      writeRows(out, allowed, rows, boss, seed, s2, options, 0x13, silent, base);
+    }
+    report.append("r104: ").append(rows.size()).append(" Ganados: ")
+        .append(elite == null ? "none" : elite.name).append(" and ")
+        .append(boss == null ? "none" : boss.name).append('\n');
+  }
+
   private static void applyPools(byte[] out, int[] allowed, long seed, int options,
       Set<String> silent, StringBuilder report) {
     for (int i = 0; i < ROOMS.length; i++) {
       int room = ROOMS[i];
+      if (room == 0x103) { applyFarm(out, allowed, seed, options, silent, report, i); continue; }
+      if (room == 0x104) { applyVillage(out, allowed, seed, options, silent, report, i); continue; }
       List<Integer> rows = poolRows(out, room);
       if (rows.size() < 2) {
         report.append(String.format(Locale.ROOT, "r%03x: no safe pool rows\n", room));
@@ -411,9 +494,8 @@ final class EnemyShuffle {
   private static void planR103(byte[] out, int[] allowed, long seed, int options,
       Set<String> silent, StringBuilder report) {
     int ganados = 0;
-    boolean basicSwap = (options & (SHARED_SET | RESET_SET)) != 0
-        && (options & MIXED) == 0
-        && (options & (KRAUSER | GIGANTE | SUPER | MENDEZ | VERDUGO | ARMADURA | BELLA)) == 0;
+    // Every ordinary Ganado becomes an island soldier: a real kind change, not just a model variant.
+    boolean basicSwap = true;
     boolean variety = (options & VARIETY) != 0, helmet = (options & HELMET) != 0;
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;

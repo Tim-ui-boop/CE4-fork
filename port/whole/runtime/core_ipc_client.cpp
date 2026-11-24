@@ -1049,27 +1049,6 @@ void re4ipc_zoom(int notches)
     post(kZoom, notches, 0, 0);
 }
 
-void re4ipc_set_more_enemies(int seed)
-{
-    post(kSetMoreEnemies, seed, 0, 0);
-}
-
-void re4ipc_set_enemy_random(int seed)
-{
-    post(kSetEnemyRandom, seed, 0, 0);
-}
-
-// The enemy TYPE randomizer (patch 0255): to the core process, no reply
-void re4ipc_set_enemy_types(int seed)
-{
-    post(kSetEnemyTypes, seed, 0, 0);
-}
-
-void re4ipc_set_enemy_options(unsigned bits)
-{
-    post(kSetEnemyOptions, (int) bits, 0, 0);
-}
-
 // The cheat "Leon's jacket" (1.0): to the core process, no reply
 void re4ipc_set_leon_jacket(int on)
 {

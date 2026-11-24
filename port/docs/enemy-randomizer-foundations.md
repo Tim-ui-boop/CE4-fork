@@ -273,3 +273,19 @@ original is still `backup/enemy-randomizer-pre-swap`.
 Verification: `python3 .harness/analysis/run_swap_deal.py` — three seeds, six toggle sets, checks
 determinism, byte-level protection, one entry per pool per room, the four-module limit, the massive
 cap and preview/report equality. All offline checks pass.
+
+## 14. In-game cheats removed (`feature/no-ingame-cheats`)
+
+The old in-game **Random enemies**, **More enemies** and **Randomize enemy types** switches are gone
+from the menu, along with their native modules (`enemy_random.cpp`, `enemy_types.cpp`), their patches
+(0231, 0244, 0255) and the IPC/JNI/preference plumbing. They could run at the same time as an offline
+deal and filled the four module slots, causing missing enemies and a blank room on the first phone
+test. `More enemies` went too because its patch depended on 0231.
+
+The launcher deal is now the only enemy randomizer. On the farm r103 the six chickens and six cows
+each change kind from a pool pick, the five Ganados become island soldiers, and the single dog
+becomes a Ganado so em21 is free — em12 stays reserved for the room's corpses. In r104 the twelve
+plain Ganado rows are split between the two pool picks. Preview and report describe the same plan.
+
+**Revert:** `git checkout feature/enemy-pools` restores the pool build with the cheats; older states
+are `feature/enemy-swap-engine` and `backup/enemy-randomizer-pre-swap`.
