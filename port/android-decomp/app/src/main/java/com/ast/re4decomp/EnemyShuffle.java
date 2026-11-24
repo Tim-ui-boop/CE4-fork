@@ -536,6 +536,9 @@ final class EnemyShuffle {
       }
       putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
       putU16(out, at + HP, 1200);
+      // r101's set values name motions that exist only in em15's event data. The castle
+      // module has no such motions; keeping them crashes in MotionSetCore on room entry.
+      putU8(out, at + SET, 0);
       n++;
     }
     if (n != 46 || zealots != 38 || garradors != 6 || verdugos != 2) {
@@ -616,7 +619,6 @@ final class EnemyShuffle {
         continue;
       }
       if (u8(src, at + BE_FLAG) != u8(out, at + BE_FLAG)
-          || u8(src, at + SET) != u8(out, at + SET)
           || u8(src, at + CHARACTER) != u8(out, at + CHARACTER)
           || u8(src, at + 0x0A) != u8(out, at + 0x0A)
           || u16(src, at + ROOM) != u16(out, at + ROOM)
@@ -626,6 +628,7 @@ final class EnemyShuffle {
       for (int k = POS; k < ROOM; k++) {
         if (src[at + k] != out[at + k]) return "entry " + no + " moved or was retargeted";
       }
+      if (u8(out, at + SET) != 0) return "entry " + no + " kept a motion the castle module lacks";
       int id = u8(out, at + ID);
       if (id != 0 && id != 0x1B && id != 0x2C && id != 0x15 && id != 0x26) {
         return "entry " + no + " has an unexpected kind " + id;
