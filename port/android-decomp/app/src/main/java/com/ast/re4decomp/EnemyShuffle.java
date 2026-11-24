@@ -6,231 +6,109 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * The offline enemy randomizer: deals the enemy lists BEFORE play and writes private copies.
+ * Offline enemy swap engine for the four test rooms (r100, r101, r103, r104).
  *
- * <p>The player picks a seed in the launcher, this reads the imported disc's enemy lists
- * ({@code game/disc1/files/etc/emleon0N.esl}), deals them, and writes the result to
- * {@code randomizer/enemies/etc/emleon0N.esl} beside an {@code active} marker. The core's loader
- * serves those copies instead of the disc's ({@code runtime/enemy_sidecar.cpp}); the import and the
- * saves are never written. Deleting the randomizer folder plays the game as the disc has it.
+ * <p>The player picks a seed and the enemy toggles in the launcher. This reads the imported disc's
+ * {@code etc/emleon00.esl}, replaces enemy records one-for-one from a per-room pool, writes a
+ * private copy, re-reads it and refuses the whole deal unless every protected byte is unchanged.
+ * The core serves that copy instead of the disc's; discs and saves are never written.
  *
- * <p>Why offline: the deal can be checked before anyone plays it. Every written list is re-read and
- * compared with its source, and the whole deal is refused unless every record kept its room, its
- * place, its health and its scripted entrance. That is the same "prove it before you play" property
- * the door randomizer has, and it is achievable here because the invariant is simple: same enemies,
- * same number, same places — different faces and weapons.
- *
- * <p>What changes: {@code id} (only within the Ganado family 0x10..0x20), {@code type} (the model
- * variant) and {@code flag} (the weapon and clothing bits). What never changes: {@code set},
- * {@code room}, {@code pos}, {@code rot}, {@code hp}, {@code Character}, {@code Guard_r},
- * {@code be_flag}. See port/docs/enemy-types-user-guide.md for the measurements behind those rules.
- *
- * <p>The records are BIG ENDIAN, as on the GameCube disc (the PC randomizer's own lists are the same
- * layout little endian; they are a design reference, not interchangeable bytes).
+ * <p>A swap keeps the record count and the module count stable: a Verdugo becomes a Krauser by
+ * changing its module from em2c to em39, not by adding a fifth kind. Rows that a counting script
+ * needs ({@code SceCountEmAlive(0x10, 0x20)}) stay inside that id range; bosses go only on rows
+ * that are not counted. New kinds get {@code set=0}, high health and their sound bank skipped.
  */
 final class EnemyShuffle {
   private static final String TAG = "EnemyShuffle";
-
   private EnemyShuffle() {}
 
-  /** One enemy list entry: 32 bytes, big endian (EM_LIST, include/global.h). */
-  private static final int ENTRY = 32;
-  private static final int ENTRIES = 256;
-  private static final int LIST_BYTES = ENTRIES * ENTRY;  // 0x2000, what the game reads
-  /** The story lists on the disc hold 255 entries; the drive zero-fills the last one. */
+  private static final int ENTRY = 32, ENTRIES = 256;
+  private static final int LIST_BYTES = ENTRIES * ENTRY;
   private static final int MIN_BYTES = 255 * ENTRY;
 
   private static final int BE_FLAG = 0x00, ID = 0x01, TYPE = 0x02, SET = 0x03, FLAG = 0x04,
-      HP = 0x08, CHARACTER = 0x0B, POS = 0x0C, ROT = 0x12, ROOM = 0x18, GUARD = 0x1A;
+      HP = 0x08, ROOM = 0x18;
 
-  /** The option bits, shared with the core (runtime/enemy_types.cpp) and CoreActivity. */
+  /** The option bits. The first eleven are the PC-style toggles; the rest are this engine's. */
   static final int SAW = 1, GARRADOR = 1 << 1, JJ = 1 << 2, SUPER = 1 << 3, VARIETY = 1 << 4,
       HELMET = 1 << 5, SHIELD = 1 << 6, PLAGA = 1 << 7, DYNAMITE = 1 << 8, MIXED = 1 << 9,
-      SAFE_CABIN = 1 << 10;
-  static final int DEFAULT_OPTIONS = SAW | VARIETY | SAFE_CABIN;
+      SAFE_CABIN = 1 << 10, REGEN = 1 << 11, IRON = 1 << 12, KRAUSER = 1 << 13,
+      MUTATED = 1 << 14, GIGANTE = 1 << 15, ARMADURA = 1 << 16, SHARED_SET = 1 << 17,
+      RESET_SET = 1 << 18;
+  /** Defaults reproduce the two proven room tests. */
+  static final int DEFAULT_OPTIONS = SAW | JJ | GARRADOR | REGEN | VARIETY | SAFE_CABIN;
 
-  private static final int FLAG_SAW = 1 << 28, FLAG_PLAGA = 1 << 20, FLAG_BOMB = 1 << 17,
-      FLAG_HELMET = 1 << 9, FLAG_SHIELD = 1 << 31;
+  private static final int FLAG_SAW = 1 << 28, FLAG_BOMB = 1 << 17;
   private static final int WEAPON_MASK =
       FLAG_SAW | FLAG_BOMB | (1 << 27) | (1 << 29) | (1 << 30) | (1 << 31) | (1 << 11);
-  // The r100 test uses two weapons the island module supports: crossbow and the big club.
   private static final int FLAG_BOWGUN = 1 << 15, FLAG_CLUB = 1 << 11;
   private static final int TEST_WEAPON_MASK = WEAPON_MASK | FLAG_BOWGUN;
 
-  /** The model types each Ganado module can show (the case labels of its EmNNSet switch). */
+  private static final int A_ID = 1, A_TYPE = 2, A_FLAG = 4, A_HP = 8, A_SET = 16;
+
+  /** Model types each module can actually show, from its own switch table. */
   private static final Map<Integer, int[]> TYPES = new LinkedHashMap<>();
   static {
-    TYPES.put(0x10, new int[] {0, 1, 3, 4});
-    TYPES.put(0x11, new int[] {7, 8, 9});
     TYPES.put(0x12, new int[] {0, 1, 3, 4});
     TYPES.put(0x13, new int[] {0, 1, 3, 4, 6});
-    TYPES.put(0x14, new int[] {6, 7, 8, 9});
     TYPES.put(0x15, new int[] {0, 3, 4, 11});
-    TYPES.put(0x16, new int[] {3, 4, 11, 12});
-    TYPES.put(0x17, new int[] {0, 1, 3, 12});
-    TYPES.put(0x19, new int[] {7, 8, 9});
-    TYPES.put(0x1A, new int[] {7, 8, 9});
-    TYPES.put(0x1B, new int[] {7, 8, 10});
-    TYPES.put(0x1C, new int[] {7, 9, 10, 13});
+    TYPES.put(0x1B, new int[] {7, 8, 9, 10, 13});
     TYPES.put(0x1D, new int[] {2, 14, 15, 16, 17, 18, 19, 20, 21});
-    TYPES.put(0x1E, new int[] {6, 14, 15, 23, 25});
-    TYPES.put(0x1F, new int[] {14, 15, 16, 24});
-    TYPES.put(0x20, new int[] {14, 15, 16, 22});
+    TYPES.put(0x21, new int[] {0, 1});
+    TYPES.put(0x23, new int[] {0});
+    TYPES.put(0x26, new int[] {0, 1});
+    TYPES.put(0x28, new int[] {0, 1});
+    TYPES.put(0x2A, new int[] {0, 2});
+    TYPES.put(0x2B, new int[] {0, 1, 2, 3});
+    TYPES.put(0x2C, new int[] {0});
+    TYPES.put(0x36, new int[] {0, 1, 2, 3});
+    TYPES.put(0x39, new int[] {0, 1, 2});
+    TYPES.put(0x3C, new int[] {0, 1, 2, 3});
   }
 
-  private static final String[] LISTS = {
-      "etc/emleon00.esl", "etc/emleon01.esl", "etc/emleon02.esl", "etc/emleon03.esl",
-      "etc/emleon04.esl", "etc/emleon05.esl", "etc/emleon06.esl", "etc/emleon07.esl"};
+  private static final String LIST_NAME = "etc/emleon00.esl";
+  private static final int[] ROOMS = {0x100, 0x101, 0x103, 0x104};
 
-  // --- the record readers (big endian) ---
+  static final class Result {
+    boolean ok;
+    String message = "";
+  }
+
   private static int u8(byte[] b, int at) { return b[at] & 0xFF; }
   private static int u16(byte[] b, int at) { return (u8(b, at) << 8) | u8(b, at + 1); }
   private static int u32(byte[] b, int at) {
     return (u8(b, at) << 24) | (u8(b, at + 1) << 16) | (u8(b, at + 2) << 8) | u8(b, at + 3);
   }
   private static void putU8(byte[] b, int at, int v) { b[at] = (byte) v; }
-  private static void putU16(byte[] b, int at, int v) { b[at] = (byte) (v >>> 8); b[at + 1] = (byte) v; }
+  private static void putU16(byte[] b, int at, int v) {
+    b[at] = (byte) (v >>> 8); b[at + 1] = (byte) v;
+  }
   private static void putU32(byte[] b, int at, int v) {
     b[at] = (byte) (v >>> 24); b[at + 1] = (byte) (v >>> 16);
     b[at + 2] = (byte) (v >>> 8); b[at + 3] = (byte) v;
   }
+  private static void allow(int[] allowed, int no, int bits) { allowed[no] |= bits; }
 
-  private static boolean ganado(int id) { return id >= 0x10 && id <= 0x20 && id != 0x18; }
-
-  private static int family(int id) {
-    switch (id) {
-      case 0x10: case 0x12: case 0x13: case 0x15: case 0x16: case 0x17: return 0;  // village
-      case 0x11: case 0x14: case 0x19: case 0x1A: case 0x1B: case 0x1C: return 1;  // castle
-      case 0x1D: case 0x1E: case 0x1F: case 0x20: return 2;                        // island
-      default: return -1;
-    }
-  }
-
-  private static boolean sawCapable(int id) {
-    return id == 0x10 || id == 0x12 || id == 0x13 || id == 0x15 || id == 0x16 || id == 0x17;
-  }
-
-  /** A special form the room's script or its own module drives: never touched. */
-  private static boolean special(int id, int type, int flag) {
-    if (id <= 0x17 && type == 4) return true;
-    if (type == 6 && (id == 0x13 || id == 0x14 || id == 0x1E)) return true;
-    if ((id == 0x1B && type == 10) || (id == 0x1C && (type == 10 || type == 13))) return true;
-    if (id == 0x1D && type == 2) return true;
-    return id == 0x20 && (type == 22 || (flag & FLAG_SAW) != 0);
-  }
-
-  private static boolean cabin(int room) { return room == 0x11C || room == 0x11D; }
-
-  private static boolean typeOk(int id, int type) {
-    int[] t = TYPES.get(id);
-    if (t == null) return false;
-    for (int v : t) if (v == type) return true;
-    return false;
-  }
-
-  // --- the same hash the core uses, so a seed means one thing everywhere ---
-  private static int mix(int x) {
-    x ^= x >>> 16; x *= 0x7feb352d;
-    x ^= x >>> 15; x *= 0x846ca68b;
-    x ^= x >>> 16;
-    return x;
-  }
-
-  private static int hashOf(int seed, int list, int room, int what) {
-    return mix(seed * 0x9E3779B1 ^ mix((list << 24) ^ (room << 8) ^ mix(what + 0x51)));
-  }
-
-  private static boolean oneIn(int h, int den) {
-    return den > 0 && Integer.remainderUnsigned(h, den) == 0;
-  }
-
-  /** What one entry becomes; null leaves it exactly as the disc has it. */
-  private static int[] dealFor(int seed, int list, int room, int no, byte[] src, int at,
-      int options, List<Integer> kinds) {
-    int id = u8(src, at + ID), type = u8(src, at + TYPE), flag = u32(src, at + FLAG);
-    int fam = family(id);
-    int h = hashOf(seed, list, room, 0x900 + no);
-    boolean cab = cabin(room);
-    int newId = id, newType = type, set = 0, clear = 0;
-    String tag = null;
-
-    if (!cab || (options & SAFE_CABIN) == 0) {
-      if (fam == 0 && (options & SAW) != 0 && sawCapable(id) && oneIn(h, 12)) {
-        set = FLAG_SAW; clear = WEAPON_MASK & ~FLAG_SAW; newType = 4; tag = "saw";
-      } else if (fam == 1 && (options & GARRADOR) != 0 && (id == 0x1B || id == 0x1C) && oneIn(h, 8)) {
-        newType = 10; clear = WEAPON_MASK; tag = "garrador";
-      } else if (fam == 2 && (options & JJ) != 0 && id != 0x1D && oneIn(h, 2)) {
-        if (!budget(kinds, 0x1D)) return null;
-        newId = 0x1D; newType = 2; clear = WEAPON_MASK; tag = "jj";
-      } else if (fam == 2 && (options & SUPER) != 0 && id != 0x20 && oneIn(h, 8)) {
-        if (!budget(kinds, 0x20)) return null;
-        newId = 0x20; newType = 22; set = FLAG_SAW; clear = WEAPON_MASK & ~FLAG_SAW; tag = "super";
-      }
-    }
-    if ((options & MIXED) != 0 && newId == id && set == 0 && fam != -1 && !cab
-        && sawCapable(id) && (options & SAW) != 0 && oneIn(h ^ 0x5A, 20)) {
-      set = FLAG_SAW; clear = WEAPON_MASK & ~FLAG_SAW; newType = 4; tag = "saw";
-    }
-    if ((options & VARIETY) != 0 && newId == id && set == 0 && clear == 0 && newType == type) {
-      int[] sup = TYPES.get(id);
-      if (sup != null && sup.length > 1) {
-        List<Integer> pick = new ArrayList<>();
-        for (int t : sup) {
-          if (t != type && !special(id, t, flag)) pick.add(t);
-        }
-        if (!pick.isEmpty() && oneIn(h ^ 0x11, 2)) {
-          newType = pick.get(Integer.remainderUnsigned(h >>> 8, pick.size()));
-          tag = "variant";
-        }
-      }
-    }
-    if (newId == id && set == 0) {
-      if ((options & HELMET) != 0 && oneIn(h ^ 0x21, 10)) { set |= FLAG_HELMET; tag = "helmet"; }
-      if ((options & SHIELD) != 0 && (fam == 1 || fam == 2) && oneIn(h ^ 0x31, 7)) {
-        set |= FLAG_SHIELD; tag = "shield";
-      }
-      if ((options & PLAGA) != 0 && oneIn(h ^ 0x41, 5) && (set & FLAG_HELMET) == 0) {
-        set |= FLAG_PLAGA; tag = "plaga";
-      }
-      if ((options & DYNAMITE) != 0 && fam == 0 && oneIn(h ^ 0x51, 12)) {
-        set |= FLAG_BOMB; tag = "dynamite";
-      }
-    }
-    if (newId == id && newType == type && set == 0 && clear == 0) return null;
-    if (!ganado(newId) || !typeOk(newId, newType)) return null;
-    return new int[] {newId, newType, set, clear, tag == null ? 0 : 1};
-  }
-
-  /** The room may load at most 4 enemy modules; 3 leaves a slot for Ashley or Luis. */
-  private static boolean budget(List<Integer> kinds, int id) {
-    if (kinds.contains(id)) return true;
-    if (kinds.size() >= 3) return false;
-    kinds.add(id);
-    return true;
-  }
-
-  /** The deal's own report, written beside the lists so a refusal can be read on the phone. */
-  static final class Result {
-    boolean ok;
-    String message = "";
-    int dealt, rooms, saws, garradors, jjs, supers, variants;
+  /** A little hash so the seed changes which variants are picked, the same way for every player. */
+  private static int pick(long seed, int what, int n) {
+    long x = seed * 0x9E3779B1L + what * 0x85EBCA6BL;
+    x ^= x >>> 33; x *= 0xFF51AFD7ED558CCDL; x ^= x >>> 33;
+    return n <= 0 ? 0 : (int) Math.floorMod(x, (long) n);
   }
 
   private static File outDir(File dataRoot) { return new File(dataRoot, "randomizer/enemies"); }
   private static File marker(File dataRoot) { return new File(outDir(dataRoot), "active"); }
   private static File logFile(File dataRoot) { return new File(outDir(dataRoot), "enemies.txt"); }
 
-  /** True when a dealt set is currently active. */
   static boolean active(File dataRoot) { return marker(dataRoot).isFile(); }
 
-  /** Removes the dealt set: the game reads the disc again. The import and the saves stay. */
   static String clear(File dataRoot) {
     File dir = outDir(dataRoot);
     int n = deleteTree(dir);
@@ -246,473 +124,327 @@ final class EnemyShuffle {
     return f.delete() ? n + 1 : n;
   }
 
-  /**
-   * Deals every story enemy list with {@code seed} and writes the private copies. Refuses the whole
-   * deal (writing nothing, leaving any previous set alone) when a source is missing or a written list
-   * does not verify. Returns a report for the launcher.
-   */
-  static Result deal(File dataRoot, File discFiles, long seed, int options) {
+  /** Deals the four test rooms. Refuses the whole deal unless every byte verifies. */
+  static Result dealRooms(File dataRoot, File discFiles, long seed, int options) {
     Result r = new Result();
-    StringBuilder log = new StringBuilder();
-    log.append("Enemy randomizer, seed ").append(seed).append(", options ").append(options).append('\n');
-
-    Map<String, byte[]> written = new LinkedHashMap<>();
-    Map<String, byte[]> sources = new LinkedHashMap<>();
-    for (int li = 0; li < LISTS.length; li++) {
-      String name = LISTS[li];
-      File src = new File(discFiles, name);
-      byte[] raw = read(src);
-      if (raw == null) {
-        r.message = "The imported disc has no " + name + ". Import the disc again, then deal.";
-        Log.i(TAG, r.message);
-        return r;
-      }
-      if (raw.length < MIN_BYTES || raw.length > LIST_BYTES || raw.length % ENTRY != 0) {
-        r.message = name + " is " + raw.length + " bytes, not an enemy list. Nothing was written.";
-        Log.i(TAG, r.message);
-        return r;
-      }
-      byte[] out = new byte[LIST_BYTES];
-      System.arraycopy(raw, 0, out, 0, raw.length);  // the last entry stays zero, as the drive gives
-      sources.put(name, raw);
-
-      // the modules this list's rooms already need
-      Map<Integer, List<Integer>> roomKinds = new LinkedHashMap<>();
-      for (int no = 0; no < ENTRIES; no++) {
-        int at = no * ENTRY;
-        int id = u8(out, at + ID);
-        if (id == 0 || (u8(out, at + BE_FLAG) & 1) == 0) continue;
-        int room = u16(out, at + ROOM);
-        List<Integer> k = roomKinds.get(room);
-        if (k == null) { k = new ArrayList<>(); roomKinds.put(room, k); }
-        if (!k.contains(id) && k.size() < 4) k.add(id);
-      }
-      int touchedRooms = 0;
-      for (int room : new ArrayList<>(roomKinds.keySet())) {
-        boolean any = false;
-        List<Integer> kinds = roomKinds.get(room);
-        for (int no = 0; no < ENTRIES; no++) {
-          int at = no * ENTRY;
-          int id = u8(out, at + ID);
-          if (!ganado(id) || u16(out, at + ROOM) != room) continue;
-          if ((u8(out, at + BE_FLAG) & 1) == 0 || (u8(out, at + BE_FLAG) & 2) != 0) continue;
-          if (u8(out, at + SET) != 0) continue;               // a scripted entrance
-          if (special(id, u8(out, at + TYPE), u32(out, at + FLAG))) continue;
-          int[] d = dealFor((int) seed, li, room, no, out, at, options, kinds);
-          if (d == null) continue;
-          putU8(out, at + ID, d[0]);
-          putU8(out, at + TYPE, d[1]);
-          putU32(out, at + FLAG, (u32(out, at + FLAG) & ~d[3]) | d[2]);
-          r.dealt++;
-          any = true;
-          if ((d[2] & FLAG_SAW) != 0 && d[0] != 0x20) r.saws++;
-          else if (d[0] == 0x1D && id != 0x1D) r.jjs++;
-          else if (d[0] == 0x20) r.supers++;
-          else if (d[1] == 10 && (id == 0x1B || id == 0x1C)) r.garradors++;
-          else if (d[0] == id && d[2] == 0) r.variants++;
-        }
-        if (any) touchedRooms++;
-      }
-      r.rooms += touchedRooms;
-      written.put(name, out);
-      log.append(name).append(": ").append(touchedRooms).append(" rooms touched\n");
+    byte[] src = read(new File(discFiles, LIST_NAME));
+    if (src == null || src.length < MIN_BYTES || src.length > LIST_BYTES || src.length % ENTRY != 0) {
+      r.message = "The imported disc has no usable " + LIST_NAME + ". Import both discs again, then try.";
+      Log.i(TAG, r.message);
+      return r;
     }
+    byte[] out = new byte[LIST_BYTES];
+    System.arraycopy(src, 0, out, 0, src.length);
+    int[] allowed = new int[ENTRIES];
+    Set<String> silent = new LinkedHashSet<>();
+    StringBuilder report = new StringBuilder();
+    report.append("Enemy swaps, seed ").append(seed).append(", options ").append(options).append('\n');
 
-    // verify BEFORE anything is written: every record keeps everything but id, type and flag
-    for (Map.Entry<String, byte[]> e : written.entrySet()) {
-      byte[] src = sources.get(e.getKey()), out = e.getValue();
-      String why = verify(src, out);
-      if (why != null) {
-        r.message = e.getKey() + ": " + why + " Nothing was written.";
-        Log.i(TAG, r.message);
-        return r;
-      }
+    planR100(out, allowed, seed, options, silent, report);
+    planR101(out, allowed, seed, options, silent, report);
+    planR103(out, allowed, seed, options, silent, report);
+    planR104(out, allowed, seed, options, silent, report);
+
+    String why = kinds(src, out);
+    if (why == null) why = verify(src, out, allowed);
+    if (why != null) {
+      r.message = why + " Nothing was written.";
+      Log.i(TAG, r.message);
+      return r;
     }
-    // write to a staging folder, then re-read each file and compare, then activate
+    for (String s : silent) report.append("Silent module: ").append(s).append('\n');
+
     File dir = outDir(dataRoot);
     File stage = new File(dir, "staging");
     deleteTree(stage);
     try {
-      for (Map.Entry<String, byte[]> e : written.entrySet()) {
-        File f = new File(stage, e.getKey());
-        f.getParentFile().mkdirs();
-        writeAll(f, e.getValue());
-        byte[] back = read(f);
-        if (back == null || !java.util.Arrays.equals(back, e.getValue())) {
-          r.message = e.getKey() + " did not read back as written. Nothing was activated.";
-          Log.i(TAG, r.message);
-          deleteTree(stage);
-          return r;
-        }
+      File staged = new File(stage, LIST_NAME);
+      staged.getParentFile().mkdirs();
+      writeAll(staged, out);
+      byte[] back = read(staged);
+      if (back == null || !Arrays.equals(back, out)) {
+        r.message = "The dealt list did not read back as written. Nothing was activated.";
+        Log.i(TAG, r.message);
+        deleteTree(stage);
+        return r;
       }
-      // promote: remove the previous set's lists, move the staged ones in, then the marker
       marker(dataRoot).delete();
-      for (String name : LISTS) {
-        File old = new File(dir, name);
-        File now = new File(stage, name);
-        old.getParentFile().mkdirs();
-        if (old.exists() && !old.delete()) {
-          r.message = "Could not replace " + name + ". The previous set is unchanged.";
-          Log.i(TAG, r.message);
-          return r;
-        }
-        if (!now.renameTo(old)) {
-          r.message = "Could not put " + name + " in place. Nothing was activated.";
-          Log.i(TAG, r.message);
-          return r;
-        }
+      File target = new File(dir, LIST_NAME);
+      target.getParentFile().mkdirs();
+      if (target.exists() && !target.delete()) {
+        r.message = "Could not replace the previous enemy list. Nothing was activated.";
+        Log.i(TAG, r.message);
+        return r;
+      }
+      if (!staged.renameTo(target)) {
+        r.message = "Could not put the dealt list in place. Nothing was activated.";
+        Log.i(TAG, r.message);
+        return r;
       }
       deleteTree(stage);
-      r.ok = true;
-      r.message = String.format(Locale.ROOT,
-          "Dealt %d enemies in %d rooms: %d chainsaw, %d Garrador, %d JJ, %d super Salvador, "
-              + "%d other looks. Seed %d.",
-          r.dealt, r.rooms, r.saws, r.garradors, r.jjs, r.supers, r.variants, seed);
-      log.append(r.message).append('\n');
-      writeAll(logFile(dataRoot), log.toString().getBytes(StandardCharsets.UTF_8));
+      writeAll(logFile(dataRoot), report.toString().getBytes(StandardCharsets.UTF_8));
+      writeAll(new File(dir, "no-sound.txt"), String.join("\n", silent).getBytes(StandardCharsets.UTF_8));
+      // the two fixed-test markers are gone for good
+      new File(dir, "r100-no-sound").delete();
+      new File(dir, "r101-no-sound").delete();
       writeAll(marker(dataRoot), String.valueOf(seed).getBytes(StandardCharsets.UTF_8));
+      r.ok = true;
+      r.message = "Dealt r100, r101, r103 and r104. Seed " + seed + ". See enemies.txt for the changes.";
       Log.i(TAG, r.message);
     } catch (IOException ex) {
-      r.message = "Could not write the dealt lists: " + ex.getMessage() + ". Nothing was activated.";
+      r.message = "Could not write the dealt list: " + ex.getMessage() + ". Nothing was activated.";
       Log.e(TAG, r.message);
       deleteTree(stage);
     }
     return r;
   }
 
-  /** Everything but id, type and flag must be identical, and every dealt record must be sane. */
-  /**
-   * Fixed test for room 1-00. Rewrites only r100's records of emleon00: villagers become island
-   * soldiers (crossbows / big clubs / plain), the five crows become JJ and regenerators, and the
-   * bear traps become island soldiers so the room never needs a fifth enemy module. The hardcoded
-   * officer-killer (0x12) and the dog (0x21) keep their kinds, giving exactly four loaded kinds.
-   */
-  static Result dealR100Test(File dataRoot, File discFiles) {
-    Result r = new Result();
-    final String name = "etc/emleon00.esl";
-    byte[] src = read(new File(discFiles, name));
-    if (src == null || src.length < MIN_BYTES || src.length > LIST_BYTES || src.length % ENTRY != 0) {
-      r.message = "The imported disc has no usable " + name + ". Import both discs again, then try.";
-      Log.i(TAG, r.message);
-      return r;
-    }
-    byte[] out = new byte[LIST_BYTES];
-    System.arraycopy(src, 0, out, 0, src.length);
-
-    int villagers = 0, archers = 0, clubs = 0, plain = 0, jjs = 0, regs = 0, traps = 0;
+  /** r100: villagers and traps become island soldiers; crows become JJ, or a boss and JJ. */
+  private static void planR100(byte[] out, int[] allowed, long seed, int options,
+      Set<String> silent, StringBuilder report) {
+    int villagers = 0, crows = 0, traps = 0, jjs = 0, regs = 0, bosses = 0;
+    boolean bossHere = (options & (KRAUSER | GIGANTE)) != 0;
+    int bossId = (options & KRAUSER) != 0 ? 0x39 : 0x2B;
+    int bossType = bossId == 0x39 ? ((options & MUTATED) != 0 ? 2 : 0) : 0;
+    int off = pick(seed, 0x100, 3);
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
-      if (at + ENTRY > src.length) break;
-      if (u16(out, at + ROOM) != 0x0100) continue;
+      if (u16(out, at + ROOM) != 0x100) continue;
       int id = u8(out, at + ID);
       int flag = u32(out, at + FLAG);
       if (id == 0x12) {
-        int weapon;
-        if (villagers % 3 == 0) { weapon = FLAG_BOWGUN; archers++; }
-        else if (villagers % 3 == 1) { weapon = FLAG_CLUB; clubs++; }
-        else { weapon = 0; plain++; }
+        int i = villagers++;
         putU8(out, at + ID, 0x1D);
-        putU8(out, at + TYPE, 14 + (villagers % 8));
+        putU8(out, at + TYPE, 14 + ((i + off) % 8));
+        int weapon = ((i + off) % 3 == 0) ? FLAG_BOWGUN : ((i + off) % 3 == 1) ? FLAG_CLUB : 0;
         putU32(out, at + FLAG, (flag & ~TEST_WEAPON_MASK) | weapon);
-        villagers++;
+        allow(allowed, no, A_ID | A_TYPE | A_FLAG);
       } else if (id == 0x23 && (u8(out, at + BE_FLAG) & 1) != 0) {
-        // The crow's 10 HP would make a JJ or regenerator die in one shot.
-        if (jjs + regs < 2) {
-          putU8(out, at + ID, 0x1D);
-          putU8(out, at + TYPE, 2);
-          jjs++;
+        int c = crows++;
+        int newId = 0x1D, newType = 2, hp = 1000;
+        if (bossHere && c == 0) {
+          newId = bossId; newType = bossType; hp = bossId == 0x39 ? 3000 : 4000;
+          putU8(out, at + SET, 0);
+          allow(allowed, no, A_SET);
+          silent.add(bossId == 0x39 ? "em39" : "em2b");
+          bosses++;
+        } else if (!bossHere && (options & REGEN) != 0 && c >= 2) {
+          newId = 0x36; newType = (options & IRON) != 0 ? 2 + (regs % 2) : (regs % 2);
+          silent.add("em36"); regs++;
         } else {
-          putU8(out, at + ID, 0x36);
-          putU8(out, at + TYPE, 0);
-          regs++;
+          jjs++;
         }
+        putU8(out, at + ID, newId);
+        putU8(out, at + TYPE, newType);
         putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
-        putU16(out, at + HP, 1000);
-      } else if (id == 0x2a) {
+        putU16(out, at + HP, hp);
+        allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP);
+      } else if (id == 0x2A) {
+        int i = traps++;
         putU8(out, at + ID, 0x1D);
-        putU8(out, at + TYPE, 14 + (traps % 8));
+        putU8(out, at + TYPE, 14 + ((i + off) % 8));
         putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
-        traps++;
+        allow(allowed, no, A_ID | A_TYPE | A_FLAG);
       }
     }
-    if (villagers != 12 || jjs != 2 || regs != 3 || traps != 7) {
-      r.message = "r100 is not the disc layout this test expects (" + villagers + " villagers, "
-          + (jjs + regs) + " crows, " + traps + " traps). Nothing was written.";
-      Log.i(TAG, r.message);
-      return r;
+    if (villagers != 12 || crows != 5 || traps != 7) {
+      report.append("r100: SKIPPED, disc layout was not the expected 12 villagers / 5 crows / 7 traps.\n");
+      return;
     }
-    String why = verifyTest(src, out);
-    if (why != null) {
-      r.message = why + " Nothing was written.";
-      Log.i(TAG, r.message);
-      return r;
-    }
-
-    File dir = outDir(dataRoot);
-    File stage = new File(dir, "staging");
-    deleteTree(stage);
-    try {
-      File staged = new File(stage, name);
-      staged.getParentFile().mkdirs();
-      writeAll(staged, out);
-      byte[] back = read(staged);
-      if (back == null || !java.util.Arrays.equals(back, out)) {
-        r.message = "The test list did not read back as written. Nothing was activated.";
-        Log.i(TAG, r.message);
-        deleteTree(stage);
-        return r;
-      }
-      marker(dataRoot).delete();
-      File target = new File(dir, name);
-      target.getParentFile().mkdirs();
-      if (target.exists() && !target.delete()) {
-        r.message = "Could not replace the previous " + name + ". Nothing was activated.";
-        Log.i(TAG, r.message);
-        return r;
-      }
-      if (!staged.renameTo(target)) {
-        r.message = "Could not put the test list in place. Nothing was activated.";
-        Log.i(TAG, r.message);
-        return r;
-      }
-      deleteTree(stage);
-      r.ok = true;
-      r.message = "r100 test ready: 12 island soldiers (4 crossbows, 4 big clubs, 4 plain), "
-          + "2 JJ, 3 regenerators; traps reused. Start the game and go to r100.";
-      writeAll(logFile(dataRoot), (r.message + "\n").getBytes(StandardCharsets.UTF_8));
-      writeAll(marker(dataRoot), "r100-test".getBytes(StandardCharsets.UTF_8));
-      // The core sees this and drops the sound-bank parts of em1d/em36: their banks would
-      // otherwise run into the music area in ARAM and crash on entering r100.
-      new File(dir, "r101-no-sound").delete();
-      writeAll(new File(dir, "r100-no-sound"), new byte[] {1});
-      Log.i(TAG, "r100 test files: " + target + ", marker " + marker(dataRoot));
-      Log.i(TAG, r.message);
-    } catch (IOException ex) {
-      r.message = "Could not write the test list: " + ex.getMessage() + ". Nothing was activated.";
-      Log.e(TAG, r.message);
-      deleteTree(stage);
-    }
-    return r;
+    silent.add("em1d");
+    report.append("r100: ").append(villagers).append(" island soldiers, ").append(jjs)
+        .append(" JJ, ").append(regs).append(" regenerators, ").append(bosses).append(" boss.\n");
   }
 
-  /**
-   * Fixed test for room 1-01, the village square. All 46 enemy records become castle enemies:
-   * zealots and Garradors share module 0x1B (type 10 is the Garrador), two rows become Verdugos
-   * (0x2C). The room itself still loads em15 / em26 for its event data, so the four module slots
-   * are full. Unlike the r100 test, the enemy sound banks are deliberately left ON.
-   */
-  static Result dealR101Test(File dataRoot, File discFiles) {
-    Result r = new Result();
-    final String name = "etc/emleon00.esl";
-    byte[] src = read(new File(discFiles, name));
-    if (src == null || src.length < MIN_BYTES || src.length > LIST_BYTES || src.length % ENTRY != 0) {
-      r.message = "The imported disc has no usable " + name + ". Import both discs again, then try.";
-      Log.i(TAG, r.message);
-      return r;
-    }
-    byte[] out = new byte[LIST_BYTES];
-    System.arraycopy(src, 0, out, 0, src.length);
-
-    int n = 0, zealots = 0, garradors = 0, verdugos = 0;
+  /** r101: the two dormant rows hold one boss; everything else is a zealot or Garrador. */
+  private static void planR101(byte[] out, int[] allowed, long seed, int options,
+      Set<String> silent, StringBuilder report) {
+    int n = 0, zealots = 0, garradors = 0, special = 0;
+    boolean krauser = (options & KRAUSER) != 0, gigante = (options & GIGANTE) != 0;
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
-      if (at + ENTRY > src.length) break;
-      if (u16(out, at + ROOM) != 0x0101) continue;
+      if (u16(out, at + ROOM) != 0x101) continue;
       int id = u8(out, at + ID);
       if (id != 0x15 && id != 0x26 && id != 0x28) continue;
       int flag = u32(out, at + FLAG);
-      if (n == 11 || n == 37) {
-        // both are dormant rows, so the bell's initial Ganado count stays intact
-        putU8(out, at + ID, 0x2C);
-        putU8(out, at + TYPE, 0);
-        verdugos++;
-      } else if (n == 3 || n == 12 || n == 19 || n == 27 || n == 35 || n == 43) {
-        putU8(out, at + ID, 0x1B);
-        putU8(out, at + TYPE, 10);
-        garradors++;
+      int idx = n++;
+      int newId = 0x1B, newType;
+      if (idx == 11 && krauser) {
+        newId = 0x39; newType = (options & MUTATED) != 0 ? 2 : 0; silent.add("em39"); special++;
+      } else if (idx == 37 && gigante && !krauser) {
+        newId = 0x2B; newType = 0; silent.add("em2b"); special++;
+      } else if (idx == 11 || idx == 37) {
+        // With a boss in one dormant row the other must give up em2c, or r101 has five modules.
+        newId = (krauser || gigante) ? 0x1B : 0x2C;
+        newType = (krauser || gigante) ? 7 + (idx & 1) : 0;
+        if (newId == 0x2C) silent.add("em2c");
+        special++;
+      } else if ((options & GARRADOR) != 0
+          && (idx == 3 || idx == 12 || idx == 19 || idx == 27 || idx == 35 || idx == 43)) {
+        newType = 10; garradors++;
       } else {
-        putU8(out, at + ID, 0x1B);
-        putU8(out, at + TYPE, 7 + (n & 1));
-        zealots++;
+        newType = 7 + (idx & 1); zealots++;
       }
+      putU8(out, at + ID, newId);
+      putU8(out, at + TYPE, newType);
       putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
       putU16(out, at + HP, 1200);
-      // r101's set values name motions that exist only in em15's event data. The castle
-      // module has no such motions; keeping them crashes in MotionSetCore on room entry.
       putU8(out, at + SET, 0);
-      n++;
+      allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
     }
-    if (n != 46 || zealots != 38 || garradors != 6 || verdugos != 2) {
-      r.message = "r101 is not the disc layout this test expects (" + n + " enemies, "
-          + zealots + " zealots, " + garradors + " Garradors, " + verdugos
-          + " Verdugos). Nothing was written.";
-      Log.i(TAG, r.message);
-      return r;
+    if (n != 46) {
+      report.append("r101: SKIPPED, disc layout was not the expected 46 records.\n");
+      return;
     }
-    String why = verifyR101(src, out);
-    if (why != null) {
-      r.message = why + " Nothing was written.";
-      Log.i(TAG, r.message);
-      return r;
-    }
-
-    File dir = outDir(dataRoot);
-    File stage = new File(dir, "staging");
-    deleteTree(stage);
-    try {
-      File staged = new File(stage, name);
-      staged.getParentFile().mkdirs();
-      writeAll(staged, out);
-      byte[] back = read(staged);
-      if (back == null || !java.util.Arrays.equals(back, out)) {
-        r.message = "The test list did not read back as written. Nothing was activated.";
-        Log.i(TAG, r.message);
-        deleteTree(stage);
-        return r;
-      }
-      marker(dataRoot).delete();
-      // Only the new castle enemies are silenced; the room's other sounds stay on.
-      new File(dir, "r100-no-sound").delete();
-      File target = new File(dir, name);
-      target.getParentFile().mkdirs();
-      if (target.exists() && !target.delete()) {
-        r.message = "Could not replace the previous " + name + ". Nothing was activated.";
-        Log.i(TAG, r.message);
-        return r;
-      }
-      if (!staged.renameTo(target)) {
-        r.message = "Could not put the test list in place. Nothing was activated.";
-        Log.i(TAG, r.message);
-        return r;
-      }
-      deleteTree(stage);
-      r.ok = true;
-      r.message = "r101 test ready: 38 castle zealots, 6 Garradors, 2 Verdugos (cow included). "
-          + "Their sound banks are skipped; music and other sounds stay on. "
-          + "Start the game and go to the village square.";
-      writeAll(logFile(dataRoot), (r.message + "\n").getBytes(StandardCharsets.UTF_8));
-      writeAll(new File(dir, "r101-no-sound"), new byte[] {1});
-      writeAll(marker(dataRoot), "r101-test".getBytes(StandardCharsets.UTF_8));
-      Log.i(TAG, "r101 test files: " + target + ", marker " + marker(dataRoot));
-      Log.i(TAG, r.message);
-    } catch (IOException ex) {
-      r.message = "Could not write the test list: " + ex.getMessage() + ". Nothing was activated.";
-      Log.e(TAG, r.message);
-      deleteTree(stage);
-    }
-    return r;
+    silent.add("em1b");
+    silent.add("em26");
+    report.append("r101: ").append(zealots).append(" zealots, ").append(garradors)
+        .append(" Garradors, ").append(special).append(" special; sets cleared.\n");
   }
 
-  /** r101's check: only its records, only the fields the test claims to change. */
-  private static String verifyR101(byte[] src, byte[] out) {
-    // r101 loads em15 and em26 itself for its events, whether or not their records remain.
-    java.util.Set<Integer> kinds = new java.util.HashSet<>();
-    kinds.add(0x15);
-    kinds.add(0x26);
+  /** r103: whole animal kinds are swapped one-for-one; the five Ganados get new looks. */
+  private static void planR103(byte[] out, int[] allowed, long seed, int options,
+      Set<String> silent, StringBuilder report) {
+    int cows = 0, chickens = 0, ganados = 0;
+    boolean basicSwap = (options & (SHARED_SET | RESET_SET)) != 0;
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
-      if (at + ENTRY > src.length) {
-        if (u8(out, at + ID) != 0) return "entry " + no + " was invented past the disc's end";
-        continue;
-      }
-      if (u16(out, at + ROOM) != 0x0101) {
-        for (int k = 0; k < ENTRY; k++) {
-          if (src[at + k] != out[at + k]) return "entry " + no + " outside r101 changed";
-        }
-        continue;
-      }
-      if (u8(src, at + BE_FLAG) != u8(out, at + BE_FLAG)
-          || u8(src, at + CHARACTER) != u8(out, at + CHARACTER)
-          || u8(src, at + 0x0A) != u8(out, at + 0x0A)
-          || u16(src, at + ROOM) != u16(out, at + ROOM)
-          || u16(src, at + GUARD) != u16(out, at + GUARD)) {
-        return "entry " + no + " changed a protected field";
-      }
-      for (int k = POS; k < ROOM; k++) {
-        if (src[at + k] != out[at + k]) return "entry " + no + " moved or was retargeted";
-      }
-      if (u8(out, at + SET) != 0) return "entry " + no + " kept a motion the castle module lacks";
+      if (u16(out, at + ROOM) != 0x103) continue;
       int id = u8(out, at + ID);
-      if (id != 0 && id != 0x1B && id != 0x2C && id != 0x15 && id != 0x26) {
-        return "entry " + no + " has an unexpected kind " + id;
+      int flag = u32(out, at + FLAG);
+      if (id == 0x26 && (options & GIGANTE) != 0) {
+        int i = cows++;
+        putU8(out, at + ID, 0x2B); putU8(out, at + TYPE, i % 4);
+        putU16(out, at + HP, 4000); putU8(out, at + SET, 0);
+        putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
+        allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
+        silent.add("em2b");
+      } else if (id == 0x28 && (options & (ARMADURA | KRAUSER)) != 0) {
+        int i = chickens++;
+        boolean armor = (options & ARMADURA) != 0;
+        putU8(out, at + ID, armor ? 0x3C : 0x39);
+        putU8(out, at + TYPE, armor ? (i % 4) : ((options & MUTATED) != 0 ? 2 : 0));
+        putU16(out, at + HP, armor ? 1000 : 3000);
+        putU8(out, at + SET, 0);
+        putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
+        allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
+        silent.add(armor ? "em3c" : "em39");
+      } else if (id == 0x12) {
+        int i = ganados++;
+        int newId = basicSwap ? 0x1D : 0x12;
+        int[] ts = basicSwap ? new int[] {14, 15, 16, 17, 18} : new int[] {0, 1, 3, 4};
+        int ty = ts[(i + pick(seed, 0x103, ts.length)) % ts.length];
+        int weapon = 0;
+        if ((options & SAW) != 0 && i == 0) {
+          weapon = FLAG_SAW;
+          ty = basicSwap ? 14 : 4;
+        }
+        putU8(out, at + ID, newId);
+        putU8(out, at + TYPE, ty);
+        putU32(out, at + FLAG, (flag & ~WEAPON_MASK) | weapon);
+        allow(allowed, no, A_ID | A_TYPE | A_FLAG);
+        if (basicSwap && (options & RESET_SET) != 0) {
+          putU8(out, at + SET, 0);
+          allow(allowed, no, A_SET);
+        }
+        if (basicSwap) silent.add("em1d");
       }
-      if (id != 0) kinds.add(id);
     }
-    if (kinds.size() > 4) {
-      return "the test would need " + kinds.size() + " enemy modules in r101";
-    }
-    return null;
+    report.append("r103: ").append(cows).append(" cows and ").append(chickens)
+        .append(" chickens swapped, ").append(ganados).append(" Ganados restyled.\n");
   }
 
-  /** The test's own check: only r100 records, only the fields the test claims to change. */
-  private static String verifyTest(byte[] src, byte[] out) {
-    java.util.Set<Integer> kinds = new java.util.HashSet<>();
-    kinds.add(0x12);  // the hardcoded officer-killer is always loaded
+  /** r104: type/flag swaps on the script rows, with a few boss rows kept out of the count. */
+  private static void planR104(byte[] out, int[] allowed, long seed, int options,
+      Set<String> silent, StringBuilder report) {
+    int n = 0, variants = 0, bosses = 0, skipped = 0;
+    int off = pick(seed, 0x104, 5);
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
-      if (at + ENTRY > src.length) {
-        if (u8(out, at + ID) != 0) return "entry " + no + " was invented past the disc's end";
-        continue;
-      }
-      if (u16(out, at + ROOM) != 0x0100) {
-        for (int k = 0; k < ENTRY; k++) {
-          if (src[at + k] != out[at + k]) return "entry " + no + " outside r100 changed";
-        }
-        continue;
-      }
-      if (u8(src, at + BE_FLAG) != u8(out, at + BE_FLAG)
-          || u8(src, at + SET) != u8(out, at + SET)
-          || u8(src, at + CHARACTER) != u8(out, at + CHARACTER)
-          || u8(src, at + 0x0A) != u8(out, at + 0x0A)
-          || u16(src, at + ROOM) != u16(out, at + ROOM)
-          || u16(src, at + GUARD) != u16(out, at + GUARD)) {
-        return "entry " + no + " changed a protected field";
-      }
-      for (int k = POS; k < ROOM; k++) {
-        if (src[at + k] != out[at + k]) return "entry " + no + " moved or was retargeted";
-      }
-      if (u8(src, at + ID) != 0x23 && u16(src, at + HP) != u16(out, at + HP)) {
-        return "entry " + no + " changed health";
-      }
-      int id = u8(out, at + ID);
-      if (id != 0 && id != 0x12 && id != 0x1D && id != 0x36 && id != 0x21) {
-        return "entry " + no + " has an unexpected kind " + id;
-      }
-      if (id != 0) kinds.add(id);
-    }
-    if (kinds.contains(0x2A) || kinds.size() > 4) {
-      return "the test would need " + kinds.size() + " enemy modules in r100";
-    }
-    return null;
-  }
-
-  private static String verify(byte[] src, byte[] out) {
-    for (int no = 0; no < ENTRIES; no++) {
-      int at = no * ENTRY;
-      if (at + ENTRY > src.length) {
-        // the source's missing last entry: the deal must leave it empty
-        if (u8(out, at + ID) != 0) return "entry " + no + " was invented past the disc's end";
-        continue;
-      }
-      for (int k = 0; k < ENTRY; k++) {
-        if (k == ID || k == TYPE || k == FLAG || k == FLAG + 1 || k == FLAG + 2 || k == FLAG + 3) {
-          continue;
-        }
-        if (src[at + k] != out[at + k]) {
-          return "entry " + no + " changed byte " + k + " (only id, type and flag may change)";
-        }
-      }
+      if (u16(out, at + ROOM) != 0x104) continue;
       int id = u8(out, at + ID);
       if (id == 0) continue;
-      /* An unused slot (be_flag bit0 clear) may carry a leftover id with no room: emleon07
-         entry 155 is one on the retail disc. Only a LIVE record needs a valid room. */
-      if ((u8(out, at + BE_FLAG) & 1) == 0) continue;
-      if (!ganado(id) && id != u8(src, at + ID)) return "entry " + no + " left the Ganado family";
-      if (!typeOk(id, u8(out, at + TYPE)) && id != u8(src, at + ID)) {
-        return "entry " + no + " has a model its module cannot show";
+      int set = u8(out, at + SET), flag = u32(out, at + FLAG);
+      // dynamite throwers and named preset rows drive the waves: leave them alone
+      if (set != 0 || (flag & FLAG_BOMB) != 0) { skipped++; continue; }
+      int idx = n++;
+      int newId = 0x13, newType, hp = 0;
+      boolean boss = false;
+      if ((options & KRAUSER) != 0 && idx == 0) {
+        newId = 0x39; newType = (options & MUTATED) != 0 ? 2 : 0; hp = 3000;
+        silent.add("em39"); boss = true;
+      } else if ((options & GIGANTE) != 0 && idx == 1 && (options & KRAUSER) == 0) {
+        newId = 0x2B; newType = 0; hp = 4000; silent.add("em2b"); boss = true;
+      } else if ((options & ARMADURA) != 0 && idx == 2
+          && (options & KRAUSER) == 0 && (options & GIGANTE) == 0) {
+        newId = 0x3C; newType = idx % 4; hp = 1000; silent.add("em3c"); boss = true;
+      } else {
+        int[] ts = {0, 1, 3, 4, 6};
+        newType = ts[(idx + off) % ts.length];
+        if ((options & SAW) != 0 && idx % 12 == 0) newType = 4;
       }
-      int room = u16(out, at + ROOM);
-      if (room == 0 || (room >>> 8) > 4) return "entry " + no + " has no valid room";
+      putU8(out, at + ID, newId);
+      putU8(out, at + TYPE, newType);
+      putU32(out, at + FLAG, flag & ~(WEAPON_MASK & ~FLAG_SAW));
+      if (boss) {
+        putU8(out, at + SET, 0);
+        putU16(out, at + HP, hp);
+        allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
+        bosses++;
+      } else {
+        allow(allowed, no, A_ID | A_TYPE | A_FLAG);
+        variants++;
+      }
+    }
+    report.append("r104: ").append(variants).append(" restyled, ").append(bosses)
+        .append(" boss rows, ").append(skipped).append(" event rows untouched.\n");
+  }
+
+  /** Four module slots per room visit, with the modules each room already loads for its events. */
+  private static String kinds(byte[] src, byte[] out) {
+    for (int room : ROOMS) {
+      Set<Integer> k = new LinkedHashSet<>();
+      for (int no = 0; no < ENTRIES; no++) {
+        int at = no * ENTRY;
+        if (u16(out, at + ROOM) != room) continue;
+        int id = u8(out, at + ID);
+        if (id != 0) k.add(id);
+      }
+      if (room == 0x100) k.add(0x12);          // the officer-killer is built by r100.cpp
+      if (room == 0x101) { k.add(0x15); k.add(0x26); }  // r101 preloads these for events
+      if (k.size() > 4) {
+        return "the deal would need " + k.size() + " enemy modules in room "
+            + Integer.toHexString(room) + " (the game has four)";
+      }
+    }
+    return null;
+  }
+
+  /** Only the fields the plans marked may differ; every other byte must match the disc. */
+  private static String verify(byte[] src, byte[] out, int[] allowed) {
+    for (int no = 0; no < ENTRIES; no++) {
+      int at = no * ENTRY;
+      if (at + ENTRY > src.length) {
+        if (u8(out, at + ID) != 0) return "entry " + no + " was invented past the disc's end";
+        continue;
+      }
+      for (int b = 0; b < ENTRY; b++) {
+        if (src[at + b] == out[at + b]) continue;
+        int bit = b == ID ? A_ID : b == TYPE ? A_TYPE
+            : (b == FLAG || b == FLAG + 1 || b == FLAG + 2 || b == FLAG + 3) ? A_FLAG
+            : (b == HP || b == HP + 1) ? A_HP : b == SET ? A_SET : 0;
+        if (bit == 0 || (allowed[no] & bit) == 0) {
+          return "entry " + no + " changed protected byte " + b;
+        }
+      }
+      if ((allowed[no] & A_TYPE) != 0) {
+        int id = u8(out, at + ID), ty = u8(out, at + TYPE);
+        int[] ts = TYPES.get(id);
+        if (ts == null) return "entry " + no + " has an unsupported kind " + id;
+        boolean ok = false;
+        for (int v : ts) if (v == ty) { ok = true; break; }
+        if (!ok) return "entry " + no + " has model " + ty + " its module cannot show";
+      }
     }
     return null;
   }

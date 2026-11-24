@@ -114,7 +114,15 @@
     <string name="launch_rand_dynamite">Dynamite</string>
     <string name="launch_rand_mixed">Mix all enemies</string>
     <string name="launch_rand_safe_cabin">Keep Luis safe</string>
-    <string name="launch_rand_deal">Deal enemies</string>
+    <string name="launch_rand_regen">Regenerator</string>
+    <string name="launch_rand_iron">Iron Maiden</string>
+    <string name="launch_rand_krauser">Krauser</string>
+    <string name="launch_rand_mutated">Mutated Krauser</string>
+    <string name="launch_rand_gigante">El Gigante</string>
+    <string name="launch_rand_armadura">Armadura</string>
+    <string name="launch_rand_shared_set">Try shared animations</string>
+    <string name="launch_rand_reset_set">Allow animation reset</string>
+    <string name="launch_rand_deal">Deal test rooms</string>
     <string name="launch_rand_off">Turn off</string>
     <string name="launch_rand_test_r100">Test r100 randomizer</string>
     <string name="launch_rand_test_r101">Test r101 randomizer</string>

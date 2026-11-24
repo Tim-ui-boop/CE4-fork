@@ -195,11 +195,16 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     // the options, as the PC randomizer's enemy toggles: each keeps the others
     final int[] flags = {EnemyShuffle.SAW, EnemyShuffle.GARRADOR, EnemyShuffle.JJ, EnemyShuffle.SUPER,
         EnemyShuffle.VARIETY, EnemyShuffle.HELMET, EnemyShuffle.SHIELD, EnemyShuffle.PLAGA,
-        EnemyShuffle.DYNAMITE, EnemyShuffle.MIXED, EnemyShuffle.SAFE_CABIN};
+        EnemyShuffle.DYNAMITE, EnemyShuffle.MIXED, EnemyShuffle.SAFE_CABIN,
+        EnemyShuffle.REGEN, EnemyShuffle.IRON, EnemyShuffle.KRAUSER, EnemyShuffle.MUTATED,
+        EnemyShuffle.GIGANTE, EnemyShuffle.ARMADURA, EnemyShuffle.SHARED_SET, EnemyShuffle.RESET_SET};
     final int[] labels = {R.string.launch_rand_saw, R.string.launch_rand_garrador, R.string.launch_rand_jj,
         R.string.launch_rand_super, R.string.launch_rand_variety, R.string.launch_rand_helmets,
         R.string.launch_rand_shields, R.string.launch_rand_plagas, R.string.launch_rand_dynamite,
-        R.string.launch_rand_mixed, R.string.launch_rand_safe_cabin};
+        R.string.launch_rand_mixed, R.string.launch_rand_safe_cabin,
+        R.string.launch_rand_regen, R.string.launch_rand_iron, R.string.launch_rand_krauser,
+        R.string.launch_rand_mutated, R.string.launch_rand_gigante, R.string.launch_rand_armadura,
+        R.string.launch_rand_shared_set, R.string.launch_rand_reset_set};
     int stored = getSharedPreferences(RAND_PREFS, MODE_PRIVATE)
         .getInt(RAND_OPTIONS, EnemyShuffle.DEFAULT_OPTIONS);
     final int[] options = {stored};
@@ -261,9 +266,9 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       randStatus.setText(R.string.launch_rand_working);
       final long s = seed;
       final int opts = options[0];
-      // off the UI thread: eight lists are read, dealt, written and re-read
+      // off the UI thread: the four test rooms are dealt, written and re-read
       new Thread(() -> {
-        EnemyShuffle.Result r = EnemyShuffle.deal(data, disc, s, opts);
+        EnemyShuffle.Result r = EnemyShuffle.dealRooms(data, disc, s, opts);
         runOnUiThread(() -> randStatus.setText(r.ok
             ? getString(R.string.launch_rand_done, r.message) : r.message));
       }, "enemy-deal").start();
@@ -271,32 +276,6 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     halfButton(body, getString(R.string.launch_rand_off), () -> {
       randStatus.setText(EnemyShuffle.clear(imports.root));
     }, null);
-    // A fixed, verified room 1-00 trial: no seed and no options, so what you see is repeatable.
-    button(body, getString(R.string.launch_rand_test_r100), () -> {
-      File data = imports.root;
-      if (data == null || !new File(data, "disc1/files").isDirectory()) {
-        randStatus.setText(R.string.launch_rand_no_disc);
-        return;
-      }
-      randStatus.setText(R.string.launch_rand_working);
-      new Thread(() -> {
-        EnemyShuffle.Result r = EnemyShuffle.dealR100Test(data, new File(data, "disc1/files"));
-        runOnUiThread(() -> randStatus.setText(r.message));
-      }, "r100-test").start();
-    });
-    // r101 (village square): castle zealots, Garradors and Verdugos, with sound banks on.
-    button(body, getString(R.string.launch_rand_test_r101), () -> {
-      File data = imports.root;
-      if (data == null || !new File(data, "disc1/files").isDirectory()) {
-        randStatus.setText(R.string.launch_rand_no_disc);
-        return;
-      }
-      randStatus.setText(R.string.launch_rand_working);
-      new Thread(() -> {
-        EnemyShuffle.Result r = EnemyShuffle.dealR101Test(data, new File(data, "disc1/files"));
-        runOnUiThread(() -> randStatus.setText(r.message));
-      }, "r101-test").start();
-    });
   }
 
   private void heading(LinearLayout body, String text) {

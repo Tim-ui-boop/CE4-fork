@@ -214,3 +214,23 @@ The r101 rehearsal reads the real DRS part tables with `tools/drs.py` and checks
 | `port/docs/enemy-type-randomizer-research.md` | id/type/measurements on master |
 | `port/docs/pc-randomizer-decompile-findings.md` | PC tool rules and enemy identities |
 | `tools/drs.py` | DRS container format, including the empty sound-bank slot |
+
+## 12. The combined swap engine (`feature/enemy-swap-engine`)
+
+The two fixed test buttons are gone. One **Deal test rooms** button deals r100, r101, r103 and r104
+from a seed and 19 toggles. It replaces records **one-for-one** — a Verdugo becomes a Krauser by
+changing module em2c to em39, not by adding a fifth kind — keeps rows that `SceCountEmAlive(0x10,
+0x20)` needs inside that range, clears `set` for bosses, and writes every introduced module to
+`randomizer/enemies/no-sound.txt`. `runtime/dvd.cpp` reads that list instead of the old
+`r100-no-sound` / `r101-no-sound` markers.
+
+Defaults reproduce the two proven room tests exactly. Added toggles: Regenerator, Iron Maiden
+(the spiky Regenerator), Krauser, Mutated Krauser, El Gigante, Armadura, Try shared animations
+(experimental, keeps `set` on basic-family swaps) and Allow animation reset.
+
+**Easy revert:** `git checkout enemy-randomizer`. The untouched pre-change state is also pushed to
+GitHub as `backup/enemy-randomizer-pre-swap` at commit `5019393f`.
+
+Verification before commit: `python3 .harness/analysis/run_swap_deal.py` runs the real Java engine
+on the real disc over four seeds and four toggle sets — all offline checks pass. The NDK build in
+GitHub Actions is the final check.

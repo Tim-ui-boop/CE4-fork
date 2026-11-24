@@ -541,43 +541,52 @@ s32 readFile(DVDFileInfo* fi, void* dst, s32 length, s32 offset)
                     "%u on the disc)", path, (unsigned) offset, (unsigned) got, fileSize, (unsigned) fi->length);
         }
     }
-    /* The fixed r100 / r101 tests introduce enemy kinds whose own sound banks either overrun the
-       music area (em1d + em36) or fault in the synth when their voices play (em1b + em2c). The
-       launcher writes r100-no-sound / r101-no-sound for those tests. With the matching marker
+    /* The offline deal introduces enemy kinds whose own sound banks either overrun the music area
+       in ARAM or fault in the synth when their voices play. The launcher writes the modules it
+       introduced into randomizer/enemies/no-sound.txt (one name per line). With a matching name
        present, mark the DRS container's sound-bank record as "no sound" (type 0xFFFFFFFE, size 0,
-       offset = file size), the empty slot the disc tools use (tools/drs.py). The enemies still
-       spawn silently; music and all other sound are left alone.
+       offset = file size), the empty slot the disc tools use (tools/drs.py). The enemy still
+       spawns silently; music and all other sound are left alone.
        The table is raw big-endian here; the game byte-swaps it to host order after this read. */
     if (files != 0 && offset == 0 && length == 0x400 && got == 0x400) {
         const char* name = files + 7;
-        bool r100 = strcmp(name, "em/em1d.drs") == 0 || strcmp(name, "em/em36.drs") == 0;
-        // em26 is loaded by r101 for event data; its cow is converted by the test as well,
-        // so its sound bank goes too (the module body the events use is untouched).
-        bool r101 = strcmp(name, "em/em1b.drs") == 0 || strcmp(name, "em/em2c.drs") == 0
-                 || strcmp(name, "em/em26.drs") == 0;
-        if (r100 || r101) {
-            char marker[1400];
-            snprintf(marker, sizeof(marker), "%s/randomizer/enemies/%s-no-sound", gDataDir,
-                     r100 ? "r100" : "r101");
-            FILE* m = fopen(marker, "rb");
-            if (m != 0) {
-                fclose(m);
-                unsigned char* b = (unsigned char*) dst;
-                u32 size = fileSize > 0 ? (u32) fileSize : fi->length;
-                for (unsigned at = 0x20; at + 32 <= 0x400; at += 32) {
-                    u32 type = ((u32) b[at] << 24) | ((u32) b[at + 1] << 16)
-                             | ((u32) b[at + 2] << 8) | b[at + 3];
-                    if (type == 0xFFFFFFFFu) break;
-                    if (type != 4) continue;  // 4 = the appended sound bank
-                    b[at] = 0xFF; b[at + 1] = 0xFF; b[at + 2] = 0xFF; b[at + 3] = 0xFE;
-                    memset(b + at + 4, 0, 4);  // size = 0
-                    b[at + 0x0C] = (unsigned char) (size >> 24);
-                    b[at + 0x0D] = (unsigned char) (size >> 16);
-                    b[at + 0x0E] = (unsigned char) (size >> 8);
-                    b[at + 0x0F] = (unsigned char) size;
-                    re4_log("randomizer: %s: sound bank skipped for the %s test", name,
-                            r100 ? "r100" : "r101");
-                    break;
+        size_t nl = strlen(name);
+        if (nl > 7 && strncmp(name, "em/", 3) == 0 && strcmp(name + nl - 4, ".drs") == 0) {
+            char mod[32], listPath[1400];
+            snprintf(mod, sizeof(mod), "%s", name + 3);
+            mod[strlen(mod) - 4] = 0;  // "em39.drs" -> "em39"
+            snprintf(listPath, sizeof(listPath), "%s/randomizer/enemies/no-sound.txt", gDataDir);
+            FILE* f = fopen(listPath, "rb");
+            if (f != 0) {
+                char line[64];
+                bool silent = false;
+                while (fgets(line, sizeof(line), f) != 0) {
+                    size_t n = strlen(line);
+                    while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;
+                    if (n > 0 && (strcmp(line, mod) == 0
+                                 || (strncmp(line, "em/", 3) == 0 && strcmp(line + 3, mod) == 0))) {
+                        silent = true;
+                        break;
+                    }
+                }
+                fclose(f);
+                if (silent) {
+                    unsigned char* b = (unsigned char*) dst;
+                    u32 size = fileSize > 0 ? (u32) fileSize : fi->length;
+                    for (unsigned at = 0x20; at + 32 <= 0x400; at += 32) {
+                        u32 type = ((u32) b[at] << 24) | ((u32) b[at + 1] << 16)
+                                 | ((u32) b[at + 2] << 8) | b[at + 3];
+                        if (type == 0xFFFFFFFFu) break;
+                        if (type != 4) continue;  // 4 = the appended sound bank
+                        b[at] = 0xFF; b[at + 1] = 0xFF; b[at + 2] = 0xFF; b[at + 3] = 0xFE;
+                        memset(b + at + 4, 0, 4);  // size = 0
+                        b[at + 0x0C] = (unsigned char) (size >> 24);
+                        b[at + 0x0D] = (unsigned char) (size >> 16);
+                        b[at + 0x0E] = (unsigned char) (size >> 8);
+                        b[at + 0x0F] = (unsigned char) size;
+                        re4_log("randomizer: %s: sound bank skipped (dealt enemy list)", name);
+                        break;
+                    }
                 }
             }
         }
