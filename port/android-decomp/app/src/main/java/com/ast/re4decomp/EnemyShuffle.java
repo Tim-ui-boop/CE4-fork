@@ -6,24 +6,24 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * Offline enemy swap engine for the four test rooms (r100, r101, r103, r104).
+ * Offline enemy randomizer for the four test rooms (r100, r101, r103, r104).
  *
- * <p>The player picks a seed and the enemy toggles in the launcher. This reads the imported disc's
- * {@code etc/emleon00.esl}, replaces enemy records one-for-one from a per-room pool, writes a
- * private copy, re-reads it and refuses the whole deal unless every protected byte is unchanged.
- * The core serves that copy instead of the disc's; discs and saves are never written.
- *
- * <p>A swap keeps the record count and the module count stable: a Verdugo becomes a Krauser by
- * changing its module from em2c to em39, not by adding a fifth kind. Rows that a counting script
- * needs ({@code SceCountEmAlive(0x10, 0x20)}) stay inside that id range; bosses go only on rows
- * that are not counted. New kinds get {@code set=0}, high health and their sound bank skipped.
+ * <p>There are two pools. Elites are the powerful ordinary enemies (JJ, Dr. Salvador, Bella Sisters,
+ * Regenerator/Iron Maiden, Armadura, Garrador); bosses are Krauser, El Gigante, Super Salvador,
+ * Mendez and Verdugo. For each room the seed picks one member from each pool whose toggle is on and
+ * whose module fits the room's four slots. A swap replaces one record one-for-one, so counts and
+ * room geometry never change. The plan is built entirely in memory: the launcher can preview it
+ * before writing, and a deal is refused unless every protected byte still matches the disc.
  */
 final class EnemyShuffle {
   private static final String TAG = "EnemyShuffle";
@@ -36,14 +36,13 @@ final class EnemyShuffle {
   private static final int BE_FLAG = 0x00, ID = 0x01, TYPE = 0x02, SET = 0x03, FLAG = 0x04,
       HP = 0x08, ROOM = 0x18;
 
-  /** The option bits. The first eleven are the PC-style toggles; the rest are this engine's. */
   static final int SAW = 1, GARRADOR = 1 << 1, JJ = 1 << 2, SUPER = 1 << 3, VARIETY = 1 << 4,
       HELMET = 1 << 5, SHIELD = 1 << 6, PLAGA = 1 << 7, DYNAMITE = 1 << 8, MIXED = 1 << 9,
       SAFE_CABIN = 1 << 10, REGEN = 1 << 11, IRON = 1 << 12, KRAUSER = 1 << 13,
       MUTATED = 1 << 14, GIGANTE = 1 << 15, ARMADURA = 1 << 16, SHARED_SET = 1 << 17,
-      RESET_SET = 1 << 18;
-  /** Defaults reproduce the two proven room tests. */
-  static final int DEFAULT_OPTIONS = SAW | JJ | GARRADOR | REGEN | VARIETY | SAFE_CABIN;
+      RESET_SET = 1 << 18, BELLA = 1 << 19, MENDEZ = 1 << 20, VERDUGO = 1 << 21;
+  static final int DEFAULT_OPTIONS =
+      SAW | JJ | GARRADOR | REGEN | VARIETY | SAFE_CABIN | VERDUGO;
 
   private static final int FLAG_SAW = 1 << 28, FLAG_BOMB = 1 << 17,
       FLAG_PLAGA = 1 << 20, FLAG_HELMET = 1 << 9, FLAG_SHIELD = 1 << 31;
@@ -54,12 +53,12 @@ final class EnemyShuffle {
 
   private static final int A_ID = 1, A_TYPE = 2, A_FLAG = 4, A_HP = 8, A_SET = 16;
 
-  /** Model types each module can actually show, from its own switch table. */
   private static final Map<Integer, int[]> TYPES = new LinkedHashMap<>();
   static {
     TYPES.put(0x12, new int[] {0, 1, 3, 4});
     TYPES.put(0x13, new int[] {0, 1, 3, 4, 6});
     TYPES.put(0x15, new int[] {0, 3, 4, 11});
+    TYPES.put(0x16, new int[] {0, 1, 3, 4, 11, 12});
     TYPES.put(0x1B, new int[] {7, 8, 9, 10, 13});
     TYPES.put(0x1D, new int[] {2, 14, 15, 16, 17, 18, 19, 20, 21});
     TYPES.put(0x20, new int[] {14, 15, 16, 22});
@@ -70,10 +69,46 @@ final class EnemyShuffle {
     TYPES.put(0x2A, new int[] {0, 2});
     TYPES.put(0x2B, new int[] {0, 1, 2, 3});
     TYPES.put(0x2C, new int[] {0});
+    TYPES.put(0x34, new int[] {0, 2, 3});
     TYPES.put(0x36, new int[] {0, 1, 2, 3});
     TYPES.put(0x39, new int[] {0, 1, 2});
     TYPES.put(0x3C, new int[] {0, 1, 2, 3});
   }
+
+  /** One pool entry. {@code ids} are alternative bodies; the seed picks one that fits the room. */
+  private static final class Member {
+    final String name;
+    final int bit;
+    final int[] ids;
+    final int[] types;
+    final int flag;
+    final int hp;
+    final boolean massive;
+    Member(String name, int bit, int[] ids, int[] types, int flag, int hp, boolean massive) {
+      this.name = name; this.bit = bit; this.ids = ids; this.types = types;
+      this.flag = flag; this.hp = hp; this.massive = massive;
+    }
+  }
+
+  private static final Member[] ELITES = {
+    new Member("JJ", JJ, new int[] {0x1D}, new int[] {2}, 0, 1000, false),
+    new Member("Dr. Salvador", SAW, new int[] {0x12, 0x13, 0x15, 0x16, 0x17},
+        new int[] {3, 4}, FLAG_SAW, 1200, false),
+    new Member("Bella Sisters", BELLA, new int[] {0x16}, new int[] {11, 12},
+        FLAG_SAW, 1200, false),
+    new Member("Regenerator", REGEN, new int[] {0x36}, new int[] {0, 1}, 0, 1000, false),
+    new Member("Iron Maiden", IRON, new int[] {0x36}, new int[] {2, 3}, 0, 1000, false),
+    new Member("Armadura", ARMADURA, new int[] {0x3C}, new int[] {0, 1, 2, 3}, 0, 1000, false),
+    new Member("Garrador", GARRADOR, new int[] {0x1B}, new int[] {10}, 0, 1200, false),
+  };
+
+  private static final Member[] BOSSES = {
+    new Member("Krauser", KRAUSER, new int[] {0x39}, new int[] {0, 1, 2}, 0, 3000, false),
+    new Member("El Gigante", GIGANTE, new int[] {0x2B}, new int[] {0, 1, 2, 3}, 0, 4000, true),
+    new Member("Super Salvador", SUPER, new int[] {0x20}, new int[] {22}, FLAG_SAW, 3000, false),
+    new Member("Mendez", MENDEZ, new int[] {0x34}, new int[] {0}, 0, 4000, true),
+    new Member("Verdugo", VERDUGO, new int[] {0x2C}, new int[] {0}, 0, 3000, false),
+  };
 
   private static final String LIST_NAME = "etc/emleon00.esl";
   private static final int[] ROOMS = {0x100, 0x101, 0x103, 0x104};
@@ -81,6 +116,15 @@ final class EnemyShuffle {
   static final class Result {
     boolean ok;
     String message = "";
+  }
+
+  /** The whole plan in memory. The launcher can show it without writing anything. */
+  private static final class Plan {
+    byte[] out;
+    int[] allowed;
+    Set<String> silent;
+    String report;
+    String error;
   }
 
   private static int u8(byte[] b, int at) { return b[at] & 0xFF; }
@@ -98,12 +142,13 @@ final class EnemyShuffle {
   }
   private static void allow(int[] allowed, int no, int bits) { allowed[no] |= bits; }
 
-  /** A little hash so the seed changes which variants are picked, the same way for every player. */
   private static int pick(long seed, int what, int n) {
     long x = seed * 0x9E3779B1L + what * 0x85EBCA6BL;
     x ^= x >>> 33; x *= 0xFF51AFD7ED558CCDL; x ^= x >>> 33;
     return n <= 0 ? 0 : (int) Math.floorMod(x, (long) n);
   }
+
+  private static String moduleName(int id) { return String.format(Locale.ROOT, "em%02x", id); }
 
   private static File outDir(File dataRoot) { return new File(dataRoot, "randomizer/enemies"); }
   private static File marker(File dataRoot) { return new File(outDir(dataRoot), "active"); }
@@ -126,36 +171,21 @@ final class EnemyShuffle {
     return f.delete() ? n + 1 : n;
   }
 
-  /** Deals the four test rooms. Refuses the whole deal unless every byte verifies. */
+  /** Builds the exact same plan the deal writes, but never touches the filesystem. */
+  static String preview(File discFiles, long seed, int options) {
+    Plan p = makePlan(discFiles, seed, options);
+    return p.error != null ? "Refused: " + p.error : p.report;
+  }
+
   static Result dealRooms(File dataRoot, File discFiles, long seed, int options) {
     Result r = new Result();
-    byte[] src = read(new File(discFiles, LIST_NAME));
-    if (src == null || src.length < MIN_BYTES || src.length > LIST_BYTES || src.length % ENTRY != 0) {
-      r.message = "The imported disc has no usable " + LIST_NAME + ". Import both discs again, then try.";
+    Plan p = makePlan(discFiles, seed, options);
+    if (p.error != null) {
+      r.message = p.error + " Nothing was written.";
       Log.i(TAG, r.message);
       return r;
     }
-    byte[] out = new byte[LIST_BYTES];
-    System.arraycopy(src, 0, out, 0, src.length);
-    int[] allowed = new int[ENTRIES];
-    Set<String> silent = new LinkedHashSet<>();
-    StringBuilder report = new StringBuilder();
-    report.append("Enemy swaps, seed ").append(seed).append(", options ").append(options).append('\n');
-
-    planR100(out, allowed, seed, options, silent, report);
-    planR101(out, allowed, seed, options, silent, report);
-    planR103(out, allowed, seed, options, silent, report);
-    planR104(out, allowed, seed, options, silent, report);
-
-    String why = kinds(src, out);
-    if (why == null) why = verify(src, out, allowed);
-    if (why != null) {
-      r.message = why + " Nothing was written.";
-      Log.i(TAG, r.message);
-      return r;
-    }
-    for (String s : silent) report.append("Silent module: ").append(s).append('\n');
-
+    byte[] out = p.out;
     File dir = outDir(dataRoot);
     File stage = new File(dir, "staging");
     deleteTree(stage);
@@ -184,9 +214,8 @@ final class EnemyShuffle {
         return r;
       }
       deleteTree(stage);
-      writeAll(logFile(dataRoot), report.toString().getBytes(StandardCharsets.UTF_8));
-      writeAll(new File(dir, "no-sound.txt"), String.join("\n", silent).getBytes(StandardCharsets.UTF_8));
-      // the two fixed-test markers are gone for good
+      writeAll(logFile(dataRoot), p.report.getBytes(StandardCharsets.UTF_8));
+      writeAll(new File(dir, "no-sound.txt"), String.join("\n", p.silent).getBytes(StandardCharsets.UTF_8));
       new File(dir, "r100-no-sound").delete();
       new File(dir, "r101-no-sound").delete();
       writeAll(marker(dataRoot), String.valueOf(seed).getBytes(StandardCharsets.UTF_8));
@@ -201,236 +230,238 @@ final class EnemyShuffle {
     return r;
   }
 
-  /** r100: villagers and traps become island soldiers; crows become JJ, or a boss and JJ. */
+  private static Plan makePlan(File discFiles, long seed, int options) {
+    Plan p = new Plan();
+    byte[] src = read(new File(discFiles, LIST_NAME));
+    if (src == null || src.length < MIN_BYTES || src.length > LIST_BYTES || src.length % ENTRY != 0) {
+      p.error = "The imported disc has no usable " + LIST_NAME + ". Import both discs again, then try.";
+      return p;
+    }
+    byte[] out = new byte[LIST_BYTES];
+    System.arraycopy(src, 0, out, 0, src.length);
+    int[] allowed = new int[ENTRIES];
+    Set<String> silent = new LinkedHashSet<>();
+    StringBuilder report = new StringBuilder();
+    report.append("Enemy pools, seed ").append(seed).append(", options ").append(options).append('\n');
+
+    applyPools(out, allowed, seed, options, silent, report);
+    planR100(out, allowed, seed, options, silent, report);
+    planR101(out, allowed, seed, options, silent, report);
+    planR103(out, allowed, seed, options, silent, report);
+    planR104(out, allowed, seed, options, silent, report);
+
+    String why = kinds(src, out);
+    if (why == null) why = verify(src, out, allowed);
+    if (why != null) { p.error = why + "\nPlan: " + report.toString().replace('\n', ' '); return p; }
+    for (String s : silent) report.append("Silent module: ").append(s).append('\n');
+    p.out = out; p.allowed = allowed; p.silent = silent; p.report = report.toString();
+    return p;
+  }
+
+  /** The rows a pool pick may replace: few, safe, and not needed by a script's kill count. */
+  private static List<Integer> poolRows(byte[] out, int room) {
+    List<Integer> rows = new ArrayList<>();
+    int n = 0;
+    for (int no = 0; no < ENTRIES; no++) {
+      int at = no * ENTRY;
+      if (u16(out, at + ROOM) != room) continue;
+      int id = u8(out, at + ID);
+      if (id == 0) continue;
+      int flag = u32(out, at + FLAG), set = u8(out, at + SET);
+      if (room == 0x100 && id == 0x23 && (u8(out, at + BE_FLAG) & 1) != 0) { rows.add(no); continue; }
+      if (room == 0x101 && (id == 0x15 || id == 0x26 || id == 0x28)) {
+        if (n == 11 || n == 37) rows.add(no);
+        n++;
+        continue;
+      }
+      if (room == 0x103 && (id == 0x21 || id == 0x28)) { rows.add(no); continue; }
+      if (room == 0x104 && set == 0 && (flag & FLAG_BOMB) == 0 && n < 2) { rows.add(no); n++; continue; }
+    }
+    return rows;
+  }
+
+  /** Modules the room will need after its ordinary restyling, plus the ones its events preload. */
+  private static Set<Integer> baseKinds(int room) {
+    Set<Integer> k = new LinkedHashSet<>();
+    if (room == 0x100) { k.add(0x12); k.add(0x1D); k.add(0x21); }
+    if (room == 0x101) { k.add(0x15); k.add(0x26); k.add(0x1B); }
+    if (room == 0x103) { k.add(0x12); k.add(0x26); k.add(0x28); }
+    if (room == 0x104) k.add(0x13);
+    return k;
+  }
+
+  private static int chooseId(Member m, Set<Integer> base, long seed, int salt) {
+    for (int id : m.ids) if (base.contains(id)) return id;   // reuse a module already loaded
+    return m.ids[pick(seed, salt + 31, m.ids.length)];
+  }
+
+  private static Member choose(Member[] pool, long seed, int salt, int options,
+      Set<Integer> base, boolean massiveUsed) {
+    List<Member> ok = new ArrayList<>();
+    for (Member m : pool) {
+      if ((options & m.bit) == 0) continue;
+      if (m.massive && massiveUsed) continue;
+      int id = chooseId(m, base, seed, salt);
+      if (!base.contains(id) && base.size() >= 4) continue;  // no free module slot
+      ok.add(m);
+    }
+    return ok.isEmpty() ? null : ok.get(pick(seed, salt + 7000, ok.size()));
+  }
+
+  private static void writeMember(byte[] out, int[] allowed, int no, Member m, long seed, int salt,
+      int options, Set<String> silent, Set<Integer> base) {
+    int at = no * ENTRY;
+    int id = chooseId(m, base, seed, salt);
+    int type = m.name.equals("Krauser") && (options & MUTATED) != 0
+        ? 2 : m.types[pick(seed, salt + 13, m.types.length)];
+    putU8(out, at + ID, id);
+    putU8(out, at + TYPE, type);
+    putU32(out, at + FLAG, (u32(out, at + FLAG) & ~TEST_WEAPON_MASK) | m.flag);
+    putU16(out, at + HP, m.hp);
+    putU8(out, at + SET, 0);
+    allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
+    silent.add(moduleName(id));
+    base.add(id);
+  }
+
+  private static void applyPools(byte[] out, int[] allowed, long seed, int options,
+      Set<String> silent, StringBuilder report) {
+    for (int i = 0; i < ROOMS.length; i++) {
+      int room = ROOMS[i];
+      List<Integer> rows = poolRows(out, room);
+      if (rows.size() < 2) {
+        report.append(String.format(Locale.ROOT, "r%03x: no safe pool rows\n", room));
+        continue;
+      }
+      Set<Integer> base = baseKinds(room);
+      Member elite = choose(ELITES, seed, i * 100 + 1, options, base, false);
+      if (elite != null) writeMember(out, allowed, rows.get(0), elite, seed, i * 100 + 1,
+          options, silent, base);
+      Member boss = choose(BOSSES, seed, i * 100 + 2, options, base, elite != null && elite.massive);
+      if (boss != null) writeMember(out, allowed, rows.get(1), boss, seed, i * 100 + 2,
+          options, silent, base);
+      report.append(String.format(Locale.ROOT, "r%03x: elite %s, boss %s\n", room,
+          elite == null ? "none" : elite.name, boss == null ? "none" : boss.name));
+    }
+  }
+
+  /** Baseline looks for the ordinary enemies. Rows already written by a pool pick are skipped. */
   private static void planR100(byte[] out, int[] allowed, long seed, int options,
       Set<String> silent, StringBuilder report) {
-    int villagers = 0, crows = 0, traps = 0, jjs = 0, regs = 0, bosses = 0;
-    boolean bossHere = (options & (KRAUSER | GIGANTE)) != 0;
-    boolean superHere = (options & SUPER) != 0 && !bossHere;
-    boolean jjOn = (options & JJ) != 0;
-    boolean plaga = (options & PLAGA) != 0;
-    int bossId = (options & KRAUSER) != 0 ? 0x39 : 0x2B;
-    int bossType = bossId == 0x39 ? ((options & MUTATED) != 0 ? 2 : 0) : 0;
+    int villagers = 0, traps = 0;
+    boolean jjOn = (options & JJ) != 0, plaga = (options & PLAGA) != 0;
     int off = pick(seed, 0x100, 3);
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
-      if (u16(out, at + ROOM) != 0x100) continue;
+      if (u16(out, at + ROOM) != 0x100 || (allowed[no] & A_ID) != 0) continue;
       int id = u8(out, at + ID);
+      if (id == 0) continue;
       int flag = u32(out, at + FLAG);
-      if (id == 0x12) {
-        int i = villagers++;
-        boolean superOne = superHere && i == 0;
-        putU8(out, at + ID, superOne ? 0x20 : 0x1D);
-        putU8(out, at + TYPE, superOne ? 22 : 14 + ((i + off) % 8));
+      if (id == 0x12 || id == 0x2A) {
+        if (id == 0x12) villagers++; else traps++;
+        int i = villagers + traps;
+        putU8(out, at + ID, 0x1D);
+        putU8(out, at + TYPE, 14 + ((i + off) % 8));
         int weapon = ((i + off) % 3 == 0) ? FLAG_BOWGUN : ((i + off) % 3 == 1) ? FLAG_CLUB : 0;
-        if (superOne) { weapon = FLAG_SAW; silent.add("em20"); }
-        if (plaga && !superOne && i % 4 == 0) weapon |= FLAG_PLAGA;
+        if (plaga && i % 4 == 0) weapon |= FLAG_PLAGA;
         putU32(out, at + FLAG, (flag & ~TEST_WEAPON_MASK) | weapon);
         allow(allowed, no, A_ID | A_TYPE | A_FLAG);
       } else if (id == 0x23 && (u8(out, at + BE_FLAG) & 1) != 0) {
-        int c = crows++;
-        int newId = 0x1D, newType = 2, hp = 1000;
-        if (bossHere && c == 0) {
-          newId = bossId; newType = bossType; hp = bossId == 0x39 ? 3000 : 4000;
-          putU8(out, at + SET, 0);
-          allow(allowed, no, A_SET);
-          silent.add(bossId == 0x39 ? "em39" : "em2b");
-          bosses++;
-        } else if (!bossHere && !superHere && (options & REGEN) != 0 && c >= 2) {
-          newId = 0x36; newType = (options & IRON) != 0 ? 2 + (regs % 2) : (regs % 2);
-          silent.add("em36"); regs++;
-        } else {
-          if (jjOn) { newId = 0x1D; newType = 2; jjs++; }
-          else { newId = 0x1D; newType = 14 + ((c + off) % 8); }
-        }
-        putU8(out, at + ID, newId);
+        int newType = jjOn ? 2 : 14 + off;
+        putU8(out, at + ID, 0x1D);
         putU8(out, at + TYPE, newType);
         putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
-        putU16(out, at + HP, hp);
+        putU16(out, at + HP, 1000);
         allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP);
-      } else if (id == 0x2A) {
-        int i = traps++;
-        putU8(out, at + ID, 0x1D);
-        putU8(out, at + TYPE, 14 + ((i + off) % 8));
-        putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
-        allow(allowed, no, A_ID | A_TYPE | A_FLAG);
       }
-    }
-    if (villagers != 12 || crows != 5 || traps != 7) {
-      report.append("r100: SKIPPED, disc layout was not the expected 12 villagers / 5 crows / 7 traps.\n");
-      return;
     }
     silent.add("em1d");
-    report.append("r100: ").append(villagers).append(" island soldiers, ").append(jjs)
-        .append(" JJ, ").append(regs).append(" regenerators, ").append(bosses).append(" boss.\n");
+    report.append("r100: ").append(villagers).append(" villagers and ").append(traps)
+        .append(" traps restyled.\n");
   }
 
-  /** r101: the two dormant rows hold one boss; everything else is a zealot or Garrador. */
   private static void planR101(byte[] out, int[] allowed, long seed, int options,
       Set<String> silent, StringBuilder report) {
-    int n = 0, zealots = 0, garradors = 0, special = 0;
-    boolean krauser = (options & KRAUSER) != 0, gigante = (options & GIGANTE) != 0;
+    int zealots = 0, garradors = 0, n = 0;
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
-      if (u16(out, at + ROOM) != 0x101) continue;
+      if (u16(out, at + ROOM) != 0x101 || (allowed[no] & A_ID) != 0) continue;
       int id = u8(out, at + ID);
-      if (id != 0x15 && id != 0x26 && id != 0x28) continue;
+      if (id == 0) continue;
       int flag = u32(out, at + FLAG);
       int idx = n++;
-      int newId = 0x1B, newType, extra = 0;
-      if ((options & SHIELD) != 0 && idx % 8 == 0) extra = FLAG_SHIELD;
-      if (idx == 11 && krauser) {
-        newId = 0x39; newType = (options & MUTATED) != 0 ? 2 : 0; silent.add("em39"); special++;
-      } else if (idx == 37 && gigante && !krauser) {
-        newId = 0x2B; newType = 0; silent.add("em2b"); special++;
-      } else if (idx == 11 || idx == 37) {
-        // With a boss in one dormant row the other must give up em2c, or r101 has five modules.
-        newId = (krauser || gigante) ? 0x1B : 0x2C;
-        newType = (krauser || gigante) ? 7 + (idx & 1) : 0;
-        if (newId == 0x2C) silent.add("em2c");
-        special++;
-      } else if ((options & GARRADOR) != 0
-          && (idx == 3 || idx == 12 || idx == 19 || idx == 27 || idx == 35 || idx == 43)) {
-        newType = 10; garradors++;
+      int extra = (options & SHIELD) != 0 && idx % 8 == 0 ? FLAG_SHIELD : 0;
+      if ((options & GARRADOR) != 0 && (idx == 3 || idx == 12 || idx == 19 || idx == 27 || idx == 35)) {
+        putU8(out, at + TYPE, 10); garradors++;
       } else {
-        newType = 7 + (idx & 1); zealots++;
+        putU8(out, at + TYPE, 7 + (idx & 1)); zealots++;
       }
-      putU8(out, at + ID, newId);
-      putU8(out, at + TYPE, newType);
+      putU8(out, at + ID, 0x1B);
       putU32(out, at + FLAG, (flag & ~TEST_WEAPON_MASK) | extra);
       putU16(out, at + HP, 1200);
       putU8(out, at + SET, 0);
       allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
     }
-    if (n != 46) {
-      report.append("r101: SKIPPED, disc layout was not the expected 46 records.\n");
-      return;
-    }
     silent.add("em1b");
     silent.add("em26");
     report.append("r101: ").append(zealots).append(" zealots, ").append(garradors)
-        .append(" Garradors, ").append(special).append(" special; sets cleared.\n");
+        .append(" Garradors; sets cleared.\n");
   }
 
-  /** r103: one boss on the dog row; whole animal groups only with Mix all enemies on. */
   private static void planR103(byte[] out, int[] allowed, long seed, int options,
       Set<String> silent, StringBuilder report) {
-    int chickens = 0, ganados = 0, dogs = 0;
-    boolean mixed = (options & MIXED) != 0;
-    boolean variety = (options & VARIETY) != 0;
-    boolean helmet = (options & HELMET) != 0;
-    boolean bossOn = (options & (KRAUSER | GIGANTE | ARMADURA)) != 0;
-    // r103 preloads em12 for its corpses, so just one other kind fits: the single dog row.
-    int dogBoss = (options & KRAUSER) != 0 ? 0x39
-        : (options & GIGANTE) != 0 ? 0x2B
-        : (options & ARMADURA) != 0 ? 0x3C : 0;
-    boolean basicSwap = (options & (SHARED_SET | RESET_SET)) != 0 && !bossOn && !mixed;
+    int ganados = 0;
+    boolean basicSwap = (options & (SHARED_SET | RESET_SET)) != 0
+        && (options & MIXED) == 0
+        && (options & (KRAUSER | GIGANTE | SUPER | MENDEZ | VERDUGO | ARMADURA | BELLA)) == 0;
+    boolean variety = (options & VARIETY) != 0, helmet = (options & HELMET) != 0;
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
-      if (u16(out, at + ROOM) != 0x103) continue;
-      int id = u8(out, at + ID);
-      int flag = u32(out, at + FLAG);
-      if (id == 0x21 && dogBoss != 0) {
-        dogs++;
-        putU8(out, at + ID, dogBoss);
-        putU8(out, at + TYPE, dogBoss == 0x3C ? 2
-            : (dogBoss == 0x39 && (options & MUTATED) != 0 ? 2 : 0));
-        putU16(out, at + HP, dogBoss == 0x2B ? 4000 : 3000);
-        putU8(out, at + SET, 0);
-        putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
-        allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
-        silent.add(dogBoss == 0x39 ? "em39" : dogBoss == 0x2B ? "em2b" : "em3c");
-      } else if (mixed && id == 0x28 && (options & ARMADURA) != 0) {
-        int i = chickens++;
-        putU8(out, at + ID, 0x3C); putU8(out, at + TYPE, i % 4);
-        putU16(out, at + HP, 1000); putU8(out, at + SET, 0);
-        putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
-        allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
-        silent.add("em3c");
-      } else if (mixed && id == 0x28 && (options & KRAUSER) != 0) {
-        chickens++;
-        putU8(out, at + ID, 0x39);
-        putU8(out, at + TYPE, (options & MUTATED) != 0 ? 2 : 0);
-        putU16(out, at + HP, 3000); putU8(out, at + SET, 0);
-        putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
-        allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
-        silent.add("em39");
-      } else if (id == 0x12) {
-        int i = ganados++;
-        int newId = basicSwap ? 0x1D : 0x12;
-        int[] ts = basicSwap ? new int[] {14, 15, 16, 17, 18} : new int[] {0, 1, 3, 4};
-        int ty = variety ? ts[(i + pick(seed, 0x103, ts.length)) % ts.length] : ts[0];
-        int weapon = 0;
-        if ((options & SAW) != 0 && i == 0) {
-          weapon = FLAG_SAW;
-          ty = basicSwap ? 14 : 4;
-        }
-        if (helmet && i % 3 == 0) weapon |= FLAG_HELMET;
-        putU8(out, at + ID, newId);
-        putU8(out, at + TYPE, ty);
-        putU32(out, at + FLAG, (flag & ~WEAPON_MASK) | weapon);
-        allow(allowed, no, A_ID | A_TYPE | A_FLAG);
-        if (basicSwap && (options & RESET_SET) != 0) {
-          putU8(out, at + SET, 0);
-          allow(allowed, no, A_SET);
-        }
-        if (basicSwap) silent.add("em1d");
-      }
+      if (u16(out, at + ROOM) != 0x103 || (allowed[no] & A_ID) != 0) continue;
+      if (u8(out, at + ID) != 0x12) continue;
+      int i = ganados++;
+      int newId = basicSwap ? 0x1D : 0x12;
+      int[] ts = basicSwap ? new int[] {14, 15, 16, 17, 18} : new int[] {0, 1, 3, 4};
+      int ty = variety ? ts[(i + pick(seed, 0x103, ts.length)) % ts.length] : ts[0];
+      int weapon = 0;
+      if ((options & SAW) != 0 && i == 0) { weapon = FLAG_SAW; ty = basicSwap ? 14 : 4; }
+      if (helmet && i % 3 == 0) weapon |= FLAG_HELMET;
+      putU8(out, at + ID, newId);
+      putU8(out, at + TYPE, ty);
+      putU32(out, at + FLAG, (u32(out, at + FLAG) & ~WEAPON_MASK) | weapon);
+      allow(allowed, no, A_ID | A_TYPE | A_FLAG);
+      if (basicSwap && (options & RESET_SET) != 0) { putU8(out, at + SET, 0); allow(allowed, no, A_SET); }
+      if (basicSwap) silent.add("em1d");
     }
-    // A massive kind (El Gigante / later Mendez) is capped at one per room; normal bosses
-    // such as Krauser, Verdugo and Armadura may fill a whole group of rows.
-    report.append("r103: ").append(dogs).append(" boss on the dog row, ")
-        .append(chickens).append(" chickens swapped, ")
-        .append(ganados).append(" Ganados restyled.\n");
+    report.append("r103: ").append(ganados).append(" Ganados restyled.\n");
   }
 
-  /** r104: type/flag swaps on the script rows, with a few boss rows kept out of the count. */
   private static void planR104(byte[] out, int[] allowed, long seed, int options,
       Set<String> silent, StringBuilder report) {
-    int n = 0, variants = 0, bosses = 0, skipped = 0;
+    int n = 0, variants = 0, skipped = 0;
     int off = pick(seed, 0x104, 5);
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
-      if (u16(out, at + ROOM) != 0x104) continue;
+      if (u16(out, at + ROOM) != 0x104 || (allowed[no] & A_ID) != 0) continue;
       int id = u8(out, at + ID);
       if (id == 0) continue;
       int set = u8(out, at + SET), flag = u32(out, at + FLAG);
-      // dynamite throwers and named preset rows drive the waves: leave them alone
       if (set != 0 || (flag & FLAG_BOMB) != 0) { skipped++; continue; }
       int idx = n++;
-      int newId = 0x13, newType, hp = 0;
-      boolean boss = false;
-      if ((options & KRAUSER) != 0 && idx == 0) {
-        newId = 0x39; newType = (options & MUTATED) != 0 ? 2 : 0; hp = 3000;
-        silent.add("em39"); boss = true;
-      } else if ((options & GIGANTE) != 0 && idx == 1 && (options & KRAUSER) == 0) {
-        newId = 0x2B; newType = 0; hp = 4000; silent.add("em2b"); boss = true;
-      } else if ((options & ARMADURA) != 0 && idx == 2
-          && (options & KRAUSER) == 0 && (options & GIGANTE) == 0) {
-        newId = 0x3C; newType = idx % 4; hp = 1000; silent.add("em3c"); boss = true;
-      } else {
-        int[] ts = {0, 1, 3, 4, 6};
-        newType = (options & VARIETY) != 0 ? ts[(idx + off) % ts.length] : ts[0];
-        if ((options & SAW) != 0 && idx % 12 == 0) newType = 4;
-      }
+      int[] ts = {0, 1, 3, 4, 6};
+      int newType = (options & VARIETY) != 0 ? ts[(idx + off) % ts.length] : ts[0];
+      if ((options & SAW) != 0 && idx % 12 == 0) newType = 4;
       int extra = 0;
       if ((options & HELMET) != 0 && idx % 3 == 0) extra |= FLAG_HELMET;
       if ((options & DYNAMITE) != 0 && idx % 7 == 0) extra |= FLAG_BOMB;
-      putU8(out, at + ID, newId);
+      putU8(out, at + ID, 0x13);
       putU8(out, at + TYPE, newType);
       putU32(out, at + FLAG, (flag & ~(WEAPON_MASK & ~FLAG_SAW)) | extra);
-      if (boss) {
-        putU8(out, at + SET, 0);
-        putU16(out, at + HP, hp);
-        allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
-        bosses++;
-      } else {
-        allow(allowed, no, A_ID | A_TYPE | A_FLAG);
-        variants++;
-      }
+      allow(allowed, no, A_ID | A_TYPE | A_FLAG);
+      variants++;
     }
-    report.append("r104: ").append(variants).append(" restyled, ").append(bosses)
-        .append(" boss rows, ").append(skipped).append(" event rows untouched.\n");
+    report.append("r104: ").append(variants).append(" restyled, ").append(skipped)
+        .append(" event rows untouched.\n");
   }
 
   /** Four module slots per room visit, with the modules each room already loads for its events. */
@@ -443,18 +474,25 @@ final class EnemyShuffle {
         int id = u8(out, at + ID);
         if (id != 0) k.add(id);
       }
-      if (room == 0x100) k.add(0x12);          // the officer-killer is built by r100.cpp
-      if (room == 0x101) { k.add(0x15); k.add(0x26); }  // r101 preloads these for events
-      if (room == 0x103) k.add(0x12);          // r103's corpse models preload em12
+      if (room == 0x100) k.add(0x12);
+      if (room == 0x101) { k.add(0x15); k.add(0x26); }
+      if (room == 0x103) k.add(0x12);
       if (k.size() > 4) {
+        Map<Integer, Integer> counts = new LinkedHashMap<>();
+        for (int no = 0; no < ENTRIES; no++) {
+          int at = no * ENTRY;
+          if (u16(out, at + ROOM) == room && u8(out, at + ID) != 0) {
+            int id = u8(out, at + ID);
+            counts.put(id, counts.getOrDefault(id, 0) + 1);
+          }
+        }
         return "the deal would need " + k.size() + " enemy modules in room "
-            + Integer.toHexString(room) + " (the game has four)";
+            + Integer.toHexString(room) + " " + counts + " (the game has four)";
       }
     }
     return null;
   }
 
-  /** Only the fields the plans marked may differ; every other byte must match the disc. */
   private static String verify(byte[] src, byte[] out, int[] allowed) {
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
@@ -467,9 +505,7 @@ final class EnemyShuffle {
         int bit = b == ID ? A_ID : b == TYPE ? A_TYPE
             : (b == FLAG || b == FLAG + 1 || b == FLAG + 2 || b == FLAG + 3) ? A_FLAG
             : (b == HP || b == HP + 1) ? A_HP : b == SET ? A_SET : 0;
-        if (bit == 0 || (allowed[no] & bit) == 0) {
-          return "entry " + no + " changed protected byte " + b;
-        }
+        if (bit == 0 || (allowed[no] & bit) == 0) return "entry " + no + " changed protected byte " + b;
       }
       if ((allowed[no] & A_TYPE) != 0) {
         int id = u8(out, at + ID), ty = u8(out, at + TYPE);

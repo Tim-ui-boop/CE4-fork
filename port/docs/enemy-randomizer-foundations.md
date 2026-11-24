@@ -245,3 +245,31 @@ slots and made three dealt enemies fail with `Em set failed, Id = 1d`.
 
 All 19 toggles are now wired except Keep Luis safe, which has no effect in these four rooms (there
 is no Luis cabin among them).
+
+## 13. Two-pool model (`feature/enemy-pools`)
+
+The priority chains are gone. There are two pools, and for each room the seed picks **one member
+from each** among the toggles that are on and whose module still fits:
+
+- **Elites:** JJ, Dr. Salvador, Bella Sisters (the female Ganado look of em16, types 11/12 — r11D
+  really has five of them), Regenerator / Iron Maiden (types 0/1 and 2/3 of em36), Armadura
+  (types 0–3 of em3c) and Garrador (type 10).
+- **Bosses:** Krauser (0x39, type 2 with Mutated), El Gigante (0x2B), Super Salvador (0x20 type 22),
+  Mendez (0x34 type 0) and Verdugo (0x2C). El Gigante and Mendez are **massive**: at most one per room.
+
+A pick reuses an already-loaded module where it can; otherwise it is only allowed if a slot is free.
+The report says `boss none` when the four-module limit leaves no room. Each entry has a chance value
+reserved for a future per-member 1-in-N mode, like the PC tool; the selection function is the only
+place that would need to change.
+
+Three new toggles — Bella Sisters, Mendez and Verdugo — join the grid. The launcher also has a
+**Preview seed rolls** button: it runs the exact same planning step in memory and shows the report
+in a dialog, without writing the sidecar or touching app data. The written `enemies.txt` and the
+preview are byte-for-byte the same text (asserted by the rehearsal).
+
+**Revert:** `git checkout feature/enemy-swap-engine` restores the previous engine; the untouched
+original is still `backup/enemy-randomizer-pre-swap`.
+
+Verification: `python3 .harness/analysis/run_swap_deal.py` — three seeds, six toggle sets, checks
+determinism, byte-level protection, one entry per pool per room, the four-module limit, the massive
+cap and preview/report equality. All offline checks pass.

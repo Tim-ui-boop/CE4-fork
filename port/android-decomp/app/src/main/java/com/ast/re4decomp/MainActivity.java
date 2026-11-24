@@ -197,14 +197,16 @@ public final class MainActivity extends Activity implements ImportManager.Listen
         EnemyShuffle.VARIETY, EnemyShuffle.HELMET, EnemyShuffle.SHIELD, EnemyShuffle.PLAGA,
         EnemyShuffle.DYNAMITE, EnemyShuffle.MIXED, EnemyShuffle.SAFE_CABIN,
         EnemyShuffle.REGEN, EnemyShuffle.IRON, EnemyShuffle.KRAUSER, EnemyShuffle.MUTATED,
-        EnemyShuffle.GIGANTE, EnemyShuffle.ARMADURA, EnemyShuffle.SHARED_SET, EnemyShuffle.RESET_SET};
+        EnemyShuffle.GIGANTE, EnemyShuffle.ARMADURA, EnemyShuffle.SHARED_SET, EnemyShuffle.RESET_SET,
+        EnemyShuffle.BELLA, EnemyShuffle.MENDEZ, EnemyShuffle.VERDUGO};
     final int[] labels = {R.string.launch_rand_saw, R.string.launch_rand_garrador, R.string.launch_rand_jj,
         R.string.launch_rand_super, R.string.launch_rand_variety, R.string.launch_rand_helmets,
         R.string.launch_rand_shields, R.string.launch_rand_plagas, R.string.launch_rand_dynamite,
         R.string.launch_rand_mixed, R.string.launch_rand_safe_cabin,
         R.string.launch_rand_regen, R.string.launch_rand_iron, R.string.launch_rand_krauser,
         R.string.launch_rand_mutated, R.string.launch_rand_gigante, R.string.launch_rand_armadura,
-        R.string.launch_rand_shared_set, R.string.launch_rand_reset_set};
+        R.string.launch_rand_shared_set, R.string.launch_rand_reset_set,
+        R.string.launch_rand_bella, R.string.launch_rand_mendez, R.string.launch_rand_verdugo};
     int stored = getSharedPreferences(RAND_PREFS, MODE_PRIVATE)
         .getInt(RAND_OPTIONS, EnemyShuffle.DEFAULT_OPTIONS);
     final int[] options = {stored};
@@ -239,6 +241,35 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     Runnable refresh = () -> randStatus.setText(imports.root != null && EnemyShuffle.active(imports.root)
         ? getString(R.string.launch_rand_active) : getString(R.string.launch_rand_inactive));
     refresh.run();
+
+    // A read-only hint: shows the seed's rolls without writing the sidecar or touching app data.
+    halfButton(body, getString(R.string.launch_rand_preview), () -> {
+      long seed;
+      try {
+        seed = Long.parseLong(seedField.getText().toString().trim());
+      } catch (NumberFormatException ex) {
+        randStatus.setText(R.string.launch_rand_bad_seed);
+        return;
+      }
+      if (seed <= 0) {
+        randStatus.setText(R.string.launch_rand_bad_seed);
+        return;
+      }
+      File data = imports.root;
+      if (data == null || !new File(data, "disc1/files").isDirectory()) {
+        randStatus.setText(R.string.launch_rand_no_disc);
+        return;
+      }
+      String text = EnemyShuffle.preview(new File(data, "disc1/files"), seed, options[0]);
+      android.widget.ScrollView sv = new android.widget.ScrollView(this);
+      TextView tv = new TextView(this);
+      tv.setText(text);
+      tv.setTextSize(13);
+      tv.setPadding(dp(12), dp(8), dp(12), dp(8));
+      sv.addView(tv);
+      new AlertDialog.Builder(this).setTitle(R.string.launch_rand_preview)
+          .setView(sv).setPositiveButton(android.R.string.ok, null).show();
+    }, null);
 
     halfButton(body, getString(R.string.launch_rand_deal), () -> {
       long seed;
