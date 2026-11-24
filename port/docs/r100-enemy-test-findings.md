@@ -263,7 +263,7 @@ native stack.
 | `port/android-decomp/app/src/main/res/values/strings.xml` | button label |
 | `port/whole/runtime/enemy_sidecar.cpp` | serves the dealt list; validates ids/rooms |
 | `port/whole/runtime/dvd.cpp` | last-`/files/` path fix + DRS sound-bank skip |
-| `port/docs/OFFLINE-ENEMY-RANDOMIZER.md` | the offline deal design |
+| `port/docs/offline-enemy-randomizer.md` | the offline deal design |
 | `port/docs/enemy-type-randomizer-research.md` | measurements behind id/type/flag |
 | `tools/drs.py` | DRS container format, including the empty sound-bank slot |
 
