@@ -481,6 +481,7 @@ final class EnemyShuffle {
           + "2 JJ, 3 regenerators; traps reused. Start the game and go to r100.";
       writeAll(logFile(dataRoot), (r.message + "\n").getBytes(StandardCharsets.UTF_8));
       writeAll(marker(dataRoot), "r100-test".getBytes(StandardCharsets.UTF_8));
+      Log.i(TAG, "r100 test files: " + target + ", marker " + marker(dataRoot));
       Log.i(TAG, r.message);
     } catch (IOException ex) {
       r.message = "Could not write the test list: " + ex.getMessage() + ". Nothing was activated.";

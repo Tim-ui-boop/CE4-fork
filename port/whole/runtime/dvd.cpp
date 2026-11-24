@@ -499,7 +499,17 @@ s32 readFile(DVDFileInfo* fi, void* dst, s32 length, s32 offset)
        queue takes the length from the file: their whole-list read arrives as 0x1FE0, not 0x2000
        (emleon08/09 are 0x2000). Both are offered to the sidecar. */
     if (offset == 0 && (length == 0x1FE0 || length == 0x2000)) {
-        const char* files = strstr(path, "/files/");
+        // path is absolute: <app>/files/game/disc1/files/etc/emleon00.esl. The FIRST
+        // "/files/" belongs to the app, not to the disc, and would hand the sidecar
+        // "game/disc1/files/etc/emleon00.esl" — no enemy-list name matches that, so every
+        // dealt list was silently ignored. Take the LAST one, the disc's own files folder.
+        const char* files = 0;
+        for (const char* p = path; ; ) {
+            const char* hit = strstr(p, "/files/");
+            if (hit == 0) break;
+            files = hit;
+            p = hit + 1;
+        }
         if (files != 0 && re4_enemy_sidecar_read(files + 7, dst, length) == 1) {
             return length;
         }
