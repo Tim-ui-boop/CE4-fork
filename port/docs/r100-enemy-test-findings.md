@@ -263,3 +263,7 @@ native stack.
 | `port/docs/OFFLINE-ENEMY-RANDOMIZER.md` | the offline deal design |
 | `port/docs/enemy-type-randomizer-research.md` | measurements behind id/type/flag |
 | `tools/drs.py` | DRS container format, including the empty sound-bank slot |
+
+**Next room:** `r101-enemy-test-findings.md` — the castle-enemy test. It adds the other major
+rule: a `set` preset's motions live in its own module, so `set` must be reset when an enemy
+changes family (the r100 villagers happened to use shared sets).

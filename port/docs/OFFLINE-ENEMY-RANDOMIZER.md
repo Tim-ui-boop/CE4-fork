@@ -169,3 +169,7 @@ Background: `enemy-types-user-guide.md` (the toggles and ratios),
 **Start with `r100-enemy-test-findings.md`** for the on-phone r100 test: it records the sidecar
 path fix, the two independent budgets (four modules and the ARAM sound area), the DRS
 "no sound bank" solution, and what still has to be proven before a general deal ships.
+
+Then read `r101-enemy-test-findings.md`: the castle-enemy test adds the `set`/motion rule (a
+behaviour preset only works in the module that owns its animations), the synth-level sound
+failure that is separate from ARAM space, and the generalised DRS sound skip.
