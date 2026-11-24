@@ -60,6 +60,9 @@ final class EnemyShuffle {
       FLAG_HELMET = 1 << 9, FLAG_SHIELD = 1 << 31;
   private static final int WEAPON_MASK =
       FLAG_SAW | FLAG_BOMB | (1 << 27) | (1 << 29) | (1 << 30) | (1 << 31) | (1 << 11);
+  // The r100 test uses two weapons the island module supports: crossbow and the big club.
+  private static final int FLAG_BOWGUN = 1 << 15, FLAG_CLUB = 1 << 11;
+  private static final int TEST_WEAPON_MASK = WEAPON_MASK | FLAG_BOWGUN;
 
   /** The model types each Ganado module can show (the case labels of its EmNNSet switch). */
   private static final Map<Integer, int[]> TYPES = new LinkedHashMap<>();
@@ -93,6 +96,7 @@ final class EnemyShuffle {
     return (u8(b, at) << 24) | (u8(b, at + 1) << 16) | (u8(b, at + 2) << 8) | u8(b, at + 3);
   }
   private static void putU8(byte[] b, int at, int v) { b[at] = (byte) v; }
+  private static void putU16(byte[] b, int at, int v) { b[at] = (byte) (v >>> 8); b[at + 1] = (byte) v; }
   private static void putU32(byte[] b, int at, int v) {
     b[at] = (byte) (v >>> 24); b[at + 1] = (byte) (v >>> 16);
     b[at + 2] = (byte) (v >>> 8); b[at + 3] = (byte) v;
@@ -377,6 +381,157 @@ final class EnemyShuffle {
   }
 
   /** Everything but id, type and flag must be identical, and every dealt record must be sane. */
+  /**
+   * Fixed test for room 1-00. Rewrites only r100's records of emleon00: villagers become island
+   * soldiers (crossbows / big clubs / plain), the five crows become JJ and regenerators, and the
+   * bear traps become island soldiers so the room never needs a fifth enemy module. The hardcoded
+   * officer-killer (0x12) and the dog (0x21) keep their kinds, giving exactly four loaded kinds.
+   */
+  static Result dealR100Test(File dataRoot, File discFiles) {
+    Result r = new Result();
+    final String name = "etc/emleon00.esl";
+    byte[] src = read(new File(discFiles, name));
+    if (src == null || src.length < MIN_BYTES || src.length > LIST_BYTES || src.length % ENTRY != 0) {
+      r.message = "The imported disc has no usable " + name + ". Import both discs again, then try.";
+      Log.i(TAG, r.message);
+      return r;
+    }
+    byte[] out = new byte[LIST_BYTES];
+    System.arraycopy(src, 0, out, 0, src.length);
+
+    int villagers = 0, archers = 0, clubs = 0, plain = 0, jjs = 0, regs = 0, traps = 0;
+    for (int no = 0; no < ENTRIES; no++) {
+      int at = no * ENTRY;
+      if (at + ENTRY > src.length) break;
+      if (u16(out, at + ROOM) != 0x0100) continue;
+      int id = u8(out, at + ID);
+      int flag = u32(out, at + FLAG);
+      if (id == 0x12) {
+        int weapon;
+        if (villagers % 3 == 0) { weapon = FLAG_BOWGUN; archers++; }
+        else if (villagers % 3 == 1) { weapon = FLAG_CLUB; clubs++; }
+        else { weapon = 0; plain++; }
+        putU8(out, at + ID, 0x1D);
+        putU8(out, at + TYPE, 14 + (villagers % 8));
+        putU32(out, at + FLAG, (flag & ~TEST_WEAPON_MASK) | weapon);
+        villagers++;
+      } else if (id == 0x23 && (u8(out, at + BE_FLAG) & 1) != 0) {
+        // The crow's 10 HP would make a JJ or regenerator die in one shot.
+        if (jjs + regs < 2) {
+          putU8(out, at + ID, 0x1D);
+          putU8(out, at + TYPE, 2);
+          jjs++;
+        } else {
+          putU8(out, at + ID, 0x36);
+          putU8(out, at + TYPE, 0);
+          regs++;
+        }
+        putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
+        putU16(out, at + HP, 1000);
+      } else if (id == 0x2a) {
+        putU8(out, at + ID, 0x1D);
+        putU8(out, at + TYPE, 14 + (traps % 8));
+        putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
+        traps++;
+      }
+    }
+    if (villagers != 12 || jjs != 2 || regs != 3 || traps != 7) {
+      r.message = "r100 is not the disc layout this test expects (" + villagers + " villagers, "
+          + (jjs + regs) + " crows, " + traps + " traps). Nothing was written.";
+      Log.i(TAG, r.message);
+      return r;
+    }
+    String why = verifyTest(src, out);
+    if (why != null) {
+      r.message = why + " Nothing was written.";
+      Log.i(TAG, r.message);
+      return r;
+    }
+
+    File dir = outDir(dataRoot);
+    File stage = new File(dir, "staging");
+    deleteTree(stage);
+    try {
+      File staged = new File(stage, name);
+      staged.getParentFile().mkdirs();
+      writeAll(staged, out);
+      byte[] back = read(staged);
+      if (back == null || !java.util.Arrays.equals(back, out)) {
+        r.message = "The test list did not read back as written. Nothing was activated.";
+        Log.i(TAG, r.message);
+        deleteTree(stage);
+        return r;
+      }
+      marker(dataRoot).delete();
+      File target = new File(dir, name);
+      target.getParentFile().mkdirs();
+      if (target.exists() && !target.delete()) {
+        r.message = "Could not replace the previous " + name + ". Nothing was activated.";
+        Log.i(TAG, r.message);
+        return r;
+      }
+      if (!staged.renameTo(target)) {
+        r.message = "Could not put the test list in place. Nothing was activated.";
+        Log.i(TAG, r.message);
+        return r;
+      }
+      deleteTree(stage);
+      r.ok = true;
+      r.message = "r100 test ready: 12 island soldiers (4 crossbows, 4 big clubs, 4 plain), "
+          + "2 JJ, 3 regenerators; traps reused. Start the game and go to r100.";
+      writeAll(logFile(dataRoot), (r.message + "\n").getBytes(StandardCharsets.UTF_8));
+      writeAll(marker(dataRoot), "r100-test".getBytes(StandardCharsets.UTF_8));
+      Log.i(TAG, r.message);
+    } catch (IOException ex) {
+      r.message = "Could not write the test list: " + ex.getMessage() + ". Nothing was activated.";
+      Log.e(TAG, r.message);
+      deleteTree(stage);
+    }
+    return r;
+  }
+
+  /** The test's own check: only r100 records, only the fields the test claims to change. */
+  private static String verifyTest(byte[] src, byte[] out) {
+    java.util.Set<Integer> kinds = new java.util.HashSet<>();
+    kinds.add(0x12);  // the hardcoded officer-killer is always loaded
+    for (int no = 0; no < ENTRIES; no++) {
+      int at = no * ENTRY;
+      if (at + ENTRY > src.length) {
+        if (u8(out, at + ID) != 0) return "entry " + no + " was invented past the disc's end";
+        continue;
+      }
+      if (u16(out, at + ROOM) != 0x0100) {
+        for (int k = 0; k < ENTRY; k++) {
+          if (src[at + k] != out[at + k]) return "entry " + no + " outside r100 changed";
+        }
+        continue;
+      }
+      if (u8(src, at + BE_FLAG) != u8(out, at + BE_FLAG)
+          || u8(src, at + SET) != u8(out, at + SET)
+          || u8(src, at + CHARACTER) != u8(out, at + CHARACTER)
+          || u8(src, at + 0x0A) != u8(out, at + 0x0A)
+          || u16(src, at + ROOM) != u16(out, at + ROOM)
+          || u16(src, at + GUARD) != u16(out, at + GUARD)) {
+        return "entry " + no + " changed a protected field";
+      }
+      for (int k = POS; k < ROOM; k++) {
+        if (src[at + k] != out[at + k]) return "entry " + no + " moved or was retargeted";
+      }
+      if (u8(src, at + ID) != 0x23 && u16(src, at + HP) != u16(out, at + HP)) {
+        return "entry " + no + " changed health";
+      }
+      int id = u8(out, at + ID);
+      if (id != 0 && id != 0x12 && id != 0x1D && id != 0x36 && id != 0x21) {
+        return "entry " + no + " has an unexpected kind " + id;
+      }
+      if (id != 0) kinds.add(id);
+    }
+    if (kinds.contains(0x2A) || kinds.size() > 4) {
+      return "the test would need " + kinds.size() + " enemy modules in r100";
+    }
+    return null;
+  }
+
   private static String verify(byte[] src, byte[] out) {
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;

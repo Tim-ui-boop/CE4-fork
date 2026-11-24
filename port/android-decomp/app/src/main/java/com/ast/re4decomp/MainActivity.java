@@ -271,6 +271,19 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     halfButton(body, getString(R.string.launch_rand_off), () -> {
       randStatus.setText(EnemyShuffle.clear(imports.root));
     }, null);
+    // A fixed, verified room 1-00 trial: no seed and no options, so what you see is repeatable.
+    button(body, getString(R.string.launch_rand_test_r100), () -> {
+      File data = imports.root;
+      if (data == null || !new File(data, "disc1/files").isDirectory()) {
+        randStatus.setText(R.string.launch_rand_no_disc);
+        return;
+      }
+      randStatus.setText(R.string.launch_rand_working);
+      new Thread(() -> {
+        EnemyShuffle.Result r = EnemyShuffle.dealR100Test(data, new File(data, "disc1/files"));
+        runOnUiThread(() -> randStatus.setText(r.message));
+      }, "r100-test").start();
+    });
   }
 
   private void heading(LinearLayout body, String text) {
