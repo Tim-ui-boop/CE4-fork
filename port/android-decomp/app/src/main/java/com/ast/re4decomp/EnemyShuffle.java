@@ -483,6 +483,7 @@ final class EnemyShuffle {
       writeAll(marker(dataRoot), "r100-test".getBytes(StandardCharsets.UTF_8));
       // The core sees this and drops the sound-bank parts of em1d/em36: their banks would
       // otherwise run into the music area in ARAM and crash on entering r100.
+      new File(dir, "r101-no-sound").delete();
       writeAll(new File(dir, "r100-no-sound"), new byte[] {1});
       Log.i(TAG, "r100 test files: " + target + ", marker " + marker(dataRoot));
       Log.i(TAG, r.message);
@@ -570,7 +571,7 @@ final class EnemyShuffle {
         return r;
       }
       marker(dataRoot).delete();
-      // r100's silent-enemy marker must not leak into this test: sounds stay on here.
+      // Only the new castle enemies are silenced; the room's other sounds stay on.
       new File(dir, "r100-no-sound").delete();
       File target = new File(dir, name);
       target.getParentFile().mkdirs();
@@ -586,9 +587,11 @@ final class EnemyShuffle {
       }
       deleteTree(stage);
       r.ok = true;
-      r.message = "r101 test ready: 38 castle zealots, 6 Garradors, 2 Verdugos, sounds on. "
+      r.message = "r101 test ready: 38 castle zealots, 6 Garradors, 2 Verdugos (cow included). "
+          + "Their sound banks are skipped; music and other sounds stay on. "
           + "Start the game and go to the village square.";
       writeAll(logFile(dataRoot), (r.message + "\n").getBytes(StandardCharsets.UTF_8));
+      writeAll(new File(dir, "r101-no-sound"), new byte[] {1});
       writeAll(marker(dataRoot), "r101-test".getBytes(StandardCharsets.UTF_8));
       Log.i(TAG, "r101 test files: " + target + ", marker " + marker(dataRoot));
       Log.i(TAG, r.message);

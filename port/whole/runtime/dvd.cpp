@@ -541,18 +541,24 @@ s32 readFile(DVDFileInfo* fi, void* dst, s32 length, s32 offset)
                     "%u on the disc)", path, (unsigned) offset, (unsigned) got, fileSize, (unsigned) fi->length);
         }
     }
-    /* The r100 test spawns JJ (em1d) and a regenerator (em36) in one room. Their two sound banks
-       overrun the fixed music/stream area at ARAM 0x700000, so the music reads corrupted samples
-       and the game crashes on entry. The launcher writes r100-no-sound for this test. With it
+    /* The fixed r100 / r101 tests introduce enemy kinds whose own sound banks either overrun the
+       music area (em1d + em36) or fault in the synth when their voices play (em1b + em2c). The
+       launcher writes r100-no-sound / r101-no-sound for those tests. With the matching marker
        present, mark the DRS container's sound-bank record as "no sound" (type 0xFFFFFFFE, size 0,
-       offset = file size), the same empty slot the disc tools use (tools/drs.py). The enemy still
-       spawns, silently; its music and the rest of the sound system are left alone.
+       offset = file size), the empty slot the disc tools use (tools/drs.py). The enemies still
+       spawn silently; music and all other sound are left alone.
        The table is raw big-endian here; the game byte-swaps it to host order after this read. */
     if (files != 0 && offset == 0 && length == 0x400 && got == 0x400) {
         const char* name = files + 7;
-        if (strcmp(name, "em/em1d.drs") == 0 || strcmp(name, "em/em36.drs") == 0) {
+        bool r100 = strcmp(name, "em/em1d.drs") == 0 || strcmp(name, "em/em36.drs") == 0;
+        // em26 is loaded by r101 for event data; its cow is converted by the test as well,
+        // so its sound bank goes too (the module body the events use is untouched).
+        bool r101 = strcmp(name, "em/em1b.drs") == 0 || strcmp(name, "em/em2c.drs") == 0
+                 || strcmp(name, "em/em26.drs") == 0;
+        if (r100 || r101) {
             char marker[1400];
-            snprintf(marker, sizeof(marker), "%s/randomizer/enemies/r100-no-sound", gDataDir);
+            snprintf(marker, sizeof(marker), "%s/randomizer/enemies/%s-no-sound", gDataDir,
+                     r100 ? "r100" : "r101");
             FILE* m = fopen(marker, "rb");
             if (m != 0) {
                 fclose(m);
@@ -569,7 +575,8 @@ s32 readFile(DVDFileInfo* fi, void* dst, s32 length, s32 offset)
                     b[at + 0x0D] = (unsigned char) (size >> 16);
                     b[at + 0x0E] = (unsigned char) (size >> 8);
                     b[at + 0x0F] = (unsigned char) size;
-                    re4_log("randomizer: %s: sound bank skipped for the r100 test", name);
+                    re4_log("randomizer: %s: sound bank skipped for the %s test", name,
+                            r100 ? "r100" : "r101");
                     break;
                 }
             }
