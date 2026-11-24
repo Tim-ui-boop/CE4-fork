@@ -232,5 +232,16 @@ Defaults reproduce the two proven room tests exactly. Added toggles: Regenerator
 GitHub as `backup/enemy-randomizer-pre-swap` at commit `5019393f`.
 
 Verification before commit: `python3 .harness/analysis/run_swap_deal.py` runs the real Java engine
-on the real disc over four seeds and four toggle sets — all offline checks pass. The NDK build in
+on the real disc over four seeds and five toggle sets — all offline checks pass. The NDK build in
 GitHub Actions is the final check.
+
+**Module-slot rule (learned from the first phone test):** r103 also reserves em12 for its corpse
+models, so it has room for only one other kind. A massive boss (El Gigante, later Mendez) is placed
+on the *least numerous* safe kind — one dog or one crow row — and capped at **one per room**;
+Krauser, Verdugo and Armadura may fill a whole group. Turning on **Mix all enemies** allows the
+wild whole-group swaps (six chickens become Armaduras). The old in-game *Random enemies* cheat must
+be **off** while an offline deal is active: on the first test it loaded four extra kinds, filled all
+slots and made three dealt enemies fail with `Em set failed, Id = 1d`.
+
+All 19 toggles are now wired except Keep Luis safe, which has no effect in these four rooms (there
+is no Luis cabin among them).

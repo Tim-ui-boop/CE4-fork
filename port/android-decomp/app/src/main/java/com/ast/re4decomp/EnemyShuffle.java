@@ -45,7 +45,8 @@ final class EnemyShuffle {
   /** Defaults reproduce the two proven room tests. */
   static final int DEFAULT_OPTIONS = SAW | JJ | GARRADOR | REGEN | VARIETY | SAFE_CABIN;
 
-  private static final int FLAG_SAW = 1 << 28, FLAG_BOMB = 1 << 17;
+  private static final int FLAG_SAW = 1 << 28, FLAG_BOMB = 1 << 17,
+      FLAG_PLAGA = 1 << 20, FLAG_HELMET = 1 << 9, FLAG_SHIELD = 1 << 31;
   private static final int WEAPON_MASK =
       FLAG_SAW | FLAG_BOMB | (1 << 27) | (1 << 29) | (1 << 30) | (1 << 31) | (1 << 11);
   private static final int FLAG_BOWGUN = 1 << 15, FLAG_CLUB = 1 << 11;
@@ -61,6 +62,7 @@ final class EnemyShuffle {
     TYPES.put(0x15, new int[] {0, 3, 4, 11});
     TYPES.put(0x1B, new int[] {7, 8, 9, 10, 13});
     TYPES.put(0x1D, new int[] {2, 14, 15, 16, 17, 18, 19, 20, 21});
+    TYPES.put(0x20, new int[] {14, 15, 16, 22});
     TYPES.put(0x21, new int[] {0, 1});
     TYPES.put(0x23, new int[] {0});
     TYPES.put(0x26, new int[] {0, 1});
@@ -204,6 +206,9 @@ final class EnemyShuffle {
       Set<String> silent, StringBuilder report) {
     int villagers = 0, crows = 0, traps = 0, jjs = 0, regs = 0, bosses = 0;
     boolean bossHere = (options & (KRAUSER | GIGANTE)) != 0;
+    boolean superHere = (options & SUPER) != 0 && !bossHere;
+    boolean jjOn = (options & JJ) != 0;
+    boolean plaga = (options & PLAGA) != 0;
     int bossId = (options & KRAUSER) != 0 ? 0x39 : 0x2B;
     int bossType = bossId == 0x39 ? ((options & MUTATED) != 0 ? 2 : 0) : 0;
     int off = pick(seed, 0x100, 3);
@@ -214,9 +219,12 @@ final class EnemyShuffle {
       int flag = u32(out, at + FLAG);
       if (id == 0x12) {
         int i = villagers++;
-        putU8(out, at + ID, 0x1D);
-        putU8(out, at + TYPE, 14 + ((i + off) % 8));
+        boolean superOne = superHere && i == 0;
+        putU8(out, at + ID, superOne ? 0x20 : 0x1D);
+        putU8(out, at + TYPE, superOne ? 22 : 14 + ((i + off) % 8));
         int weapon = ((i + off) % 3 == 0) ? FLAG_BOWGUN : ((i + off) % 3 == 1) ? FLAG_CLUB : 0;
+        if (superOne) { weapon = FLAG_SAW; silent.add("em20"); }
+        if (plaga && !superOne && i % 4 == 0) weapon |= FLAG_PLAGA;
         putU32(out, at + FLAG, (flag & ~TEST_WEAPON_MASK) | weapon);
         allow(allowed, no, A_ID | A_TYPE | A_FLAG);
       } else if (id == 0x23 && (u8(out, at + BE_FLAG) & 1) != 0) {
@@ -228,11 +236,12 @@ final class EnemyShuffle {
           allow(allowed, no, A_SET);
           silent.add(bossId == 0x39 ? "em39" : "em2b");
           bosses++;
-        } else if (!bossHere && (options & REGEN) != 0 && c >= 2) {
+        } else if (!bossHere && !superHere && (options & REGEN) != 0 && c >= 2) {
           newId = 0x36; newType = (options & IRON) != 0 ? 2 + (regs % 2) : (regs % 2);
           silent.add("em36"); regs++;
         } else {
-          jjs++;
+          if (jjOn) { newId = 0x1D; newType = 2; jjs++; }
+          else { newId = 0x1D; newType = 14 + ((c + off) % 8); }
         }
         putU8(out, at + ID, newId);
         putU8(out, at + TYPE, newType);
@@ -268,7 +277,8 @@ final class EnemyShuffle {
       if (id != 0x15 && id != 0x26 && id != 0x28) continue;
       int flag = u32(out, at + FLAG);
       int idx = n++;
-      int newId = 0x1B, newType;
+      int newId = 0x1B, newType, extra = 0;
+      if ((options & SHIELD) != 0 && idx % 8 == 0) extra = FLAG_SHIELD;
       if (idx == 11 && krauser) {
         newId = 0x39; newType = (options & MUTATED) != 0 ? 2 : 0; silent.add("em39"); special++;
       } else if (idx == 37 && gigante && !krauser) {
@@ -287,7 +297,7 @@ final class EnemyShuffle {
       }
       putU8(out, at + ID, newId);
       putU8(out, at + TYPE, newType);
-      putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
+      putU32(out, at + FLAG, (flag & ~TEST_WEAPON_MASK) | extra);
       putU16(out, at + HP, 1200);
       putU8(out, at + SET, 0);
       allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
@@ -302,43 +312,60 @@ final class EnemyShuffle {
         .append(" Garradors, ").append(special).append(" special; sets cleared.\n");
   }
 
-  /** r103: whole animal kinds are swapped one-for-one; the five Ganados get new looks. */
+  /** r103: one boss on the dog row; whole animal groups only with Mix all enemies on. */
   private static void planR103(byte[] out, int[] allowed, long seed, int options,
       Set<String> silent, StringBuilder report) {
-    int cows = 0, chickens = 0, ganados = 0;
-    boolean basicSwap = (options & (SHARED_SET | RESET_SET)) != 0;
+    int chickens = 0, ganados = 0, dogs = 0;
+    boolean mixed = (options & MIXED) != 0;
+    boolean variety = (options & VARIETY) != 0;
+    boolean helmet = (options & HELMET) != 0;
+    boolean bossOn = (options & (KRAUSER | GIGANTE | ARMADURA)) != 0;
+    // r103 preloads em12 for its corpses, so just one other kind fits: the single dog row.
+    int dogBoss = (options & KRAUSER) != 0 ? 0x39
+        : (options & GIGANTE) != 0 ? 0x2B
+        : (options & ARMADURA) != 0 ? 0x3C : 0;
+    boolean basicSwap = (options & (SHARED_SET | RESET_SET)) != 0 && !bossOn && !mixed;
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
       if (u16(out, at + ROOM) != 0x103) continue;
       int id = u8(out, at + ID);
       int flag = u32(out, at + FLAG);
-      if (id == 0x26 && (options & GIGANTE) != 0) {
-        int i = cows++;
-        putU8(out, at + ID, 0x2B); putU8(out, at + TYPE, i % 4);
-        putU16(out, at + HP, 4000); putU8(out, at + SET, 0);
-        putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
-        allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
-        silent.add("em2b");
-      } else if (id == 0x28 && (options & (ARMADURA | KRAUSER)) != 0) {
-        int i = chickens++;
-        boolean armor = (options & ARMADURA) != 0;
-        putU8(out, at + ID, armor ? 0x3C : 0x39);
-        putU8(out, at + TYPE, armor ? (i % 4) : ((options & MUTATED) != 0 ? 2 : 0));
-        putU16(out, at + HP, armor ? 1000 : 3000);
+      if (id == 0x21 && dogBoss != 0) {
+        dogs++;
+        putU8(out, at + ID, dogBoss);
+        putU8(out, at + TYPE, dogBoss == 0x3C ? 2
+            : (dogBoss == 0x39 && (options & MUTATED) != 0 ? 2 : 0));
+        putU16(out, at + HP, dogBoss == 0x2B ? 4000 : 3000);
         putU8(out, at + SET, 0);
         putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
         allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
-        silent.add(armor ? "em3c" : "em39");
+        silent.add(dogBoss == 0x39 ? "em39" : dogBoss == 0x2B ? "em2b" : "em3c");
+      } else if (mixed && id == 0x28 && (options & ARMADURA) != 0) {
+        int i = chickens++;
+        putU8(out, at + ID, 0x3C); putU8(out, at + TYPE, i % 4);
+        putU16(out, at + HP, 1000); putU8(out, at + SET, 0);
+        putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
+        allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
+        silent.add("em3c");
+      } else if (mixed && id == 0x28 && (options & KRAUSER) != 0) {
+        chickens++;
+        putU8(out, at + ID, 0x39);
+        putU8(out, at + TYPE, (options & MUTATED) != 0 ? 2 : 0);
+        putU16(out, at + HP, 3000); putU8(out, at + SET, 0);
+        putU32(out, at + FLAG, flag & ~TEST_WEAPON_MASK);
+        allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
+        silent.add("em39");
       } else if (id == 0x12) {
         int i = ganados++;
         int newId = basicSwap ? 0x1D : 0x12;
         int[] ts = basicSwap ? new int[] {14, 15, 16, 17, 18} : new int[] {0, 1, 3, 4};
-        int ty = ts[(i + pick(seed, 0x103, ts.length)) % ts.length];
+        int ty = variety ? ts[(i + pick(seed, 0x103, ts.length)) % ts.length] : ts[0];
         int weapon = 0;
         if ((options & SAW) != 0 && i == 0) {
           weapon = FLAG_SAW;
           ty = basicSwap ? 14 : 4;
         }
+        if (helmet && i % 3 == 0) weapon |= FLAG_HELMET;
         putU8(out, at + ID, newId);
         putU8(out, at + TYPE, ty);
         putU32(out, at + FLAG, (flag & ~WEAPON_MASK) | weapon);
@@ -350,8 +377,11 @@ final class EnemyShuffle {
         if (basicSwap) silent.add("em1d");
       }
     }
-    report.append("r103: ").append(cows).append(" cows and ").append(chickens)
-        .append(" chickens swapped, ").append(ganados).append(" Ganados restyled.\n");
+    // A massive kind (El Gigante / later Mendez) is capped at one per room; normal bosses
+    // such as Krauser, Verdugo and Armadura may fill a whole group of rows.
+    report.append("r103: ").append(dogs).append(" boss on the dog row, ")
+        .append(chickens).append(" chickens swapped, ")
+        .append(ganados).append(" Ganados restyled.\n");
   }
 
   /** r104: type/flag swaps on the script rows, with a few boss rows kept out of the count. */
@@ -380,12 +410,15 @@ final class EnemyShuffle {
         newId = 0x3C; newType = idx % 4; hp = 1000; silent.add("em3c"); boss = true;
       } else {
         int[] ts = {0, 1, 3, 4, 6};
-        newType = ts[(idx + off) % ts.length];
+        newType = (options & VARIETY) != 0 ? ts[(idx + off) % ts.length] : ts[0];
         if ((options & SAW) != 0 && idx % 12 == 0) newType = 4;
       }
+      int extra = 0;
+      if ((options & HELMET) != 0 && idx % 3 == 0) extra |= FLAG_HELMET;
+      if ((options & DYNAMITE) != 0 && idx % 7 == 0) extra |= FLAG_BOMB;
       putU8(out, at + ID, newId);
       putU8(out, at + TYPE, newType);
-      putU32(out, at + FLAG, flag & ~(WEAPON_MASK & ~FLAG_SAW));
+      putU32(out, at + FLAG, (flag & ~(WEAPON_MASK & ~FLAG_SAW)) | extra);
       if (boss) {
         putU8(out, at + SET, 0);
         putU16(out, at + HP, hp);
@@ -412,6 +445,7 @@ final class EnemyShuffle {
       }
       if (room == 0x100) k.add(0x12);          // the officer-killer is built by r100.cpp
       if (room == 0x101) { k.add(0x15); k.add(0x26); }  // r101 preloads these for events
+      if (room == 0x103) k.add(0x12);          // r103's corpse models preload em12
       if (k.size() > 4) {
         return "the deal would need " + k.size() + " enemy modules in room "
             + Integer.toHexString(room) + " (the game has four)";
