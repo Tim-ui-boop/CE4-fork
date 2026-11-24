@@ -481,6 +481,9 @@ final class EnemyShuffle {
           + "2 JJ, 3 regenerators; traps reused. Start the game and go to r100.";
       writeAll(logFile(dataRoot), (r.message + "\n").getBytes(StandardCharsets.UTF_8));
       writeAll(marker(dataRoot), "r100-test".getBytes(StandardCharsets.UTF_8));
+      // The core sees this and drops the sound-bank parts of em1d/em36: their banks would
+      // otherwise run into the music area in ARAM and crash on entering r100.
+      writeAll(new File(dir, "r100-no-sound"), new byte[] {1});
       Log.i(TAG, "r100 test files: " + target + ", marker " + marker(dataRoot));
       Log.i(TAG, r.message);
     } catch (IOException ex) {

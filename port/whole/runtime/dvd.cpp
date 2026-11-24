@@ -498,18 +498,18 @@ s32 readFile(DVDFileInfo* fi, void* dst, s32 length, s32 offset)
        The eight story lists are 0x1FE0 bytes on the disc and readEmList passes size 0, so the
        queue takes the length from the file: their whole-list read arrives as 0x1FE0, not 0x2000
        (emleon08/09 are 0x2000). Both are offered to the sidecar. */
+    // path is absolute: <app>/files/game/disc1/files/etc/emleon00.esl. The FIRST
+    // "/files/" belongs to the app, not to the disc, and would hand the sidecar
+    // "game/disc1/files/etc/emleon00.esl" — no enemy-list name matches that, so every
+    // dealt list was silently ignored. Take the LAST one, the disc's own files folder.
+    const char* files = 0;
+    for (const char* p = path; ; ) {
+        const char* hit = strstr(p, "/files/");
+        if (hit == 0) break;
+        files = hit;
+        p = hit + 1;
+    }
     if (offset == 0 && (length == 0x1FE0 || length == 0x2000)) {
-        // path is absolute: <app>/files/game/disc1/files/etc/emleon00.esl. The FIRST
-        // "/files/" belongs to the app, not to the disc, and would hand the sidecar
-        // "game/disc1/files/etc/emleon00.esl" — no enemy-list name matches that, so every
-        // dealt list was silently ignored. Take the LAST one, the disc's own files folder.
-        const char* files = 0;
-        for (const char* p = path; ; ) {
-            const char* hit = strstr(p, "/files/");
-            if (hit == 0) break;
-            files = hit;
-            p = hit + 1;
-        }
         if (files != 0 && re4_enemy_sidecar_read(files + 7, dst, length) == 1) {
             return length;
         }
@@ -539,6 +539,40 @@ s32 readFile(DVDFileInfo* fi, void* dst, s32 length, s32 offset)
         if (zeros && toldZero++ < 8) {
             re4_log("DVD: %s: 0x400 bytes at 0x%x read as zeros (got %u; the file is %ld bytes on the device, "
                     "%u on the disc)", path, (unsigned) offset, (unsigned) got, fileSize, (unsigned) fi->length);
+        }
+    }
+    /* The r100 test spawns JJ (em1d) and a regenerator (em36) in one room. Their two sound banks
+       overrun the fixed music/stream area at ARAM 0x700000, so the music reads corrupted samples
+       and the game crashes on entry. The launcher writes r100-no-sound for this test. With it
+       present, mark the DRS container's sound-bank record as "no sound" (type 0xFFFFFFFE, size 0,
+       offset = file size), the same empty slot the disc tools use (tools/drs.py). The enemy still
+       spawns, silently; its music and the rest of the sound system are left alone.
+       The table is raw big-endian here; the game byte-swaps it to host order after this read. */
+    if (files != 0 && offset == 0 && length == 0x400 && got == 0x400) {
+        const char* name = files + 7;
+        if (strcmp(name, "em/em1d.drs") == 0 || strcmp(name, "em/em36.drs") == 0) {
+            char marker[1400];
+            snprintf(marker, sizeof(marker), "%s/randomizer/enemies/r100-no-sound", gDataDir);
+            FILE* m = fopen(marker, "rb");
+            if (m != 0) {
+                fclose(m);
+                unsigned char* b = (unsigned char*) dst;
+                u32 size = fileSize > 0 ? (u32) fileSize : fi->length;
+                for (unsigned at = 0x20; at + 32 <= 0x400; at += 32) {
+                    u32 type = ((u32) b[at] << 24) | ((u32) b[at + 1] << 16)
+                             | ((u32) b[at + 2] << 8) | b[at + 3];
+                    if (type == 0xFFFFFFFFu) break;
+                    if (type != 4) continue;  // 4 = the appended sound bank
+                    b[at] = 0xFF; b[at + 1] = 0xFF; b[at + 2] = 0xFF; b[at + 3] = 0xFE;
+                    memset(b + at + 4, 0, 4);  // size = 0
+                    b[at + 0x0C] = (unsigned char) (size >> 24);
+                    b[at + 0x0D] = (unsigned char) (size >> 16);
+                    b[at + 0x0E] = (unsigned char) (size >> 8);
+                    b[at + 0x0F] = (unsigned char) size;
+                    re4_log("randomizer: %s: sound bank skipped for the r100 test", name);
+                    break;
+                }
+            }
         }
     }
     if (got < (size_t) length) {
