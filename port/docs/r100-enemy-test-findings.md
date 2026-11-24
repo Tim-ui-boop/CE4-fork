@@ -1,5 +1,8 @@
 # r100 enemy test — findings
 
+**Consolidated reference: `enemy-randomizer-foundations.md`** covers both room tests and the
+general rules. This file stays as the detailed r100 playtest log.
+
 Branch `enemy-randomizer`, 24 Nov 2026. This is the write-up of the first successful on-phone
 test that changed real enemies in a room. It is the foundation for a general enemy randomizer:
 everything below was measured from the retail G4BE08 disc, the decompilation, the GitHub build

@@ -166,7 +166,10 @@ from the disc image into the imported-disc layout, runs the deal, and checks eve
 Background: `enemy-types-user-guide.md` (the toggles and ratios),
 `enemy-type-randomizer-research.md` (the measurements), `pc-randomizer-decompile-findings.md`.
 
-**Start with `r100-enemy-test-findings.md`** for the on-phone r100 test: it records the sidecar
+**Start with `enemy-randomizer-foundations.md`** — the single consolidated reference that merges
+both on-phone room tests, the module/sound budgets, the `set`/motion rule and the open work.
+
+The detailed playtest logs remain: `r100-enemy-test-findings.md` records the sidecar
 path fix, the two independent budgets (four modules and the ARAM sound area), the DRS
 "no sound bank" solution, and what still has to be proven before a general deal ships.
 

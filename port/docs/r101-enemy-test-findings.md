@@ -1,5 +1,8 @@
 # r101 enemy test — findings
 
+**Consolidated reference: `enemy-randomizer-foundations.md`** covers both room tests and the
+general rules. This file stays as the detailed r101 playtest log.
+
 Branch `enemy-randomizer`, 24 Nov 2026. Second on-phone room test, after
 `r100-enemy-test-findings.md`. **Status: the user confirmed the test works** (CI run
 45418178825, commit `0b33588a`).
