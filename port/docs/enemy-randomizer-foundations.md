@@ -210,7 +210,7 @@ The r101 rehearsal reads the real DRS part tables with `tools/drs.py` and checks
 | `port/android-decomp/.../MainActivity.java` | launcher buttons |
 | `port/whole/runtime/enemy_sidecar.cpp` | serves dealt lists; validates ids/rooms |
 | `port/whole/runtime/dvd.cpp` | last-`/files/` fix + DRS empty-sound marker |
-| `port/docs/OFFLINE-ENEMY-RANDOMIZER.md` | original offline design |
+| `port/docs/offline-enemy-randomizer.md` | original offline design |
 | `port/docs/enemy-type-randomizer-research.md` | id/type/measurements on master |
 | `port/docs/pc-randomizer-decompile-findings.md` | PC tool rules and enemy identities |
 | `tools/drs.py` | DRS container format, including the empty sound-bank slot |
