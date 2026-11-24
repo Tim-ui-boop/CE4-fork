@@ -142,3 +142,8 @@ from the disc image into the imported-disc layout, runs the deal, and checks eve
 
 Background: `enemy-types-user-guide.md` (the toggles and ratios),
 `enemy-type-randomizer-research.md` (the measurements), `pc-randomizer-decompile-findings.md`.
+
+**Start with `enemy-randomizer-foundations.md`** — the consolidated reference that merges the
+two on-phone room tests (r100 and r101), the four-module and sound budgets, the `set`/motion rule
+for scripted enemies, and the work still needed for a general deal. The test buttons themselves
+live on the `enemy-randomizer` branch; master carries this document as the design foundation.
