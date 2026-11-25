@@ -271,22 +271,6 @@ final class EnemyShuffle {
   }
 
   /**
-   * Every r100 list entry the game spawns by number in `src/st1/r100.cpp` (EmSetFromList2):
-   * the ambush and fire traps (3..8, 0x12, 0x13, 0x26, 0x27), the s03/s20 event rows, the house
-   * Ganado (0x25, `r100_HouseEvent`) and the after-state trap Ganados. Their cutscenes play
-   * model-specific motions; even an in-range id with a different `type` can lack the parts those
-   * motions need (`em10MouthPartsReset`). These records stay exactly as on the disc. Only r100's
-   * unscripted rows and all of r103 may receive out-of-range enemies.
-   */
-  private static final int[] R100_SCRIPT_ROWS =
-      {3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0x12, 0x13, 0x1D, 0x25, 0x26, 0x27, 0x7A};
-
-  private static boolean r100ScriptRow(int no) {
-    for (int row : R100_SCRIPT_ROWS) if (row == no) return true;
-    return false;
-  }
-
-  /**
    * Ordinary Ganados keep the weapon the disc gave them (sickle, stun rod, torch...). A special
    * enemy brings its own flag instead. The Dynamite switch adds a bomb to a seeded sixth of the
    * ordinary records; the disc's own dynamite rows are script rows and are never rewritten.
@@ -338,14 +322,12 @@ final class EnemyShuffle {
     if (room == 0x103) kinds.add(0x12);                    // r103's corpse models
     int[] tally = new int[POOL.length];
     boolean massiveUsed = false;
-    // Modules that survive the deal occupy a slot up front: hand-made actors, script rows, and
-    // the r100 rows we now leave untouched for its cutscenes (their vanilla models still load).
+    // Only modules that survive the deal (hand-made actors and script rows) occupy a slot up front.
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
       if (u16(out, at + ROOM) != room) continue;
       int id = u8(out, at + ID);
-      if (id != 0 && ((u32(out, at + FLAG) & FLAG_BOMB) != 0 || u8(out, at + SET) == 0x25
-          || (room == 0x100 && r100ScriptRow(no)))) {
+      if (id != 0 && ((u32(out, at + FLAG) & FLAG_BOMB) != 0 || u8(out, at + SET) == 0x25)) {
         kinds.add(id);
       }
     }
@@ -353,19 +335,12 @@ final class EnemyShuffle {
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
       if (u16(out, at + ROOM) != room) continue;
-      // Script-owned rows keep their exact disc bytes: the cutscenes assume the original model.
-      if (room == 0x100 && r100ScriptRow(no)) continue;
       int id = u8(out, at + ID);
       if (id == 0) continue;
       int flag = u32(out, at + FLAG), set = u8(out, at + SET);
       if ((flag & FLAG_BOMB) != 0 || set == 0x25) continue;  // dynamite and named event motions
-      // r101's bell and r104's waves count living ids 0x10..0x20; r101's two dormant rows and
-      // r104's one wave-boss row are the known exceptions. r100's script rows were skipped above,
-      // its remaining rows and all of r103 have no id-dependent script.
-      boolean counted;
-      if (room == 0x101) counted = n != 11 && n != 37;
-      else if (room == 0x104) counted = n != 0;
-      else counted = false;
+      boolean counted = room != 0x101 || (n != 11 && n != 37);
+      if (room == 0x104 && counted && n == 0) counted = false; // one boss row for the waves
       n++;
 
       List<Member> hits = new ArrayList<>();
