@@ -594,12 +594,10 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
         if (cheats != 0) Log.i(TAG, "cheats: " + cheats);
         CoreBridge.setCheats(cheats);
       }
-      // Leon's movement speed, kept from the last run (a test script's RE4_LEON_SPEED wins)
-      if (!settings.contains("RE4_LEON_SPEED=")) {
-        int level = getSharedPreferences(GAME_PREFS, MODE_PRIVATE).getInt(LEON_SPEED_LEVEL, 0);
-        if (level != 0) Log.i(TAG, "leon speed: " + level);
-        CoreBridge.cheatAction(11 + level);
-      }
+      // Leon's movement speed, kept from the last run
+      int speedLevel = getSharedPreferences(GAME_PREFS, MODE_PRIVATE).getInt(LEON_SPEED_LEVEL, 0);
+      if (speedLevel != 0) Log.i(TAG, "leon speed: " + speedLevel);
+      CoreBridge.cheatAction(11 + speedLevel);
       // the cheat "Leon's jacket" (1.0; a test script's RE4_LEON_JACKET wins)
       if (!settings.contains("RE4_LEON_JACKET=")) {
         final boolean jacket = getSharedPreferences(GAME_PREFS, MODE_PRIVATE).getBoolean(LEON_JACKET, false);

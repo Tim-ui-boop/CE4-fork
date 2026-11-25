@@ -323,6 +323,8 @@ int re4_gx_wide_now(void);
  * story lists, 0x2000 for emleon08/09), only with the launcher's randomizer/enemies/active
  * marker and records that pass its checks. */
 int re4_enemy_sidecar_read(const char* name, void* dst, int length);
+/* Leon's movement speed (runtime/cheats.cpp, actions 11..14): 0 Off, 1 2x, 2 3x, 3 4x. */
+void re4_speed_set_level(int level);
 
 #ifdef __cplusplus
 }

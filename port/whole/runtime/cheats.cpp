@@ -119,6 +119,11 @@ int gApplied;                  // what the game frames have set so far
 std::atomic<int> gQueued(0);   // a button pressed while the game ran (the hook does it)
 // 1.2.0: Leon's movement speed, action 11..14 (Off / 2x / 3x / 4x), re-applied every frame
 std::atomic<int> gSpeedLevel(0);
+bool standIn();
+extern "C" void re4_speed_set_level(int level)
+{
+    gSpeedLevel.store(level < 0 ? 0 : (level > 3 ? 3 : level), std::memory_order_release);
+}
 // the cheat "Leon's jacket" (1.0, patch 0235; re4_core_set_leon_jacket), -1 before RE4_LEON_JACKET was read; the
 // state the last PlSetCostume ran with (-1 none yet)
 std::atomic<int> gJacket(-1);
@@ -431,6 +436,12 @@ void repairPartnerLife();
 // can switch DBG_KAIOUKEN itself, so the level is written from the atomic on every game frame.
 void applySpeed()
 {
+    // The row is for Leon's story movement: no other playable character inherits it.
+    if (pG->pl_type != 0 && !standIn()) {
+        if (DbgFlagChk(pG, DBG_KAIOUKEN)) DbgFlagOff(pG, DBG_KAIOUKEN);
+        PlKaiou = 0;
+        return;
+    }
     int level = gSpeedLevel.load(std::memory_order_acquire);
     if (level <= 0) {
         if (pG && DbgFlagChk(pG, DBG_KAIOUKEN)) DbgFlagOff(pG, DBG_KAIOUKEN);

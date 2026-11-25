@@ -727,7 +727,12 @@ int re4_core_cheat_action(int what)
     if (what >= 20 && what <= 24) return re4_bench_command(what);  // 24: the title's menu waits (0.99.10)
     // 25: the game's play time in seconds for the app's Information HUD, -1 outside a game (0.99.11), any thread
     if (what == 25) return re4_instant_play_seconds();
-    if (what < 1 || what > 14) return 0;  // (10: "Refill ammo"; 11..14: Leon movement speed)
+    // 11..14 set Leon's movement speed directly, so the new value is live on the very next frame.
+    if (what >= 11 && what <= 14) {
+        re4_speed_set_level(what - 11);
+        return 1;
+    }
+    if (what < 1 || what > 10) return 0;  // (10: "Refill ammo")
     pthread_mutex_lock(&gPauseLock);
     if (!gPaused || !gPauseWanted || gInstantBusy || gCheatPending) {
         pthread_mutex_unlock(&gPauseLock);
