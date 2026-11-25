@@ -130,15 +130,13 @@ Task 1 is complete and committed: `port/tools/enemy_random_table.py --java-out` 
 `EnemyRooms.java` (108 rooms, 45 open / 11 untouched / 52 places-only), checked by
 `.harness/analysis/check_enemy_rooms.py`.
 
-Task 2 is **partly implemented, not passing yet**. `EnemyShuffle.java` now reads and writes all
-eight story lists, applies the room table, protects script-driven rows, and stages/promotes all
-lists atomically. Offline check `.harness/analysis/run_all_lists.py` passes seeds 1, 42 and 31337
-(8 sidecars each) but seed 777 is refused: `entry 127 has an unsupported kind 41 in
-etc/emleon05.esl`. Diagnosis: entry 127 is an unchanged vanilla record with id `0x29` (41
-decimal) for which `TYPES` has no entry; `verify()` checks the model table even when `src` and
-`out` bytes are identical, so a room restored by the module-budget fallback is still rejected.
-Next fix: in `verify()`, skip unchanged records before the `A_TYPE` check (or clear `A_TYPE` when
-restoring), then re-run the full all-list suite and the older four-room suite.
+Task 2 is now complete. `EnemyShuffle.java` reads and writes all eight story lists, applies the
+room table, protects script-driven rows, and stages/promotes all lists atomically. Two fixes were
+needed after the pause: `verify()` now skips the model-table check for unchanged records (seed 777
+was refused on an unchanged vanilla `0x29` record after a room was restored for the module budget),
+and the older harness was updated for the new report shape. Verified green:
+`.harness/analysis/run_all_lists.py 1 42 777 31337` (8 sidecars each),
+`.harness/analysis/run_swap_deal.py 1 42 777`, `check_enemy_rooms.py` and `check_enemy_java.py`.
 
-No CI build has been pushed for this branch yet; the phone still runs the restored four-room
-build from run 45597438295.
+Task 3 (appearance-only changes for places-only rooms) is next. No CI build has been pushed for
+this branch yet; the phone still runs the restored four-room build from run 45597438295.

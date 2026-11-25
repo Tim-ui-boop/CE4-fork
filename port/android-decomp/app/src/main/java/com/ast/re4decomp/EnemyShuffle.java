@@ -503,13 +503,16 @@ final class EnemyShuffle {
         if (u8(out, at + ID) != 0) return "entry " + no + " was invented past the disc's end";
         continue;
       }
+      boolean changed = false;
       for (int b = 0; b < ENTRY; b++) {
         if (src[at + b] == out[at + b]) continue;
+        changed = true;
         int bit = b == ID ? A_ID : b == TYPE ? A_TYPE
             : (b == FLAG || b == FLAG + 1 || b == FLAG + 2 || b == FLAG + 3) ? A_FLAG
             : (b == HP || b == HP + 1) ? A_HP : b == SET ? A_SET : 0;
         if (bit == 0 || (allowed[no] & bit) == 0) return "entry " + no + " changed protected byte " + b;
       }
+      if (!changed) continue;  // an untouched record needs no model-table check, even when restored
       if ((allowed[no] & A_TYPE) != 0) {
         int id = u8(out, at + ID), ty = u8(out, at + TYPE);
         int[] ts = TYPES.get(id);
