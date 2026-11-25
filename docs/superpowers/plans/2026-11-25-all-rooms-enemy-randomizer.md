@@ -165,3 +165,18 @@ r100 stays fully vanilla by design in phase 1: it is an "untouched" room in the 
 (the first encounter, with hand-built actors and cutscene rows). Phase 2 only addresses counted
 bell/wave rows in rooms like r101/r104; it does not make r100 open. Making r100 fully random is a
 separate, riskier change.
+
+### Phone feedback — r101 shotgun/laser crash (fixed)
+
+Next build crashed while aiming a shotgun at a group. No native *exception*: logcat shows
+`ModelInit() Parts allocate was failed`, `em39() ModelInit failed` twice, `em36() ModelInit failed`,
+`SetWeapon() ModelInit failed`, `cObjShotgun::init() failed`, then
+`partsWorldCalc() MODEL HAS NO PARTS` and a SIGSEGV in `C_MTXMultVec` from
+`cObjWep::drawLaserSight`/`getMarkerPos`. Root cause: the per-room model-parts pool
+(`game.cpp:389`, `model.cpp:148-159`) was exhausted by Krauser (`0x39`) plus Regenerator/Iron
+(`0x36`) in the same room; the shotgun then had no parts and its laser sight dereferenced a null
+matrix. Fix: the dealer now allows **at most one** heavy model (`0x2B`, `0x36`, `0x39`, `0x3C`) per
+room, counting models already reserved by the script. Verified over 20 seeds with both the default
+toggles and a Krauser/Regen/Armadura-heavy toggle set: no room has more than one heavy model, no
+room exceeds four modules, and all other offline checks stay green. This is a conservative data
+cap, not an engine change; phase 2 must respect it when it relaxes the count guard.

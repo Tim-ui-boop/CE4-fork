@@ -145,6 +145,10 @@ final class EnemyShuffle {
   }
 
   /** The eight story enemy lists, in the order stage.cpp asks for them. */
+  /** Models whose joint counts exhaust a room's parts pool when several are loaded together. */
+  private static final Set<Integer> HEAVY_IDS =
+      new LinkedHashSet<>(Arrays.asList(0x2B, 0x36, 0x39, 0x3C));
+
   private static final String[] LISTS = {
       "etc/emleon00.esl", "etc/emleon01.esl", "etc/emleon02.esl", "etc/emleon03.esl",
       "etc/emleon04.esl", "etc/emleon05.esl", "etc/emleon06.esl", "etc/emleon07.esl"};
@@ -401,6 +405,8 @@ final class EnemyShuffle {
     if (room == 0x103) kinds.add(0x12);                    // r103's corpse models
     int[] tally = new int[POOL.length];
     boolean massiveUsed = false;
+    boolean heavyUsed = false;
+    for (int id : kinds) if (HEAVY_IDS.contains(id)) heavyUsed = true;
     // Only modules that survive the deal (hand-made actors and script rows) occupy a slot up front.
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
@@ -437,7 +443,7 @@ final class EnemyShuffle {
         if (counted && !m.counted()) continue;
         if (hash(seed, room, no, i) % ratio[i] != 0) continue;
         int candidate = m.ids[Math.floorMod(hash(seed, room, no, 902), m.ids.length)];
-        if (!fits(kinds, candidate)) continue;
+        if (!fits(kinds, candidate) || (heavyUsed && HEAVY_IDS.contains(candidate))) continue;
         hits.add(m);
       }
       Member pick = null;
@@ -448,7 +454,9 @@ final class EnemyShuffle {
         for (int i = 0; i < 3; i++) {
           if ((options & POOL[i].bit) == 0) continue;
           int candidate = POOL[i].ids[Math.floorMod(hash(seed, room, no, 902), POOL[i].ids.length)];
-          if (fits(kinds, candidate)) bases.add(POOL[i]);
+          if (fits(kinds, candidate) && !(heavyUsed && HEAVY_IDS.contains(candidate))) {
+            bases.add(POOL[i]);
+          }
         }
         if (!bases.isEmpty()) {
           pick = bases.get(Math.floorMod(hash(seed, room, no, 901), bases.size()));
@@ -460,7 +468,10 @@ final class EnemyShuffle {
         if (kinds.isEmpty()) continue;
         int reuse = kinds.iterator().next();
         int[] rt = TYPES.get(reuse);
-        if (rt == null) { kinds.add(id); continue; }  // no model table: leave the row, reserve its module
+        if (rt == null || (heavyUsed && HEAVY_IDS.contains(reuse))) {
+          kinds.add(id);  // no model table, or the parts budget is full: leave the row
+          continue;
+        }
         putU8(out, at + ID, reuse);
         putU8(out, at + TYPE, rt[0]);
         putU32(out, at + FLAG,
@@ -487,6 +498,7 @@ final class EnemyShuffle {
       allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
       kinds.add(chosen);
       silent.add(moduleName(chosen));
+      if (HEAVY_IDS.contains(chosen)) heavyUsed = true;
       if (pick.massive) massiveUsed = true;
       for (int i = 0; i < POOL.length; i++) if (POOL[i] == pick) tally[i]++;
     }
