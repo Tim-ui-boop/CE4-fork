@@ -1,0 +1,11 @@
+--- a/src/game/player.cpp
++++ b/src/game/player.cpp
+@@ -347,7 +347,7 @@
+     moveBinocular();
+     subCharLiveCheck();
+     Pl_func_tbl[r_no_0](this);
+-    if (DbgFlagChk(pG, DBG_KAIOUKEN)) {
++    if (r_no_0 == 0 && DbgFlagChk(pG, DBG_KAIOUKEN)) {
+         // the u8 compared as an int (`cmpwi -1`): the original's test, always true
+         if (PlKaiou != -1) {
+             for (i = 0; i < PlKaiou + 1; i++) {
