@@ -179,4 +179,5 @@ matrix. Fix: the dealer now allows **at most one** heavy model (`0x2B`, `0x36`, 
 room, counting models already reserved by the script. Verified over 20 seeds with both the default
 toggles and a Krauser/Regen/Armadura-heavy toggle set: no room has more than one heavy model, no
 room exceeds four modules, and all other offline checks stay green. This is a conservative data
-cap, not an engine change; phase 2 must respect it when it relaxes the count guard.
+cap, not an engine change; phase 2 must respect it when it relaxes the count guard. GitHub Actions
+run **45645256203** is green (commit `d3998c8a`, artifact `CubeEvil4-core-debug-apk`, 24.6 MB).
