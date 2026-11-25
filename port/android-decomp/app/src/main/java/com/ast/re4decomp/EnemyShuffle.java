@@ -289,6 +289,40 @@ final class EnemyShuffle {
     return false;
   }
 
+  /** Model variants the pool can show for an id, with no id change. */
+  private static int[] variantTypes(int id) {
+    Set<Integer> all = new LinkedHashSet<>();
+    for (Member m : POOL) for (int x : m.ids) if (x == id) {
+      for (int t : m.types) all.add(t);
+    }
+    int[] result = new int[all.size()];
+    int at = 0;
+    for (int t : all) result[at++] = t;
+    return result;
+  }
+
+  /**
+   * A row the script owns keeps its id, hp, set, position and room. Only the look and non-weapon
+   * extras may change; room scripts never read the type or flag fields.
+   */
+  private static void appearanceOnly(byte[] out, int[] allowed, long seed, int options,
+      int room, int no) {
+    int at = no * ENTRY;
+    int[] types = variantTypes(u8(out, at + ID));
+    if ((options & VARIETY) != 0 && types.length > 0 && TYPES.containsKey(u8(out, at + ID))) {
+      putU8(out, at + TYPE, types[Math.floorMod(hash(seed, room, no, 903), types.length)]);
+      allow(allowed, no, A_TYPE);
+    }
+    int flag = u32(out, at + FLAG), extra = 0;
+    if ((options & HELMET) != 0 && hash(seed, room, no, 904) % 10 == 0) extra |= FLAG_HELMET;
+    if ((options & SHIELD) != 0 && hash(seed, room, no, 905) % 10 == 0) extra |= FLAG_SHIELD;
+    if ((options & PLAGA) != 0 && hash(seed, room, no, 906) % 10 == 0) extra |= FLAG_PLAGA;
+    if (extra != 0) {
+      putU32(out, at + FLAG, flag | extra);  // every vanilla weapon bit stays exactly as it was
+      allow(allowed, no, A_FLAG);
+    }
+  }
+
   /**
    * Ordinary Ganados keep the weapon the disc gave them (sickle, stun rod, torch...). A special
    * enemy brings its own flag instead. The Dynamite switch adds a bomb to a seeded sixth of the
@@ -381,7 +415,11 @@ final class EnemyShuffle {
       int at = no * ENTRY;
       if (u16(out, at + ROOM) != room) continue;
       int id = u8(out, at + ID);
-      if (id == 0 || EnemyRooms.driven(room, no)) continue;
+      if (id == 0) continue;
+      if (EnemyRooms.driven(room, no)) {
+        appearanceOnly(out, allowed, seed, options, room, no);
+        continue;
+      }
       int flag = u32(out, at + FLAG), set = u8(out, at + SET);
       if ((flag & FLAG_BOMB) != 0 || set == 0x25) continue;  // dynamite and named event motions
       boolean counted;

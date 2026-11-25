@@ -138,5 +138,9 @@ and the older harness was updated for the new report shape. Verified green:
 `.harness/analysis/run_all_lists.py 1 42 777 31337` (8 sidecars each),
 `.harness/analysis/run_swap_deal.py 1 42 777`, `check_enemy_rooms.py` and `check_enemy_java.py`.
 
-Task 3 (appearance-only changes for places-only rooms) is next. No CI build has been pushed for
-this branch yet; the phone still runs the restored four-room build from run 45597438295.
+Task 3 is complete: script-owned rows keep id, hp, set and position; with **Try shared
+animations** on, their model variant and non-weapon extras may change. The all-list harness now
+asserts zero identity changes and 1071 look/gear changes over four seeds; both offline suites and
+both syntax checks are green. Phase 1 (all story rooms, no engine patch) is ready for a GitHub
+Actions build and a phone playtest before phase 2 starts. The phone still runs the restored
+four-room build from run 45597438295.
