@@ -126,6 +126,8 @@
     <string name="launch_rand_mendez">Mendez</string>
     <string name="launch_rand_verdugo">Verdugo</string>
     <string name="launch_rand_preview">Preview seed rolls</string>
+    <string name="launch_rand_ratio">1 in %1$d</string>
+    <string name="launch_rand_ratio_off">off</string>
     <string name="launch_rand_deal">Deal test rooms</string>
     <string name="launch_rand_off">Turn off</string>
     <string name="launch_rand_test_r100">Test r100 randomizer</string>

@@ -295,3 +295,16 @@ showed only the old test's island soldiers and zealots because the pool picks to
 now the boss takes two crow rows in r100 / the two dormant rows in r101 and the elite takes the rest.
 And when several enemies were enabled the same one could be picked in every room — pool selection is
 now ordered by seed and advanced per room, so the enabled enemies spread across the four rooms.
+
+## 15. Full pool + ratios (`feature/pool-ratios`)
+
+The fixed per-room conversions are gone. Every ordinary record in r100/r101/r103/r104 is dealt from
+one pool: three basic families (village Ganado, castle zealot, island soldier) plus seven elites and
+five bosses. A record rolls the seed for each enabled enemy; a 1-in-N ratio decides whether that
+enemy takes the record (PC defaults: Salvador 1:12, JJ 1:2, Garrador 1:8, Super Salvador 1:8).
+The launcher shows a checkbox and a **1 in N** stepper for each of the fifteen pool entries, with the
+ten remaining switches below as simple modifiers. Ratios are stored in their own `enemyRatios`
+preferences. Rows with dynamite or named event motions are left alone, counted rows keep ids inside
+0x10..0x20, one massive boss per room, four modules per room, and the preview uses the same plan.
+
+**Revert:** `git checkout feature/no-ingame-cheats` restores the previous build.

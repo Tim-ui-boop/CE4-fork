@@ -31,6 +31,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
   static final String AUTO_START = "autoStart";
   /** The offline enemy randomizer's own prefs: the last seed and the option bits. */
   private static final String RAND_PREFS = "enemyRandomizer", RAND_SEED = "seed", RAND_OPTIONS = "options";
+  private static final String RATIO_PREFS = "enemyRatios";
   private final ExecutorService worker = Executors.newSingleThreadExecutor();
   private final Handler main = new Handler(Looper.getMainLooper());
   private volatile boolean destroyed;
@@ -184,33 +185,58 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     seedRow.addView(seedField, fieldLp);
     body.addView(seedRow);
 
-    // the options, as the PC randomizer's enemy toggles: each keeps the others
-    final int[] flags = {EnemyShuffle.SAW, EnemyShuffle.GARRADOR, EnemyShuffle.JJ, EnemyShuffle.SUPER,
-        EnemyShuffle.VARIETY, EnemyShuffle.HELMET, EnemyShuffle.SHIELD, EnemyShuffle.PLAGA,
-        EnemyShuffle.DYNAMITE, EnemyShuffle.MIXED, EnemyShuffle.SAFE_CABIN,
-        EnemyShuffle.REGEN, EnemyShuffle.IRON, EnemyShuffle.KRAUSER, EnemyShuffle.MUTATED,
-        EnemyShuffle.GIGANTE, EnemyShuffle.ARMADURA, EnemyShuffle.SHARED_SET, EnemyShuffle.RESET_SET,
-        EnemyShuffle.BELLA, EnemyShuffle.MENDEZ, EnemyShuffle.VERDUGO};
-    final int[] labels = {R.string.launch_rand_saw, R.string.launch_rand_garrador, R.string.launch_rand_jj,
-        R.string.launch_rand_super, R.string.launch_rand_variety, R.string.launch_rand_helmets,
-        R.string.launch_rand_shields, R.string.launch_rand_plagas, R.string.launch_rand_dynamite,
-        R.string.launch_rand_mixed, R.string.launch_rand_safe_cabin,
-        R.string.launch_rand_regen, R.string.launch_rand_iron, R.string.launch_rand_krauser,
-        R.string.launch_rand_mutated, R.string.launch_rand_gigante, R.string.launch_rand_armadura,
-        R.string.launch_rand_shared_set, R.string.launch_rand_reset_set,
-        R.string.launch_rand_bella, R.string.launch_rand_mendez, R.string.launch_rand_verdugo};
-    int stored = getSharedPreferences(RAND_PREFS, MODE_PRIVATE)
-        .getInt(RAND_OPTIONS, EnemyShuffle.DEFAULT_OPTIONS);
-    final int[] options = {stored};
+    // Every toggled enemy is a pool member. The button beside it is its 1-in-N appearance ratio.
+    final int[] options = {getSharedPreferences(RAND_PREFS, MODE_PRIVATE)
+        .getInt(RAND_OPTIONS, EnemyShuffle.DEFAULT_OPTIONS)};
+    android.content.SharedPreferences ratioPrefs = getSharedPreferences(RATIO_PREFS, MODE_PRIVATE);
+    final int[] ratios = EnemyShuffle.DEFAULT_RATIOS.clone();
+    for (int i = 0; i < ratios.length; i++) ratios[i] = ratioPrefs.getInt("r" + i, ratios[i]);
     LinearLayout grid = new LinearLayout(this);
     grid.setOrientation(LinearLayout.VERTICAL);
-    for (int i = 0; i < flags.length; i += 2) {
+    for (int i = 0; i < EnemyShuffle.POOL_NAMES.length; i++) {
+      final int idx = i, flag = EnemyShuffle.POOL_BITS[i];
       LinearLayout row = new LinearLayout(this);
       row.setOrientation(LinearLayout.HORIZONTAL);
-      for (int k = i; k < Math.min(i + 2, flags.length); k++) {
-        final int flag = flags[k];
+      CheckBox box = new CheckBox(this);
+      box.setText(EnemyShuffle.POOL_NAMES[i]);
+      box.setTextSize(13);
+      box.setChecked((options[0] & flag) != 0);
+      box.setOnCheckedChangeListener((v, on) -> {
+        options[0] = on ? options[0] | flag : options[0] & ~flag;
+        getSharedPreferences(RAND_PREFS, MODE_PRIVATE).edit().putInt(RAND_OPTIONS, options[0]).apply();
+      });
+      row.addView(box, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+      Button ratioButton = new Button(this);
+      ratioButton.setTextSize(12);
+      Runnable showRatio = () -> ratioButton.setText(ratios[idx] == 0
+          ? getString(R.string.launch_rand_ratio_off)
+          : getString(R.string.launch_rand_ratio, ratios[idx]));
+      showRatio.run();
+      ratioButton.setOnClickListener(v -> {
+        int at = 0;
+        for (int k = 0; k < EnemyShuffle.RATIO_STEPS.length; k++) {
+          if (EnemyShuffle.RATIO_STEPS[k] == ratios[idx]) at = k;
+        }
+        ratios[idx] = EnemyShuffle.RATIO_STEPS[(at + 1) % EnemyShuffle.RATIO_STEPS.length];
+        showRatio.run();
+        ratioPrefs.edit().putInt("r" + idx, ratios[idx]).apply();
+      });
+      row.addView(ratioButton, new LinearLayout.LayoutParams(dp(92), ViewGroup.LayoutParams.WRAP_CONTENT));
+      grid.addView(row);
+    }
+    // The remaining switches are modifiers, not enemies.
+    final int[] mods = EnemyShuffle.MODIFIER_BITS;
+    final int[] modLabels = {R.string.launch_rand_variety, R.string.launch_rand_helmets,
+        R.string.launch_rand_shields, R.string.launch_rand_plagas, R.string.launch_rand_dynamite,
+        R.string.launch_rand_mixed, R.string.launch_rand_safe_cabin, R.string.launch_rand_mutated,
+        R.string.launch_rand_shared_set, R.string.launch_rand_reset_set};
+    for (int i = 0; i < mods.length; i += 2) {
+      LinearLayout row = new LinearLayout(this);
+      row.setOrientation(LinearLayout.HORIZONTAL);
+      for (int k = i; k < Math.min(i + 2, mods.length); k++) {
+        final int flag = mods[k];
         CheckBox box = new CheckBox(this);
-        box.setText(labels[k]);
+        box.setText(modLabels[k]);
         box.setTextSize(13);
         box.setChecked((options[0] & flag) != 0);
         box.setOnCheckedChangeListener((v, on) -> {
@@ -252,7 +278,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
         randStatus.setText(R.string.launch_rand_no_disc);
         return;
       }
-      String text = EnemyShuffle.preview(new File(data, "disc1/files"), seed, options[0]);
+      String text = EnemyShuffle.preview(new File(data, "disc1/files"), seed, options[0], ratios);
       android.widget.ScrollView sv = new android.widget.ScrollView(this);
       TextView tv = new TextView(this);
       tv.setText(text);
@@ -291,7 +317,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       final int opts = options[0];
       // off the UI thread: the four test rooms are dealt, written and re-read
       new Thread(() -> {
-        EnemyShuffle.Result r = EnemyShuffle.dealRooms(data, disc, s, opts);
+        EnemyShuffle.Result r = EnemyShuffle.dealRooms(data, disc, s, opts, ratios);
         runOnUiThread(() -> randStatus.setText(r.ok
             ? getString(R.string.launch_rand_done, r.message) : r.message));
       }, "enemy-deal").start();
