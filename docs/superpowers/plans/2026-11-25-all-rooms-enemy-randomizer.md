@@ -143,4 +143,6 @@ animations** on, their model variant and non-weapon extras may change. The all-l
 asserts zero identity changes and 1071 look/gear changes over four seeds; both offline suites and
 both syntax checks are green. Phase 1 (all story rooms, no engine patch) is ready for a GitHub
 Actions build and a phone playtest before phase 2 starts. The phone still runs the restored
-four-room build from run 45597438295.
+four-room build from run 45597438295. GitHub Actions run **45628362399** on
+`ci/all-room-enemies` is green (commit `afc5e9d4`, artifact `CubeEvil4-core-debug-apk`, 24.6 MB).
+Phase 2 (the gated count-alias patch) waits for the user's playtest of this build.
