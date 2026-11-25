@@ -143,6 +143,8 @@ final class CoreMenu extends Dialog {
     void stackItemsChanged(int max);
     /** "Enemy health bars" (1.1.0, ENEMIES AND WORLD; CoreActivity.HEALTH_BARS holds it). */
     void healthBarsChanged(boolean on);
+    /** Leon's movement speed (1.2.0, PLAYER): 0 Off, 1 2x, 2 3x, 3 4x (CoreActivity.LEON_SPEED_LEVEL). */
+    void leonSpeedChanged(int level);
     /** "Photo mode" switched on and photo mode not on yet: the header's button starts it (1.1.0, the way on touch). */
     default boolean photoAvailable() { return false; }
     /** The header's "Photo mode": the menu closes, photo mode comes. */
@@ -457,7 +459,8 @@ final class CoreMenu extends Dialog {
     // lit as an "On" switch while the value is not the off one (the project owner, 21.11.2026: Off, None; Standard of
     // "Stack items" and Normal of the costumes, the cheats' off)
     String[] off = {s(R.string.ingame_off), s(R.string.ingame_view_very_short), s(R.string.ingame_particles_none),
-        s(R.string.ingame_stack_standard), s(R.string.ingame_cheat_costume_normal)};
+        s(R.string.ingame_stack_standard), s(R.string.ingame_cheat_costume_normal),
+        s(R.string.ingame_speed_off)};
     for (int i = 0; i < labels.length; i++) for (String o : off) if (labels[i].equals(o)) a.setOffIndex(i);
     parent.addButton(a);
     return a;
@@ -2143,6 +2146,16 @@ final class CoreMenu extends Dialog {
     cheatSwitch(player3, R.string.ingame_cheat_steady, STEADY_AIM_BIT);
     // the special costumes, out of the player character's section (the project owner, 16.11.2026)
     costumeSwitch(player3);
+    // Leon's movement speed (1.2.0, wish of the project owner, 25.11.2026): Off/2x/3x/4x, a channel of
+    // its own because every bit of the cheat integer is already used.
+    int leonSpeed = getContext().getSharedPreferences(CoreActivity.GAME_PREFS, Context.MODE_PRIVATE)
+        .getInt(CoreActivity.LEON_SPEED_LEVEL, 0);
+    MenuLayout.Buttons player4 = cheatRow(playerGroup);
+    selector(player4, R.string.ingame_cheat_speed,
+        new String[] {s(R.string.ingame_speed_off), s(R.string.ingame_speed_2x),
+                      s(R.string.ingame_speed_3x), s(R.string.ingame_speed_4x)},
+        leonSpeed, 0, i -> host.leonSpeedChanged(i));
+    help(R.string.ingame_cheat_speed_help);
     heading(R.string.ingame_cheat_section_weapons);
     LinearLayout basic = labelledOptions(R.string.ingame_side_basic_weapons);
     MenuLayout.Buttons weapons = cheatRow(basic);

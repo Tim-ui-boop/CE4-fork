@@ -202,6 +202,8 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
    *  (true: 999), since STACK_MAX a slot's most (0 Standard, the game's own limits; 250, 500, 999). */
   static final String STACK_ITEMS = "stackItems", STACK_MAX = "stackMax";
   static final int[] STACK_STEPS = {0, 250, 500, 999};
+  /** Leon's movement speed (1.2.0, GAME_PREFS; cheatAction 11..14): 0 Off, 1 2x, 2 3x, 3 4x. */
+  static final String LEON_SPEED_LEVEL = "leonSpeedLevel";
   /** The chosen "Stack items" value (0 Standard). */
   static int stackMax(android.content.SharedPreferences g) {
     if (g.contains(STACK_MAX)) return STACK_STEPS[CoreMenu.stepOf(STACK_STEPS, g.getInt(STACK_MAX, 0))];
@@ -591,6 +593,12 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       if (!settings.contains("RE4_CHEATS=")) {
         if (cheats != 0) Log.i(TAG, "cheats: " + cheats);
         CoreBridge.setCheats(cheats);
+      }
+      // Leon's movement speed, kept from the last run (a test script's RE4_LEON_SPEED wins)
+      if (!settings.contains("RE4_LEON_SPEED=")) {
+        int level = getSharedPreferences(GAME_PREFS, MODE_PRIVATE).getInt(LEON_SPEED_LEVEL, 0);
+        if (level != 0) Log.i(TAG, "leon speed: " + level);
+        CoreBridge.cheatAction(11 + level);
       }
       // the cheat "Leon's jacket" (1.0; a test script's RE4_LEON_JACKET wins)
       if (!settings.contains("RE4_LEON_JACKET=")) {
@@ -1470,6 +1478,11 @@ public final class CoreActivity extends Activity implements InputManager.InputDe
       int result = CoreBridge.cheatAction(what);
       Log.i(TAG, "cheat button " + what + ": " + result);
       return result;
+    }
+
+    @Override public void leonSpeedChanged(int level) {
+      getSharedPreferences(GAME_PREFS, MODE_PRIVATE).edit().putInt(LEON_SPEED_LEVEL, level).apply();
+      CoreBridge.cheatAction(11 + level);
     }
 
     @Override public void alternateChanged(boolean on) {
