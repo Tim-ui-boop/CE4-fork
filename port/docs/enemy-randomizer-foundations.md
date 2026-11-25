@@ -381,6 +381,8 @@ bytes are unchanged.
 
 Offline checks: `check_enemy_java.py` clean and `run_swap_deal.py 1 42 777` fully green, including
 a new regression that Verdugo/Krauser reach ordinary r100 rows and r103 while never touching
-r100's Ganado-cast rows (135 and 194 hits over 12 seeds). **This is a playtest experiment, not a
-proven-safe build.** If the phone shows a broken r100 ambush/gate or an r104 wave stall, revert with
-`git checkout feature/enemy-pool-fixes` — the previous build is untouched on that branch.
+r100's Ganado-cast rows (135 and 194 hits over 12 seeds). GitHub Actions run **45582415619** on
+`ci/enemy-count-relax` is green (commit `cff125dc`, artifact `CubeEvil4-core-debug-apk`, 24.6 MB).
+**This is a playtest experiment, not a proven-safe build.** If the phone shows a broken r100
+ambush/gate or an r104 wave stall, revert with `git checkout feature/enemy-pool-fixes` — the
+previous build is untouched on that branch.
