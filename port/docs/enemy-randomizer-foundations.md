@@ -308,3 +308,25 @@ preferences. Rows with dynamite or named event motions are left alone, counted r
 0x10..0x20, one massive boss per room, four modules per room, and the preview uses the same plan.
 
 **Revert:** `git checkout feature/no-ingame-cheats` restores the previous build.
+
+## 16. Phone feedback on the pool build — pending work (25 Nov 2026)
+
+The player confirmed the bosses **do** appear once their ratios are raised, but remain rarer than the
+ratio alone suggests. That is expected: a boss with an out-of-range id only fits rows the counting
+scripts do not need, and it also competes for the four module slots. No code change is needed for
+that observation; the earlier suspicion that the toggles were broken was withdrawn.
+
+Three items are still open and were explicitly confirmed by the player:
+
+1. **Variants must be separate toggles.** Armadura white/grey (`0x3C` types 0/1) and black (types 2/3)
+   should be independent pool entries so both can appear in one run. Krauser human (`0x39` types 0/1)
+   and mutated (type 2) should be split the same way. The global **Mutated** modifier is then
+   redundant and should be removed.
+2. **Remove Mendez.** The `0x34` model is not the boss model, so the entry does nothing and should be
+   deleted from the pool, the launcher, the strings and this document.
+3. **Basic Ganados have lost their weapons.** The pool writer clears `WEAPON_MASK` and the basic
+   families carry no weapon flag, so sickles, dynamite and island stun rods no longer appear. The
+   fix must preserve the disc's weapon bits for basic families (and let Dynamite add bombs), checked
+   against the flag names in `src/t_emlist/t_emlist.cpp`.
+
+Nothing in this section has been implemented yet; these are the next tasks on a new branch.
