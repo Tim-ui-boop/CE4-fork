@@ -289,3 +289,9 @@ plain Ganado rows are split between the two pool picks. Preview and report descr
 
 **Revert:** `git checkout feature/enemy-pools` restores the pool build with the cheats; older states
 are `feature/enemy-swap-engine` and `backup/enemy-randomizer-pre-swap`.
+
+The first phone test of this build exposed two more issues, both fixed here: r100 and r101 still
+showed only the old test's island soldiers and zealots because the pool picks touched just two rows —
+now the boss takes two crow rows in r100 / the two dormant rows in r101 and the elite takes the rest.
+And when several enemies were enabled the same one could be picked in every room — pool selection is
+now ordered by seed and advanced per room, so the enabled enemies spread across the four rooms.

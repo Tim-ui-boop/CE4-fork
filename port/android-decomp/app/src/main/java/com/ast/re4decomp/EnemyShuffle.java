@@ -142,10 +142,31 @@ final class EnemyShuffle {
   }
   private static void allow(int[] allowed, int no, int bits) { allowed[no] |= bits; }
 
-  private static int pick(long seed, int what, int n) {
-    long x = seed * 0x9E3779B1L + what * 0x85EBCA6BL;
+  private static long mix(long x) {
     x ^= x >>> 33; x *= 0xFF51AFD7ED558CCDL; x ^= x >>> 33;
+    return x;
+  }
+
+  private static int pick(long seed, int what, int n) {
+    long x = mix(seed * 0x9E3779B1L + what * 0x85EBCA6BL);
     return n <= 0 ? 0 : (int) Math.floorMod(x, (long) n);
+  }
+
+  /** A seed-ordered pick from the pool, advancing per room so enabled enemies spread out. */
+  private static Member chooseAt(Member[] pool, long seed, int options, Set<Integer> base,
+      boolean massiveUsed, int roomIndex) {
+    List<Member> ok = new ArrayList<>();
+    for (Member m : pool) {
+      if ((options & m.bit) == 0) continue;
+      if (m.massive && massiveUsed) continue;
+      int id = chooseId(m, base, seed, roomIndex * 100 + 1);
+      if (!base.contains(id) && base.size() >= 4) continue;
+      ok.add(m);
+    }
+    if (ok.isEmpty()) return null;
+    ok.sort((a, b) -> Long.compare(mix(seed + a.name.hashCode() * 2654435761L),
+                                  mix(seed + b.name.hashCode() * 2654435761L)));
+    return ok.get(roomIndex % ok.size());
   }
 
   private static String moduleName(int id) { return String.format(Locale.ROOT, "em%02x", id); }
@@ -309,6 +330,37 @@ final class EnemyShuffle {
     return ok.isEmpty() ? null : ok.get(pick(seed, salt + 7000, ok.size()));
   }
 
+  /** r101's bell counts ids 0x10..0x20, so an elite there must stay inside that range. */
+  private static boolean counted(Member m) {
+    for (int id : m.ids) if (id < 0x10 || id > 0x20) return false;
+    return true;
+  }
+
+  private static Member chooseCounted(int options, long seed, int salt, Set<Integer> base) {
+    List<Member> ok = new ArrayList<>();
+    for (Member m : ELITES) {
+      if ((options & m.bit) == 0 || !counted(m)) continue;
+      int id = chooseId(m, base, seed, salt);
+      if (!base.contains(id) && base.size() >= 4) continue;
+      ok.add(m);
+    }
+    return ok.isEmpty() ? null : ok.get(pick(seed, salt + 7000, ok.size()));
+  }
+
+  private static Member chooseCountedAt(int options, long seed, Set<Integer> base, int roomIndex) {
+    List<Member> ok = new ArrayList<>();
+    for (Member m : ELITES) {
+      if ((options & m.bit) == 0 || !counted(m)) continue;
+      int id = chooseId(m, base, seed, roomIndex * 100 + 1);
+      if (!base.contains(id) && base.size() >= 4) continue;
+      ok.add(m);
+    }
+    if (ok.isEmpty()) return null;
+    ok.sort((a, b) -> Long.compare(mix(seed + a.name.hashCode() * 2654435761L),
+                                  mix(seed + b.name.hashCode() * 2654435761L)));
+    return ok.get(roomIndex % ok.size());
+  }
+
   private static void writeMember(byte[] out, int[] allowed, int no, Member m, long seed, int salt,
       int options, Set<String> silent, Set<Integer> base) {
     int at = no * ENTRY;
@@ -365,10 +417,20 @@ final class EnemyShuffle {
     }
     Set<Integer> base = baseKinds(0x103);
     int s1 = i * 100 + 1, s2 = i * 100 + 2;
-    Member elite = choose(ELITES, seed, s1, options, base, false);
-    Member boss = choose(BOSSES, seed, s2, options, base, elite != null && elite.massive);
+    Member elite = chooseAt(ELITES, seed, options, base, false, i);
+    Member boss = chooseAt(BOSSES, seed, options, base, elite != null && elite.massive, i);
     if (elite != null && !chickens.isEmpty()) {
       writeRows(out, allowed, chickens, elite, seed, s1, options, 0x1D, silent, base);
+    } else if (!chickens.isEmpty()) {
+      // Even with every elite toggle off, the chickens still change kind.
+      for (int no : chickens) {
+        int at = no * ENTRY;
+        putU8(out, at + ID, 0x1D);
+        putU8(out, at + TYPE, 14);
+        putU8(out, at + SET, 0);
+        allow(allowed, no, A_ID | A_TYPE | A_SET);
+      }
+      base.add(0x1D);
     }
     if (boss != null && !cows.isEmpty()) {
       writeRows(out, allowed, cows, boss, seed, s2, options, 0x1D, silent, base);
@@ -389,8 +451,8 @@ final class EnemyShuffle {
     }
     Set<Integer> base = baseKinds(0x104);
     int s1 = i * 100 + 1, s2 = i * 100 + 2;
-    Member elite = choose(ELITES, seed, s1, options, base, false);
-    Member boss = choose(BOSSES, seed, s2, options, base, elite != null && elite.massive);
+    Member elite = chooseAt(ELITES, seed, options, base, false, i);
+    Member boss = chooseAt(BOSSES, seed, options, base, elite != null && elite.massive, i);
     int half = rows.size() / 2;
     if (elite != null && boss != null && half > 0) {
       writeRows(out, allowed, rows.subList(0, half), elite, seed, s1, options, 0x13, silent, base);
@@ -405,10 +467,58 @@ final class EnemyShuffle {
         .append(boss == null ? "none" : boss.name).append('\n');
   }
 
+  /** r100: the boss takes two crow rows, the elite takes the rest; traps keep their normal deal. */
+  private static void applyVillage100(byte[] out, int[] allowed, long seed, int options,
+      Set<String> silent, StringBuilder report, int i) {
+    List<Integer> crows = new ArrayList<>();
+    for (int no = 0; no < ENTRIES; no++) {
+      int at = no * ENTRY;
+      if (u16(out, at + ROOM) == 0x100 && u8(out, at + ID) == 0x23
+          && (u8(out, at + BE_FLAG) & 1) != 0) crows.add(no);
+    }
+    Set<Integer> base = baseKinds(0x100);
+    int s1 = i * 100 + 1, s2 = i * 100 + 2;
+    Member boss = chooseAt(BOSSES, seed, options, base, false, i);
+    int given = Math.min(2, crows.size());
+    if (boss != null) writeRows(out, allowed, crows.subList(0, given),
+        boss, seed, s2, options, 0x1D, silent, base);
+    Member elite = chooseAt(ELITES, seed, options, base, boss != null && boss.massive, i);
+    if (elite != null && crows.size() > given) {
+      writeRows(out, allowed, crows.subList(given, crows.size()), elite, seed, s1, options, 0x1D, silent, base);
+    }
+    report.append("r100: ").append(crows.size()).append(" crows: ")
+        .append(boss == null ? "none" : boss.name).append(" and ")
+        .append(elite == null ? "none" : elite.name).append('\n');
+  }
+
+  /** r101: the boss takes the two dormant rows; the elite takes the other rows, inside the count range. */
+  private static void applySquare101(byte[] out, int[] allowed, long seed, int options,
+      Set<String> silent, StringBuilder report, int i) {
+    List<Integer> dormant = new ArrayList<>(), rest = new ArrayList<>();
+    int n = 0;
+    for (int no = 0; no < ENTRIES; no++) {
+      int at = no * ENTRY;
+      if (u16(out, at + ROOM) != 0x101 || u8(out, at + ID) == 0) continue;
+      if (n == 11 || n == 37) dormant.add(no); else rest.add(no);
+      n++;
+    }
+    Set<Integer> base = baseKinds(0x101);
+    int s1 = i * 100 + 1, s2 = i * 100 + 2;
+    Member boss = chooseAt(BOSSES, seed, options, base, false, i);
+    if (boss != null) writeRows(out, allowed, dormant, boss, seed, s2, options, 0x1B, silent, base);
+    Member elite = chooseCountedAt(options, seed, base, i);
+    if (elite != null) writeRows(out, allowed, rest, elite, seed, s1, options, 0x1B, silent, base);
+    report.append("r101: ").append(rest.size()).append(" zealots as ")
+        .append(elite == null ? "none" : elite.name).append(", ")
+        .append(dormant.size()).append(" as ").append(boss == null ? "none" : boss.name).append('\n');
+  }
+
   private static void applyPools(byte[] out, int[] allowed, long seed, int options,
       Set<String> silent, StringBuilder report) {
     for (int i = 0; i < ROOMS.length; i++) {
       int room = ROOMS[i];
+      if (room == 0x100) { applyVillage100(out, allowed, seed, options, silent, report, i); continue; }
+      if (room == 0x101) { applySquare101(out, allowed, seed, options, silent, report, i); continue; }
       if (room == 0x103) { applyFarm(out, allowed, seed, options, silent, report, i); continue; }
       if (room == 0x104) { applyVillage(out, allowed, seed, options, silent, report, i); continue; }
       List<Integer> rows = poolRows(out, room);
@@ -417,10 +527,10 @@ final class EnemyShuffle {
         continue;
       }
       Set<Integer> base = baseKinds(room);
-      Member elite = choose(ELITES, seed, i * 100 + 1, options, base, false);
+      Member elite = chooseAt(ELITES, seed, options, base, false, i);
       if (elite != null) writeMember(out, allowed, rows.get(0), elite, seed, i * 100 + 1,
           options, silent, base);
-      Member boss = choose(BOSSES, seed, i * 100 + 2, options, base, elite != null && elite.massive);
+      Member boss = chooseAt(BOSSES, seed, options, base, elite != null && elite.massive, i);
       if (boss != null) writeMember(out, allowed, rows.get(1), boss, seed, i * 100 + 2,
           options, silent, base);
       report.append(String.format(Locale.ROOT, "r%03x: elite %s, boss %s\n", room,
