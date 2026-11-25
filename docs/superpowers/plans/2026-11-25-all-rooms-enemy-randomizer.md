@@ -158,7 +158,8 @@ kind and the scene models failed to load. Fix: `enemy_random_table.py` now also 
 `EmReadSearch`/`SearchEmModule` into a generated `FORCED` array, and `EnemyShuffle` reserves those
 ids both in the pre-pass and in the final four-module check, so a full room is restored to the disc
 instead of being dealt. Verified with 30 seeds: no room exceeds four modules including forced ones;
-both offline suites and both syntax checks are green. This fix is part of the next CI build.
+both offline suites and both syntax checks are green. GitHub Actions run **45635780885** on
+`ci/all-room-enemies` is green (commit `c6253a0a`, artifact `CubeEvil4-core-debug-apk`, 24.6 MB).
 
 r100 stays fully vanilla by design in phase 1: it is an "untouched" room in the generated table
 (the first encounter, with hand-built actors and cutscene rows). Phase 2 only addresses counted
