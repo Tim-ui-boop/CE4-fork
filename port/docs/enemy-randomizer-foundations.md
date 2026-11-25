@@ -383,6 +383,14 @@ Offline checks: `check_enemy_java.py` clean and `run_swap_deal.py 1 42 777` full
 a new regression that Verdugo/Krauser reach ordinary r100 rows and r103 while never touching
 r100's Ganado-cast rows (135 and 194 hits over 12 seeds). GitHub Actions run **45582415619** on
 `ci/enemy-count-relax` is green (commit `cff125dc`, artifact `CubeEvil4-core-debug-apk`, 24.6 MB).
-**This is a playtest experiment, not a proven-safe build.** If the phone shows a broken r100
-ambush/gate or an r104 wave stall, revert with `git checkout feature/enemy-pool-fixes` — the
-previous build is untouched on that branch.
+**Phone test, first crash and fix.** The house-Ganado cutscene crashed in
+`em10MouthPartsReset` (`getPartsPtr(0x1B)` returned null). The exact record is r100 list entry
+`0x25`, spawned by `r100_HouseEvent()` (`src/st1/r100.cpp:709-748`). It was missing from the
+protected-row list, so a seed could turn that villager into id `0x1B` type 10 (Garrador), which has
+no villager mouth parts; the event motion then dereferenced them. The record is now skipped
+entirely and stays byte-for-byte as on the disc; a regression check asserts that. Offline checks
+are green again (130 ordinary r100 hits, 194 r103 hits over 12 seeds, zero on protected rows).
+
+Still a playtest experiment, not a proven-safe build. If the phone shows another break (r100
+ambush/gate, r104 wave stall), revert with `git checkout feature/enemy-pool-fixes` — the previous
+build is untouched on that branch.

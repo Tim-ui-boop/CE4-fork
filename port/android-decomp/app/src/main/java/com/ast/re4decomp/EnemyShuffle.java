@@ -278,6 +278,7 @@ final class EnemyShuffle {
    */
   private static final int[] R100_GANADO_ROWS =
       {3, 4, 5, 6, 7, 8, 0x12, 0x13, 0x26, 0x27};
+  private static final int R100_HOUSE_ROW = 0x25;
 
   private static boolean r100GanadoRow(int no) {
     for (int row : R100_GANADO_ROWS) if (row == no) return true;
@@ -349,6 +350,9 @@ final class EnemyShuffle {
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
       if (u16(out, at + ROOM) != room) continue;
+      // r100_HouseEvent() spawns this exact record and plays a villager-only event motion.
+      // Anything but the disc's villager there crashes em10MouthPartsReset (parts 0x1B missing).
+      if (room == 0x100 && no == R100_HOUSE_ROW) continue;
       int id = u8(out, at + ID);
       if (id == 0) continue;
       int flag = u32(out, at + FLAG), set = u8(out, at + SET);
