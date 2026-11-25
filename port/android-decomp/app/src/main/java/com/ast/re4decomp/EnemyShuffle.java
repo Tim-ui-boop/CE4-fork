@@ -16,13 +16,14 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Offline enemy randomizer for r100, r101, r103 and r104.
+ * Offline enemy randomizer for all story rooms.
  *
- * <p>The toggles define one pool: basic Ganado families, elites and bosses. Every ordinary record in
- * a room is dealt from that pool using the seed and a per-enemy appearance ratio (1 in N). A record
- * that no special enemy wins becomes a basic family chosen by the seed. Script rows (dynamite and
- * named motion presets) are left alone. The whole plan is built in memory, so the launcher can
- * preview it without writing anything, and it is refused unless every protected byte still matches.
+ * <p>The toggles define one pool: basic Ganado families, elites and bosses. Every ordinary record
+ * in a dealt room is dealt from that pool using the seed and a per-enemy appearance ratio (1 in N).
+ * The source-derived EnemyRooms table decides which rooms may change at all: untouched rooms and
+ * rows the scripts drive by list number keep their exact disc bytes. The whole plan is built in
+ * memory across all eight story enemy lists, so the launcher can preview it without writing
+ * anything, and it is refused unless every protected byte and the four-module limit still hold.
  */
 final class EnemyShuffle {
   private static final String TAG = "EnemyShuffle";
@@ -143,18 +144,25 @@ final class EnemyShuffle {
     TYPES.put(0x39, new int[] {0, 1, 2});
   }
 
-  private static final String LIST_NAME = "etc/emleon00.esl";
-  private static final int[] ROOMS = {0x100, 0x101, 0x103, 0x104};
+  /** The eight story enemy lists, in the order stage.cpp asks for them. */
+  private static final String[] LISTS = {
+      "etc/emleon00.esl", "etc/emleon01.esl", "etc/emleon02.esl", "etc/emleon03.esl",
+      "etc/emleon04.esl", "etc/emleon05.esl", "etc/emleon06.esl", "etc/emleon07.esl"};
 
   static final class Result {
     boolean ok;
     String message = "";
   }
 
-  private static final class Plan {
+  private static final class ListPlan {
+    String name;
     byte[] out;
     int[] allowed;
-    Set<String> silent;
+  }
+
+  private static final class Plan {
+    final List<ListPlan> lists = new ArrayList<>();
+    final Set<String> silent = new LinkedHashSet<>();
     String report;
     String error;
   }
@@ -224,28 +232,33 @@ final class EnemyShuffle {
     File stage = new File(dir, "staging");
     deleteTree(stage);
     try {
-      File staged = new File(stage, LIST_NAME);
-      staged.getParentFile().mkdirs();
-      writeAll(staged, p.out);
-      byte[] back = read(staged);
-      if (back == null || !Arrays.equals(back, p.out)) {
-        r.message = "The dealt list did not read back as written. Nothing was activated.";
-        Log.i(TAG, r.message);
-        deleteTree(stage);
-        return r;
+      for (ListPlan lp : p.lists) {
+        File staged = new File(stage, lp.name);
+        staged.getParentFile().mkdirs();
+        writeAll(staged, lp.out);
+        byte[] back = read(staged);
+        if (back == null || !Arrays.equals(back, lp.out)) {
+          r.message = "The dealt list " + lp.name + " did not read back as written. Nothing was activated.";
+          Log.i(TAG, r.message);
+          deleteTree(stage);
+          return r;
+        }
       }
       marker(dataRoot).delete();
-      File target = new File(dir, LIST_NAME);
-      target.getParentFile().mkdirs();
-      if (target.exists() && !target.delete()) {
-        r.message = "Could not replace the previous enemy list. Nothing was activated.";
-        Log.i(TAG, r.message);
-        return r;
-      }
-      if (!staged.renameTo(target)) {
-        r.message = "Could not put the dealt list in place. Nothing was activated.";
-        Log.i(TAG, r.message);
-        return r;
+      for (ListPlan lp : p.lists) {
+        File target = new File(dir, lp.name);
+        target.getParentFile().mkdirs();
+        if (target.exists() && !target.delete()) {
+          r.message = "Could not replace the previous enemy list " + lp.name
+              + ". Nothing was activated.";
+          Log.i(TAG, r.message);
+          return r;
+        }
+        if (!new File(stage, lp.name).renameTo(target)) {
+          r.message = "Could not put the dealt list " + lp.name + " in place. Nothing was activated.";
+          Log.i(TAG, r.message);
+          return r;
+        }
       }
       deleteTree(stage);
       writeAll(logFile(dataRoot), p.report.getBytes(StandardCharsets.UTF_8));
@@ -255,11 +268,11 @@ final class EnemyShuffle {
       new File(dir, "r101-no-sound").delete();
       writeAll(marker(dataRoot), String.valueOf(seed).getBytes(StandardCharsets.UTF_8));
       r.ok = true;
-      r.message = "Dealt r100, r101, r103 and r104 from the pool. Seed " + seed
+      r.message = "Dealt all story rooms from the pool. Seed " + seed
           + ". See enemies.txt for the details.";
       Log.i(TAG, r.message);
     } catch (IOException ex) {
-      r.message = "Could not write the dealt list: " + ex.getMessage() + ". Nothing was activated.";
+      r.message = "Could not write the dealt lists: " + ex.getMessage() + ". Nothing was activated.";
       Log.e(TAG, r.message);
       deleteTree(stage);
     }
@@ -268,6 +281,12 @@ final class EnemyShuffle {
 
   private static boolean basicId(int id) {
     return id == 0x12 || id == 0x13 || id == 0x1B || id == 0x1C || id == 0x1D;
+  }
+
+  /** True when the pool can actually write this id; other ids can only be kept or reused. */
+  private static boolean poolId(int id) {
+    for (Member m : POOL) for (int x : m.ids) if (x == id) return true;
+    return false;
   }
 
   /**
@@ -286,36 +305,61 @@ final class EnemyShuffle {
 
   private static Plan makePlan(File discFiles, long seed, int options, int[] ratios) {
     Plan p = new Plan();
-    byte[] src = read(new File(discFiles, LIST_NAME));
-    if (src == null || src.length < MIN_BYTES || src.length > LIST_BYTES || src.length % ENTRY != 0) {
-      p.error = "The imported disc has no usable " + LIST_NAME + ". Import both discs again, then try.";
-      return p;
-    }
     int[] ratio = new int[POOL.length];
     for (int i = 0; i < POOL.length; i++) {
       ratio[i] = ratios != null && i < ratios.length ? ratios[i] : POOL[i].ratio;
     }
-    byte[] out = new byte[LIST_BYTES];
-    System.arraycopy(src, 0, out, 0, src.length);
-    int[] allowed = new int[ENTRIES];
-    Set<String> silent = new LinkedHashSet<>();
     StringBuilder report = new StringBuilder();
     report.append("Enemy pool, seed ").append(seed).append(", options ").append(options).append('\n');
 
-    for (int ri = 0; ri < ROOMS.length; ri++) dealRoom(out, allowed, seed, options, ratio,
-        ROOMS[ri], silent, report, ri);
-
-    String why = kinds(out);
-    if (why == null) why = verify(src, out, allowed);
-    if (why != null) { p.error = why + "\nPlan: " + report.toString().replace('\n', '|'); return p; }
-    for (String s : silent) report.append("Silent module: ").append(s).append('\n');
-    p.out = out; p.allowed = allowed; p.silent = silent; p.report = report.toString();
+    for (String name : LISTS) {
+      byte[] src = read(new File(discFiles, name));
+      if (src == null || src.length < MIN_BYTES || src.length > LIST_BYTES || src.length % ENTRY != 0) {
+        p.error = "The imported disc has no usable " + name + ". Import both discs again, then try.";
+        return p;
+      }
+      byte[] out = new byte[LIST_BYTES];
+      System.arraycopy(src, 0, out, 0, src.length);
+      int[] allowed = new int[ENTRIES];
+      Set<Integer> rooms = new LinkedHashSet<>();
+      for (int no = 0; no < ENTRIES; no++) {
+        int at = no * ENTRY;
+        if (u8(out, at + ID) != 0) rooms.add(u16(out, at + ROOM));
+      }
+      ListPlan lp = new ListPlan();
+      lp.name = name; lp.out = out; lp.allowed = allowed;
+      report.append("List ").append(name).append('\n');
+      Set<Integer> dealt = new LinkedHashSet<>();
+      for (int room : rooms) {
+        int kind = EnemyRooms.kind(room);
+        if (kind == EnemyRooms.UNTOUCHED || kind < 0) continue;
+        dealRoom(out, allowed, seed, options, ratio, room, p.silent, report,
+            kind == EnemyRooms.PLACES_ONLY);
+        dealt.add(room);
+      }
+      String why = kinds(out, dealt);
+      if (why != null) {
+        // A room can already be at its four-module limit because of script-owned rows. Drop the
+        // whole room back to the disc rather than refusing every seed in the import.
+        for (int room : dealt) restoreRoom(out, src, room);
+        report.append("Kept rooms with a full module budget: ").append(dealt.size()).append('\n');
+        why = null;
+      }
+      if (why == null) why = verify(src, out, allowed);
+      if (why != null) {
+        p.error = why + " in " + name + "\nPlan: " + report.toString().replace('\n', '|');
+        return p;
+      }
+      p.lists.add(lp);
+    }
+    for (String s : p.silent) report.append("Silent module: ").append(s).append('\n');
+    p.report = report.toString();
     return p;
   }
 
   /** Deals every ordinary record in one room; script rows and the hand-made officer are skipped. */
   private static void dealRoom(byte[] out, int[] allowed, long seed, int options, int[] ratio,
-      int room, Set<String> silent, StringBuilder report, int roomIndex) {
+      int room, Set<String> silent, StringBuilder report, boolean placesOnly) {
     Set<Integer> kinds = new LinkedHashSet<>();
     if (room == 0x100) kinds.add(0x12);                    // the officer-killer is built by r100.cpp
     if (room == 0x101) { kinds.add(0x15); kinds.add(0x26); } // r101 preloads these for events
@@ -327,7 +371,8 @@ final class EnemyShuffle {
       int at = no * ENTRY;
       if (u16(out, at + ROOM) != room) continue;
       int id = u8(out, at + ID);
-      if (id != 0 && ((u32(out, at + FLAG) & FLAG_BOMB) != 0 || u8(out, at + SET) == 0x25)) {
+      if (id != 0 && ((u32(out, at + FLAG) & FLAG_BOMB) != 0 || u8(out, at + SET) == 0x25
+          || EnemyRooms.driven(room, no) || !poolId(id))) {
         kinds.add(id);
       }
     }
@@ -336,11 +381,13 @@ final class EnemyShuffle {
       int at = no * ENTRY;
       if (u16(out, at + ROOM) != room) continue;
       int id = u8(out, at + ID);
-      if (id == 0) continue;
+      if (id == 0 || EnemyRooms.driven(room, no)) continue;
       int flag = u32(out, at + FLAG), set = u8(out, at + SET);
       if ((flag & FLAG_BOMB) != 0 || set == 0x25) continue;  // dynamite and named event motions
-      boolean counted = room != 0x101 || (n != 11 && n != 37);
-      if (room == 0x104 && counted && n == 0) counted = false; // one boss row for the waves
+      boolean counted;
+      if (room == 0x101) counted = n != 11 && n != 37;   // two dormant rows: bell count unchanged
+      else if (room == 0x104) counted = n != 0;          // one boss row for the waves
+      else counted = placesOnly;                        // open rooms have no counting script
       n++;
 
       List<Member> hits = new ArrayList<>();
@@ -369,9 +416,12 @@ final class EnemyShuffle {
         }
       }
       if (pick == null) {
-        // No member fits the four slots: reuse a module the room already loads.
+        // No member fits the four slots: reuse a module the room already loads. A room with no
+        // reserved module and no eligible pick stays exactly as on the disc.
+        if (kinds.isEmpty()) continue;
         int reuse = kinds.iterator().next();
         int[] rt = TYPES.get(reuse);
+        if (rt == null) { kinds.add(id); continue; }  // no model table: leave the row, reserve its module
         putU8(out, at + ID, reuse);
         putU8(out, at + TYPE, rt[0]);
         putU32(out, at + FLAG,
@@ -413,14 +463,27 @@ final class EnemyShuffle {
     return kinds.contains(id) || kinds.size() < 4;
   }
 
-  private static String kinds(byte[] out) {
-    for (int room : ROOMS) {
+  private static void restoreRoom(byte[] out, byte[] src, int room) {
+    for (int no = 0; no < ENTRIES; no++) {
+      int at = no * ENTRY;
+      if (at + ENTRY > src.length || u16(out, at + ROOM) != room) continue;
+      System.arraycopy(src, at, out, at, ENTRY);
+    }
+  }
+
+  private static String kinds(byte[] out, Set<Integer> rooms) {
+    for (int room : rooms) {
       Set<Integer> k = new LinkedHashSet<>();
       for (int no = 0; no < ENTRIES; no++) {
         int at = no * ENTRY;
         if (u16(out, at + ROOM) != room) continue;
         int id = u8(out, at + ID);
-        if (id != 0) k.add(id);
+        if (id == 0) continue;
+        // Only rows the room actually spawns occupy a module: active rows, script-driven rows,
+        // dynamite rows and named-motion rows. Dormant decorative records do not.
+        if ((u8(out, at + BE_FLAG) & 1) == 0 && (u32(out, at + FLAG) & FLAG_BOMB) == 0
+            && u8(out, at + SET) != 0x25 && !EnemyRooms.driven(room, no)) continue;
+        k.add(id);
       }
       if (room == 0x100) k.add(0x12);
       if (room == 0x101) { k.add(0x15); k.add(0x26); }
