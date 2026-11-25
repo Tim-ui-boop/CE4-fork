@@ -271,6 +271,20 @@ final class EnemyShuffle {
   }
 
   /**
+   * r100's ambush and fire-trap rows are fetched with EmSetFromList2 and cast to cEmGanado*, then
+   * asked Ganado-only questions (`src/st1/r100.cpp:497-503,632-644,798-820,1034-1049`). An
+   * out-of-range id would not have that vtable. Those rows stay inside the 0x10..0x20 range;
+   * the rest of r100 and all of r103 have no such dependency, so bosses may be dealt there.
+   */
+  private static final int[] R100_GANADO_ROWS =
+      {3, 4, 5, 6, 7, 8, 0x12, 0x13, 0x26, 0x27};
+
+  private static boolean r100GanadoRow(int no) {
+    for (int row : R100_GANADO_ROWS) if (row == no) return true;
+    return false;
+  }
+
+  /**
    * Ordinary Ganados keep the weapon the disc gave them (sickle, stun rod, torch...). A special
    * enemy brings its own flag instead. The Dynamite switch adds a bomb to a seeded sixth of the
    * ordinary records; the disc's own dynamite rows are script rows and are never rewritten.
@@ -339,8 +353,14 @@ final class EnemyShuffle {
       if (id == 0) continue;
       int flag = u32(out, at + FLAG), set = u8(out, at + SET);
       if ((flag & FLAG_BOMB) != 0 || set == 0x25) continue;  // dynamite and named event motions
-      boolean counted = room != 0x101 || (n != 11 && n != 37);
-      if (room == 0x104 && counted && n == 0) counted = false; // one boss row for the waves
+      // r101's bell and r104's waves count living ids 0x10..0x20; r101's two dormant rows and
+      // r104's one wave-boss row are the known exceptions. r100 only needs the Ganado-cast rows
+      // in range; r103 has no id-dependent script at all.
+      boolean counted;
+      if (room == 0x101) counted = n != 11 && n != 37;
+      else if (room == 0x104) counted = n != 0;
+      else if (room == 0x100) counted = r100GanadoRow(no);
+      else counted = false;
       n++;
 
       List<Member> hits = new ArrayList<>();

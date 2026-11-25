@@ -361,3 +361,26 @@ sickle flags survive on ordinary rows and Dynamite adds bombs). GitHub Actions r
 **45572518365** on `ci/enemy-pool-fixes` is green (commit `6c93f0fd`, artifact
 `CubeEvil4-core-debug-apk`, 24.6 MB). The APK on a phone stays at commit `b9427e5e` until the
 player installs a new one.
+
+## 18. Experimental: bosses in r100/r103 (`feature/enemy-count-relax`)
+
+The `0x10..0x20` guard is **not** a general "safe enemy type" rule. `SceCountEmAlive(0x10, 0x20)`
+(`src/game/sce_com.cpp:398`) counts living enemies by **id range**. r101's bell uses that count to
+fire its event and later destroys the same range (`r101.cpp:322,328,464,631,893`); r104 uses it for
+wave resets and music (`r104.cpp:212,632,642`). Verdugo `0x2C`, Krauser `0x39` and Armadura `0x3C`
+are invisible to those counters. The previous code treated *every* row of r100, r103 and r104 as
+counted, so out-of-range bosses were rejected almost everywhere — which is why toggling only
+Verdugo and Krauser produced them only on r101's two dormant rows and r104's one boss row even
+with many seeds.
+
+This branch narrows the guard: r101 and r104 keep it exactly as before; r100 keeps it only on the
+ten rows the game casts to `cEmGanado*` and asks Ganado-only questions (entries `3,4,5,6,7,8,0x12,
+0x13,0x26,0x27` — `r100.cpp:497-503,632-644,798-820,1034-1049`); all other r100 rows and all of
+r103 may now receive out-of-range enemies. The four-module-per-room guard and all other protected
+bytes are unchanged.
+
+Offline checks: `check_enemy_java.py` clean and `run_swap_deal.py 1 42 777` fully green, including
+a new regression that Verdugo/Krauser reach ordinary r100 rows and r103 while never touching
+r100's Ganado-cast rows (135 and 194 hits over 12 seeds). **This is a playtest experiment, not a
+proven-safe build.** If the phone shows a broken r100 ambush/gate or an r104 wave stall, revert with
+`git checkout feature/enemy-pool-fixes` — the previous build is untouched on that branch.
