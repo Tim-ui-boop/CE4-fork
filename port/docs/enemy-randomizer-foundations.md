@@ -236,7 +236,7 @@ on the real disc over four seeds and five toggle sets — all offline checks pas
 GitHub Actions is the final check.
 
 **Module-slot rule (learned from the first phone test):** r103 also reserves em12 for its corpse
-models, so it has room for only one other kind. A massive boss (El Gigante, later Mendez) is placed
+models, so it has room for only one other kind. A massive boss (El Gigante) is placed
 on the *least numerous* safe kind — one dog or one crow row — and capped at **one per room**;
 Krauser, Verdugo and Armadura may fill a whole group. Turning on **Mix all enemies** allows the
 wild whole-group swaps (six chickens become Armaduras). The old in-game *Random enemies* cheat must
@@ -253,16 +253,16 @@ from each** among the toggles that are on and whose module still fits:
 
 - **Elites:** JJ, Dr. Salvador, Bella Sisters (the female Ganado look of em16, types 11/12 — r11D
   really has five of them), Regenerator / Iron Maiden (types 0/1 and 2/3 of em36), Armadura
-  (types 0–3 of em3c) and Garrador (type 10).
-- **Bosses:** Krauser (0x39, type 2 with Mutated), El Gigante (0x2B), Super Salvador (0x20 type 22),
-  Mendez (0x34 type 0) and Verdugo (0x2C). El Gigante and Mendez are **massive**: at most one per room.
+  (types 0/1 and 2/3 of em3c, now two separate toggles) and Garrador (type 10).
+- **Bosses:** Krauser (0x39, human and mutated are separate toggles), El Gigante (0x2B),
+  Super Salvador (0x20 type 22) and Verdugo (0x2C). El Gigante is **massive**: at most one per room.
 
 A pick reuses an already-loaded module where it can; otherwise it is only allowed if a slot is free.
 The report says `boss none` when the four-module limit leaves no room. Each entry has a chance value
 reserved for a future per-member 1-in-N mode, like the PC tool; the selection function is the only
 place that would need to change.
 
-Three new toggles — Bella Sisters, Mendez and Verdugo — join the grid. The launcher also has a
+Two new toggles — Bella Sisters and Verdugo — join the grid. The launcher also has a
 **Preview seed rolls** button: it runs the exact same planning step in memory and shows the report
 in a dialog, without writing the sidecar or touching app data. The written `enemies.txt` and the
 preview are byte-for-byte the same text (asserted by the rehearsal).
@@ -303,7 +303,8 @@ one pool: three basic families (village Ganado, castle zealot, island soldier) p
 five bosses. A record rolls the seed for each enabled enemy; a 1-in-N ratio decides whether that
 enemy takes the record (PC defaults: Salvador 1:12, JJ 1:2, Garrador 1:8, Super Salvador 1:8).
 The launcher shows a checkbox and a **1 in N** stepper for each of the fifteen pool entries, with the
-ten remaining switches below as simple modifiers. Ratios are stored in their own `enemyRatios`
+ten remaining switches below as simple modifiers. (The next section replaces this with sixteen
+entries and nine modifiers.) Ratios are stored in their own `enemyRatios`
 preferences. Rows with dynamite or named event motions are left alone, counted rows keep ids inside
 0x10..0x20, one massive boss per room, four modules per room, and the preview uses the same plan.
 
@@ -329,4 +330,33 @@ Three items are still open and were explicitly confirmed by the player:
    fix must preserve the disc's weapon bits for basic families (and let Dynamite add bombs), checked
    against the flag names in `src/t_emlist/t_emlist.cpp`.
 
-Nothing in this section has been implemented yet; these are the next tasks on a new branch.
+All three were implemented on `feature/enemy-pool-fixes`; see §17 below.
+
+## 17. Variant toggles, no Mendez, weapons kept (`feature/enemy-pool-fixes`)
+
+The three items from §16 are now code:
+
+1. **Variants are their own pool entries.** Armadura white/grey (`0x3C` types 0/1) and Armadura
+   black (types 2/3) are two checkboxes with two ratios, so both can be dealt in one run; the same
+   for Krauser human (`0x39` types 0/1) and Krauser mutated (type 2). The global **Mutated**
+   modifier is gone and the modifier grid now has nine switches. The new bits are `1 << 25` and
+   `1 << 26` so old saved settings cannot silently switch a new variant on. The new members were
+   appended to the pool; deleting Mendez shifts the saved ratio for Verdugo by one slot, so the
+   Verdugo and new-variant steppers may need re-setting once.
+2. **Mendez is gone** from the pool, launcher, strings and documentation. `0x34` was never a model
+   the game could show, so the entry did nothing. El Gigante is now the only massive boss, capped
+   at one per room.
+3. **Basic Ganados keep their disc weapons.** The writer used to clear every weapon bit, which made
+   sickles, dynamite rows and island stun rods vanish. Rows still dealt to an ordinary family now
+   keep that family's weapon bits from the disc; rows dealt to a special enemy keep only that
+   enemy's own weapon flag. The **Dynamite** switch now adds a bomb flag to a seeded one in six of
+   the ordinary records (the disc's own dynamite rows are script rows and are never rewritten).
+   Flag names were checked against `src/t_emlist/t_emlist.cpp`: bit 17 `Weapon Bomb`, bit 27
+   `Weapon Sickle` / `Weapon StunRod`, bit 28 `Weapon ChainSaw`.
+
+Verification: `python3 .harness/analysis/check_enemy_java.py` (javac clean) and
+`python3 .harness/analysis/run_swap_deal.py 1 42 777` (all checks pass, including new assertions
+that each variant only writes its own types, both forms can appear together, Mendez is absent,
+sickle flags survive on ordinary rows and Dynamite adds bombs). The GitHub Actions build runs on
+`ci/enemy-pool-fixes`; the APK on a phone stays at commit `b9427e5e` until the player installs a
+new one.

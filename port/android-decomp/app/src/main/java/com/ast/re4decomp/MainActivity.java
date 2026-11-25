@@ -228,7 +228,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     final int[] mods = EnemyShuffle.MODIFIER_BITS;
     final int[] modLabels = {R.string.launch_rand_variety, R.string.launch_rand_helmets,
         R.string.launch_rand_shields, R.string.launch_rand_plagas, R.string.launch_rand_dynamite,
-        R.string.launch_rand_mixed, R.string.launch_rand_safe_cabin, R.string.launch_rand_mutated,
+        R.string.launch_rand_mixed, R.string.launch_rand_safe_cabin,
         R.string.launch_rand_shared_set, R.string.launch_rand_reset_set};
     for (int i = 0; i < mods.length; i += 2) {
       LinearLayout row = new LinearLayout(this);

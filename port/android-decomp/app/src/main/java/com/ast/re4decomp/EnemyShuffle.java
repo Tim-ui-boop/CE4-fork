@@ -39,12 +39,13 @@ final class EnemyShuffle {
   static final int SAW = 1, GARRADOR = 1 << 1, JJ = 1 << 2, SUPER = 1 << 3, VARIETY = 1 << 4,
       HELMET = 1 << 5, SHIELD = 1 << 6, PLAGA = 1 << 7, DYNAMITE = 1 << 8, MIXED = 1 << 9,
       SAFE_CABIN = 1 << 10, REGEN = 1 << 11, IRON = 1 << 12, KRAUSER = 1 << 13,
-      MUTATED = 1 << 14, GIGANTE = 1 << 15, ARMADURA = 1 << 16, SHARED_SET = 1 << 17,
-      RESET_SET = 1 << 18, BELLA = 1 << 19, MENDEZ = 1 << 20, VERDUGO = 1 << 21;
+      GIGANTE = 1 << 15, ARMADURA = 1 << 16, SHARED_SET = 1 << 17,
+      RESET_SET = 1 << 18, BELLA = 1 << 19, VERDUGO = 1 << 21,
+      ARMADURA_DARK = 1 << 25, KRAUSER_MUTANT = 1 << 26;
 
-  /** The ten switches that are not pool members. */
+  /** The nine switches that are not pool members. */
   static final int[] MODIFIER_BITS = {VARIETY, HELMET, SHIELD, PLAGA, DYNAMITE, MIXED,
-      SAFE_CABIN, MUTATED, SHARED_SET, RESET_SET};
+      SAFE_CABIN, SHARED_SET, RESET_SET};
   static final int DEFAULT_OPTIONS = VILLAGE | CASTLE | ISLAND | SAW | JJ | GARRADOR
       | REGEN | VARIETY | SAFE_CABIN | VERDUGO;
 
@@ -73,7 +74,7 @@ final class EnemyShuffle {
     }
   }
 
-  /** Three basic families, seven elites and five bosses. The first three are the fallback pool. */
+  /** Three basic families, eight elites and five bosses. The first three are the fallback pool. */
   private static final Member[] POOL = {
     new Member("Village Ganado", VILLAGE, new int[] {0x12, 0x13},
         new int[] {0, 1, 3}, 0, 700, 2, false, true),
@@ -91,17 +92,20 @@ final class EnemyShuffle {
         0, 1000, 8, false, false),
     new Member("Iron Maiden", IRON, new int[] {0x36}, new int[] {2, 3},
         0, 1000, 12, false, false),
-    new Member("Armadura", ARMADURA, new int[] {0x3C}, new int[] {0, 1, 2, 3},
+    new Member("Armadura (white/grey)", ARMADURA, new int[] {0x3C}, new int[] {0, 1},
         0, 1000, 8, false, false),
-    new Member("Krauser", KRAUSER, new int[] {0x39}, new int[] {0, 1, 2},
+    new Member("Krauser (human)", KRAUSER, new int[] {0x39}, new int[] {0, 1},
         0, 3000, 12, false, false),
     new Member("El Gigante", GIGANTE, new int[] {0x2B}, new int[] {0, 1, 2, 3},
         0, 4000, 12, true, false),
     new Member("Super Salvador", SUPER, new int[] {0x20}, new int[] {22},
         FLAG_SAW, 3000, 8, false, false),
-    new Member("Mendez", MENDEZ, new int[] {0x34}, new int[] {0},
-        0, 4000, 12, true, false),
     new Member("Verdugo", VERDUGO, new int[] {0x2C}, new int[] {0},
+        0, 3000, 12, false, false),
+    // New variants are appended so the ratio steppers keep their old positions.
+    new Member("Armadura (black)", ARMADURA_DARK, new int[] {0x3C}, new int[] {2, 3},
+        0, 1000, 8, false, false),
+    new Member("Krauser (mutated)", KRAUSER_MUTANT, new int[] {0x39}, new int[] {2},
         0, 3000, 12, false, false),
   };
 
@@ -262,6 +266,24 @@ final class EnemyShuffle {
     return r;
   }
 
+  private static boolean basicId(int id) {
+    return id == 0x12 || id == 0x13 || id == 0x1B || id == 0x1C || id == 0x1D;
+  }
+
+  /**
+   * Ordinary Ganados keep the weapon the disc gave them (sickle, stun rod, torch...). A special
+   * enemy brings its own flag instead. The Dynamite switch adds a bomb to a seeded sixth of the
+   * ordinary records; the disc's own dynamite rows are script rows and are never rewritten.
+   */
+  private static int keptWeapons(int srcId, int srcFlag, boolean basicPick, long seed,
+      int room, int no, int options) {
+    int keep = basicPick && basicId(srcId) && (srcFlag & FLAG_SAW) == 0
+        ? srcFlag & WEAPON_MASK : 0;
+    if ((options & DYNAMITE) != 0 && basicPick && (keep & FLAG_BOMB) == 0
+        && hash(seed, room, no, 907) % 6 == 0) keep |= FLAG_BOMB;
+    return keep;
+  }
+
   private static Plan makePlan(File discFiles, long seed, int options, int[] ratios) {
     Plan p = new Plan();
     byte[] src = read(new File(discFiles, LIST_NAME));
@@ -352,7 +374,8 @@ final class EnemyShuffle {
         int[] rt = TYPES.get(reuse);
         putU8(out, at + ID, reuse);
         putU8(out, at + TYPE, rt[0]);
-        putU32(out, at + FLAG, flag & ~WEAPON_MASK);
+        putU32(out, at + FLAG,
+            (flag & ~WEAPON_MASK) | keptWeapons(id, flag, basicId(reuse), seed, room, no, options));
         putU16(out, at + HP, 1000);
         putU8(out, at + SET, 0);
         allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
@@ -361,7 +384,6 @@ final class EnemyShuffle {
 
       int chosen = pick.ids[Math.floorMod(hash(seed, room, no, 902), pick.ids.length)];
       int type = pick.types[Math.floorMod(hash(seed, room, no, 903), pick.types.length)];
-      if (pick.name.equals("Krauser") && (options & MUTATED) != 0) type = 2;
       int extra = 0;
       if ((options & HELMET) != 0 && hash(seed, room, no, 904) % 10 == 0) extra |= FLAG_HELMET;
       if ((options & SHIELD) != 0 && hash(seed, room, no, 905) % 10 == 0) extra |= FLAG_SHIELD;
@@ -369,7 +391,8 @@ final class EnemyShuffle {
       if ((options & VARIETY) == 0) type = pick.types[0];
       putU8(out, at + ID, chosen);
       putU8(out, at + TYPE, type);
-      putU32(out, at + FLAG, (flag & ~WEAPON_MASK) | pick.flag | extra);
+      putU32(out, at + FLAG, (flag & ~WEAPON_MASK)
+          | keptWeapons(id, flag, pick.basic, seed, room, no, options) | pick.flag | extra);
       putU16(out, at + HP, pick.hp);
       putU8(out, at + SET, 0);
       allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
