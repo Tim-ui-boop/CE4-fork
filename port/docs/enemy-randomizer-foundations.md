@@ -391,7 +391,9 @@ and `W->ems[2]` = list entries 4 and 5). Both are the same class of problem: a c
 model-specific motion on a record the deal changed. The final fix protects **all** script-owned
 r100 rows and reserves their vanilla modules, rather than chasing them one crash at a time. The
 missing Leon model is consistent with the cutscene's model setup being disturbed by the wrong
-enemy module. This is inferred from the stack and source, not reproduced on the phone here.
+enemy module. This is inferred from the stack and source, not reproduced on the phone here. The
+current build is GitHub Actions run **45592083831** (commit `54481703`, artifact
+`CubeEvil4-core-debug-apk`, 24.6 MB).
 
 Still a playtest experiment, not a proven-safe build. If another break appears (r100 ambush/gate,
 r104 wave stall), revert with `git checkout feature/enemy-pool-fixes` — the previous build is
