@@ -390,6 +390,8 @@ protected-row list, so a seed could turn that villager into id `0x1B` type 10 (G
 no villager mouth parts; the event motion then dereferenced them. The record is now skipped
 entirely and stays byte-for-byte as on the disc; a regression check asserts that. Offline checks
 are green again (130 ordinary r100 hits, 194 r103 hits over 12 seeds, zero on protected rows).
+The fixed build is GitHub Actions run **45588530860** (commit `91ebbcce`, artifact
+`CubeEvil4-core-debug-apk`, 24.6 MB); the earlier crashing run was 45582415619.
 
 Still a playtest experiment, not a proven-safe build. If the phone shows another break (r100
 ambush/gate, r104 wave stall), revert with `git checkout feature/enemy-pool-fixes` — the previous
