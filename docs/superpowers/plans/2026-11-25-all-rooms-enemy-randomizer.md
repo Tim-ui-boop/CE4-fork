@@ -146,3 +146,21 @@ Actions build and a phone playtest before phase 2 starts. The phone still runs t
 four-room build from run 45597438295. GitHub Actions run **45628362399** on
 `ci/all-room-enemies` is green (commit `afc5e9d4`, artifact `CubeEvil4-core-debug-apk`, 24.6 MB).
 Phase 2 (the gated count-alias patch) waits for the user's playtest of this build.
+
+### Phone feedback — r106 blank render (fixed)
+
+The player reported r106 (boulder chase / Luis cabin) rendering nothing while sound and menus
+still worked — the same symptom as the earlier blank farm room. Logcat showed no crash but
+`EmSetFromList() Em set failed, Id = 1b / 13 / 1b`. Root cause: `r106.cpp:97-100` preloads four
+modules itself (`0x12`, `0x29`, `0x2A`, `0x2E`), filling every slot before any dealt enemy spawns;
+the room-safety table did not know about these forced modules, so seeds 3, 5, 6 etc. added a fifth
+kind and the scene models failed to load. Fix: `enemy_random_table.py` now also scans
+`EmReadSearch`/`SearchEmModule` into a generated `FORCED` array, and `EnemyShuffle` reserves those
+ids both in the pre-pass and in the final four-module check, so a full room is restored to the disc
+instead of being dealt. Verified with 30 seeds: no room exceeds four modules including forced ones;
+both offline suites and both syntax checks are green. This fix is part of the next CI build.
+
+r100 stays fully vanilla by design in phase 1: it is an "untouched" room in the generated table
+(the first encounter, with hand-built actors and cutscene rows). Phase 2 only addresses counted
+bell/wave rows in rooms like r101/r104; it does not make r100 open. Making r100 fully random is a
+separate, riskier change.

@@ -395,6 +395,7 @@ final class EnemyShuffle {
   private static void dealRoom(byte[] out, int[] allowed, long seed, int options, int[] ratio,
       int room, Set<String> silent, StringBuilder report, boolean placesOnly) {
     Set<Integer> kinds = new LinkedHashSet<>();
+    for (int id : EnemyRooms.forced(room)) kinds.add(id);  // modules the room preloads itself
     if (room == 0x100) kinds.add(0x12);                    // the officer-killer is built by r100.cpp
     if (room == 0x101) { kinds.add(0x15); kinds.add(0x26); } // r101 preloads these for events
     if (room == 0x103) kinds.add(0x12);                    // r103's corpse models
@@ -523,7 +524,8 @@ final class EnemyShuffle {
             && u8(out, at + SET) != 0x25 && !EnemyRooms.driven(room, no)) continue;
         k.add(id);
       }
-      if (room == 0x100) k.add(0x12);
+      for (int id : EnemyRooms.forced(room)) k.add(id);
+        if (room == 0x100) k.add(0x12);
       if (room == 0x101) { k.add(0x15); k.add(0x26); }
       if (room == 0x103) k.add(0x12);
       if (k.size() > 4) {
