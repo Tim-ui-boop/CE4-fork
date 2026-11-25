@@ -357,6 +357,7 @@ The three items from §16 are now code:
 Verification: `python3 .harness/analysis/check_enemy_java.py` (javac clean) and
 `python3 .harness/analysis/run_swap_deal.py 1 42 777` (all checks pass, including new assertions
 that each variant only writes its own types, both forms can appear together, Mendez is absent,
-sickle flags survive on ordinary rows and Dynamite adds bombs). The GitHub Actions build runs on
-`ci/enemy-pool-fixes`; the APK on a phone stays at commit `b9427e5e` until the player installs a
-new one.
+sickle flags survive on ordinary rows and Dynamite adds bombs). GitHub Actions run
+**45572518365** on `ci/enemy-pool-fixes` is green (commit `6c93f0fd`, artifact
+`CubeEvil4-core-debug-apk`, 24.6 MB). The APK on a phone stays at commit `b9427e5e` until the
+player installs a new one.
