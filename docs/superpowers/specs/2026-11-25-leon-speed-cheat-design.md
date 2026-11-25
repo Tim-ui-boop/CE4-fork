@@ -46,11 +46,15 @@ does not change seeds, discs or saves.
   like the "Stack ammo" row (`:2174-2178`).
 - Safety patch: change `src/game/player.cpp:347` from
   `if (DbgFlagChk(pG, DBG_KAIOUKEN))` to
-  `if (r_no_0 == 0 && DbgFlagChk(pG, DBG_KAIOUKEN))` so only normal movement repeats. Generate it
-  as the next numbered patch (`port/whole/patches/0255-leon-speed-move-only.patch`) with
-  `port/tools/whole_make_patch.py`; do not hand-edit patch files.
-- Strings: add the row label and four values to `port/android-decomp/app/src/main/res/values/strings_ingame.xml`
-  and every locale directory — `check_translations.py` requires all of them.
+  `if (r_no_0 == 0 && r_no_1 <= 5 && DbgFlagChk(pG, DBG_KAIOUKEN))`. Routine 1 values 0..5 are
+  footwork, walk, back, run, turn and turn180; excluding 6+ keeps weapons/reload, knife, ladders,
+  crouch and jumps out of the repeat. Generate it as the next numbered patch
+  (`port/whole/patches/0255-leon-speed-move-only.patch`) with `port/tools/whole_make_patch.py`; do
+  not hand-edit patch files. (The first review found that `r_no_0 == 0` alone was too broad.)
+- Strings: add the row label and four values to the English
+  `port/android-decomp/app/src/main/res/values/strings_ingame.xml` only. The player explicitly said
+  not to worry about other languages, so no locale files were changed and no translation check was
+  run.
 - Known tradeoff, accepted by the player: at 4× Leon can cross thin triggers between collision
   checks, and foot/weapon animation will slide. The cheat is for speedrunning, not physics fidelity.
 
@@ -60,3 +64,10 @@ Exact Java callback name, preference key spelling, action numbers (11..14), and 
 number are implementation details. Verification: javac-level check if the menu change is isolated,
 `git diff --check`, a clean GitHub Actions build on a new `ci/**` branch, and a phone playtest of
 Off → 2× → 3× → 4× in r100/r101 including a soft reset and a cutscene.
+
+## Shipped state
+
+Code commits `99ec670a`, `2d9032cb`, `b1a75de7`, `ec8aacee`, `377cfbd3` and the review-fix commit
+`fe279a33` on `feature/leon-speed-cheat`; CI mirror `ci/leon-speed-cheat`. Final GitHub Actions run
+**45667293579** is green (`CubeEvil4-core-debug-apk`, 24.6 MB). No APK was installed by us; the
+player must install it. Playtest (Off / 2× / 3× / 4×, soft reset, cutscene) is still pending.
