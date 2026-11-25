@@ -373,26 +373,26 @@ counted, so out-of-range bosses were rejected almost everywhere — which is why
 Verdugo and Krauser produced them only on r101's two dormant rows and r104's one boss row even
 with many seeds.
 
-This branch narrows the guard: r101 and r104 keep it exactly as before; r100 keeps it only on the
-ten rows the game casts to `cEmGanado*` and asks Ganado-only questions (entries `3,4,5,6,7,8,0x12,
-0x13,0x26,0x27` — `r100.cpp:497-503,632-644,798-820,1034-1049`); all other r100 rows and all of
-r103 may now receive out-of-range enemies. The four-module-per-room guard and all other protected
-bytes are unchanged.
+This branch narrows the guard: r101 and r104 keep it exactly as before. r100's **script-owned**
+rows — every entry the game spawns by list number in `EmSetFromList2` (`r100.cpp:498-504,720,
+1031-1049`): `3,4,5,6,7,8,9,0xA,0xB,0xC,0xD,0xE,0x12,0x13,0x1D,0x25,0x26,0x27,0x7A` — are left
+byte-for-byte as on the disc, and their vanilla models are counted in the four-module budget up
+front. Only r100's six unscripted rows and all of r103 may receive out-of-range enemies.
 
 Offline checks: `check_enemy_java.py` clean and `run_swap_deal.py 1 42 777` fully green, including
-a new regression that Verdugo/Krauser reach ordinary r100 rows and r103 while never touching
-r100's Ganado-cast rows (135 and 194 hits over 12 seeds). GitHub Actions run **45582415619** on
-`ci/enemy-count-relax` is green (commit `cff125dc`, artifact `CubeEvil4-core-debug-apk`, 24.6 MB).
-**Phone test, first crash and fix.** The house-Ganado cutscene crashed in
-`em10MouthPartsReset` (`getPartsPtr(0x1B)` returned null). The exact record is r100 list entry
-`0x25`, spawned by `r100_HouseEvent()` (`src/st1/r100.cpp:709-748`). It was missing from the
-protected-row list, so a seed could turn that villager into id `0x1B` type 10 (Garrador), which has
-no villager mouth parts; the event motion then dereferenced them. The record is now skipped
-entirely and stays byte-for-byte as on the disc; a regression check asserts that. Offline checks
-are green again (130 ordinary r100 hits, 194 r103 hits over 12 seeds, zero on protected rows).
-The fixed build is GitHub Actions run **45588530860** (commit `91ebbcce`, artifact
-`CubeEvil4-core-debug-apk`, 24.6 MB); the earlier crashing run was 45582415619.
+a regression that Verdugo/Krauser reach r100's unscripted rows and r103 while every script-owned
+r100 record stays byte-identical (53 and 194 hits over 12 seeds).
+**Phone tests and crashes.** Run 45582415619 crashed in `em10MouthPartsReset` during the first
+house-Ganado cutscene; logcat showed null `getPartsPtr(0x1B)`. Cause: r100 list entry `0x25`, spawned
+by `r100_HouseEvent()` (`r100.cpp:709-748`), had been dealt into a Garrador-type zealot with no
+villager mouth parts. Run 45588530860 protected that row but still crashed in the same function,
+this time from `Evt_R100S20_Func+168` (the truck cutscene, which touches ambush rows `W->ems[1]`
+and `W->ems[2]` = list entries 4 and 5). Both are the same class of problem: a cutscene plays a
+model-specific motion on a record the deal changed. The final fix protects **all** script-owned
+r100 rows and reserves their vanilla modules, rather than chasing them one crash at a time. The
+missing Leon model is consistent with the cutscene's model setup being disturbed by the wrong
+enemy module. This is inferred from the stack and source, not reproduced on the phone here.
 
-Still a playtest experiment, not a proven-safe build. If the phone shows another break (r100
-ambush/gate, r104 wave stall), revert with `git checkout feature/enemy-pool-fixes` — the previous
-build is untouched on that branch.
+Still a playtest experiment, not a proven-safe build. If another break appears (r100 ambush/gate,
+r104 wave stall), revert with `git checkout feature/enemy-pool-fixes` — the previous build is
+untouched on that branch.

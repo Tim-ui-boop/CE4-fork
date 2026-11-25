@@ -271,17 +271,18 @@ final class EnemyShuffle {
   }
 
   /**
-   * r100's ambush and fire-trap rows are fetched with EmSetFromList2 and cast to cEmGanado*, then
-   * asked Ganado-only questions (`src/st1/r100.cpp:497-503,632-644,798-820,1034-1049`). An
-   * out-of-range id would not have that vtable. Those rows stay inside the 0x10..0x20 range;
-   * the rest of r100 and all of r103 have no such dependency, so bosses may be dealt there.
+   * Every r100 list entry the game spawns by number in `src/st1/r100.cpp` (EmSetFromList2):
+   * the ambush and fire traps (3..8, 0x12, 0x13, 0x26, 0x27), the s03/s20 event rows, the house
+   * Ganado (0x25, `r100_HouseEvent`) and the after-state trap Ganados. Their cutscenes play
+   * model-specific motions; even an in-range id with a different `type` can lack the parts those
+   * motions need (`em10MouthPartsReset`). These records stay exactly as on the disc. Only r100's
+   * unscripted rows and all of r103 may receive out-of-range enemies.
    */
-  private static final int[] R100_GANADO_ROWS =
-      {3, 4, 5, 6, 7, 8, 0x12, 0x13, 0x26, 0x27};
-  private static final int R100_HOUSE_ROW = 0x25;
+  private static final int[] R100_SCRIPT_ROWS =
+      {3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE, 0x12, 0x13, 0x1D, 0x25, 0x26, 0x27, 0x7A};
 
-  private static boolean r100GanadoRow(int no) {
-    for (int row : R100_GANADO_ROWS) if (row == no) return true;
+  private static boolean r100ScriptRow(int no) {
+    for (int row : R100_SCRIPT_ROWS) if (row == no) return true;
     return false;
   }
 
@@ -337,12 +338,14 @@ final class EnemyShuffle {
     if (room == 0x103) kinds.add(0x12);                    // r103's corpse models
     int[] tally = new int[POOL.length];
     boolean massiveUsed = false;
-    // Only modules that survive the deal (hand-made actors and script rows) occupy a slot up front.
+    // Modules that survive the deal occupy a slot up front: hand-made actors, script rows, and
+    // the r100 rows we now leave untouched for its cutscenes (their vanilla models still load).
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
       if (u16(out, at + ROOM) != room) continue;
       int id = u8(out, at + ID);
-      if (id != 0 && ((u32(out, at + FLAG) & FLAG_BOMB) != 0 || u8(out, at + SET) == 0x25)) {
+      if (id != 0 && ((u32(out, at + FLAG) & FLAG_BOMB) != 0 || u8(out, at + SET) == 0x25
+          || (room == 0x100 && r100ScriptRow(no)))) {
         kinds.add(id);
       }
     }
@@ -350,20 +353,18 @@ final class EnemyShuffle {
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
       if (u16(out, at + ROOM) != room) continue;
-      // r100_HouseEvent() spawns this exact record and plays a villager-only event motion.
-      // Anything but the disc's villager there crashes em10MouthPartsReset (parts 0x1B missing).
-      if (room == 0x100 && no == R100_HOUSE_ROW) continue;
+      // Script-owned rows keep their exact disc bytes: the cutscenes assume the original model.
+      if (room == 0x100 && r100ScriptRow(no)) continue;
       int id = u8(out, at + ID);
       if (id == 0) continue;
       int flag = u32(out, at + FLAG), set = u8(out, at + SET);
       if ((flag & FLAG_BOMB) != 0 || set == 0x25) continue;  // dynamite and named event motions
       // r101's bell and r104's waves count living ids 0x10..0x20; r101's two dormant rows and
-      // r104's one wave-boss row are the known exceptions. r100 only needs the Ganado-cast rows
-      // in range; r103 has no id-dependent script at all.
+      // r104's one wave-boss row are the known exceptions. r100's script rows were skipped above,
+      // its remaining rows and all of r103 have no id-dependent script.
       boolean counted;
       if (room == 0x101) counted = n != 11 && n != 37;
       else if (room == 0x104) counted = n != 0;
-      else if (room == 0x100) counted = r100GanadoRow(no);
       else counted = false;
       n++;
 
