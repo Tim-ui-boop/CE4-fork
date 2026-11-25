@@ -408,6 +408,12 @@ final class EnemyShuffle {
       int room, Set<String> silent, StringBuilder report, boolean placesOnly) {
     Set<Integer> kinds = new LinkedHashSet<>();
     for (int id : EnemyRooms.forced(room)) kinds.add(id);  // modules the room preloads itself
+    for (int no = 0; no < ENTRIES; no++) {
+      if (EnemyRooms.spawn(room, no) && u16(out, no * ENTRY + ROOM) == room) {
+        int id = u8(out, no * ENTRY + ID);
+        if (id != 0) kinds.add(id);  // a dormant row the script really spawns still needs a slot
+      }
+    }
     if (room == 0x100) kinds.add(0x12);                    // the officer-killer is built by r100.cpp
     if (room == 0x101) { kinds.add(0x15); kinds.add(0x26); } // r101 preloads these for events
     if (room == 0x103) kinds.add(0x12);                    // r103's corpse models
@@ -540,9 +546,10 @@ final class EnemyShuffle {
         int id = u8(out, at + ID);
         if (id == 0) continue;
         // Only rows the room actually spawns occupy a module: active rows, script-driven rows,
-        // dynamite rows and named-motion rows. Dormant decorative records do not.
+        // script-spawn rows, dynamite rows and named-motion rows. Dormant decorative records do not.
         if ((u8(out, at + BE_FLAG) & 1) == 0 && (u32(out, at + FLAG) & FLAG_BOMB) == 0
-            && u8(out, at + SET) != 0x25 && !EnemyRooms.driven(room, no)) continue;
+            && u8(out, at + SET) != 0x25 && !EnemyRooms.driven(room, no)
+            && !EnemyRooms.spawn(room, no)) continue;
         k.add(id);
       }
       for (int id : EnemyRooms.forced(room)) k.add(id);

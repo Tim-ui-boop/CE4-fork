@@ -1,0 +1,106 @@
+--- a/src/game/read.cpp
++++ b/src/game/read.cpp
+@@ -78,6 +78,8 @@
+ MODULE_DAT EmReadModule[4] __attribute__((aligned(32)));
+ MODULE_DAT PlReadModule __attribute__((aligned(32)));
+ MODULE_DAT WepReadModule __attribute__((aligned(32)));
++// Ashley's companion is a separate module, not one of the four enemy slots.
++MODULE_DAT AshleyReadModule __attribute__((aligned(32)));
+ 
+ // HALT() (db_log.h) is a plain block, not do/while(0): the loop notes of a do/while are a sched1
+ // barrier, and the original's argument order around HALT (`lwz r4` / `addi r4,r31,__FILE__` before
+@@ -535,6 +537,32 @@
+     }
+ }
+ 
++// The companion module survives room changes: r117/r11c swap event data into it and hand the
++// pointer to the Ashley event. Only a hard/soft reset releases it (src/game/main.cpp).
++void ReleaseAshleyModule()
++{
++    if (AshleyReadModule.pData != NULL) {
++        InitModule(&AshleyReadModule);
++    }
++}
++
++// Loads the companion module into its own slot. The body is readEm()'s, without pullEmModule().
++static void* readAshleyModule(int id, void* addr, u32 size)
++{
++    u32 flags = pG->Disp_flg;
++    MODULE_DAT* m = &AshleyReadModule;
++
++    pG->Disp_flg = 0xFFFFFFFF;
++    DpfFlagOff(pG, DPF_MESSAGE);
++    if (readEmData(m, id, addr, size) == 0) {
++        pG->Disp_flg = flags;
++        return NULL;
++    }
++    setEmModule(m, id);
++    pG->Disp_flg = flags;
++    return m->pData;
++}
++
+ // Ashley's module: id 3 normal, 5 in the alternate costume (game_costume).
+ static int checkAshleyId(int id)
+ {
+@@ -555,6 +583,20 @@
+     MODULE_DAT* m;
+ 
+     id = checkAshleyId(id);
++    if (id == 3 || id == 5) {
++        m = &AshleyReadModule;
++        if (m->pData != NULL && m->id == (u16) id && m->DataSize >= malloc_size) {
++            EmInitFunc = m->EmInitFunc;
++            return m->pData;
++        }
++        // A costume change or a larger event archive needs the right data in the private slot.
++        ReleaseAshleyModule();
++        void* data = readAshleyModule(id, data_addr, malloc_size);
++        if (data != NULL) {
++            EmInitFunc = m->EmInitFunc;
++        }
++        return data;
++    }
+     m = SearchEmModule(id);
+     if (m != NULL) {
+         EmInitFunc = m->EmInitFunc;
+@@ -570,6 +612,12 @@
+     int i;
+ 
+     id = checkAshleyId(id);
++    if (id == 3 || id == 5) {
++        if (AshleyReadModule.pData != NULL && AshleyReadModule.id == (u16) id) {
++            return &AshleyReadModule;
++        }
++        return NULL;
++    }
+     for (m = EmReadModule, i = 0; i < 4; i++, m++) {
+         if (m->id == (u16) id) {
+             return m;
+--- a/include/read.h
++++ b/include/read.h
+@@ -30,6 +30,7 @@
+ extern MODULE_DAT EmReadModule[4];
+ extern MODULE_DAT PlReadModule;
+ extern MODULE_DAT WepReadModule;
++extern MODULE_DAT AshleyReadModule;
+ 
+ void CoreDataRead();
+ void OptionDataRead();
+@@ -41,6 +42,7 @@
+ void ReadAreaData();
+ void ReadPlayerData(int type, int costume);
+ void ReleasePlData();
++void ReleaseAshleyModule();
+ void ReadWepData(u32 no, u32 type);
+ void ReleaseWepData();
+ void ContinueWepData();
+--- a/src/game/main.cpp
++++ b/src/game/main.cpp
+@@ -571,6 +571,7 @@
+     TaskAllClear();
+     EmReadInit();
+     ReleasePlData();
++    ReleaseAshleyModule();
+     ReleaseWepData();
+     RoomData.stopRelData();
+     pRK->Config_flg = pSys->Config_flg;

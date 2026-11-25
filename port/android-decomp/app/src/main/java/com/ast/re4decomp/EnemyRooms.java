@@ -250,8 +250,8 @@ final class EnemyRooms {
     {}, // r111
     {}, // r112
     {}, // r113
-    {0x50, 0x51}, // r117
-    {0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f}, // r118
+    {}, // r117
+    {0x78}, // r118
     {0x28, 0x29}, // r119
     {}, // r11a
     {0x3c, 0x3e, 0x3f, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46}, // r11b
@@ -341,7 +341,120 @@ final class EnemyRooms {
     {0xfe}, // r333
   };
 
-  // Modules the room preloads itself with EmReadSearch/SearchEmModule.
+  // Rows the room script only spawns, never reads the identity of; the dealer may change them.
+  static final int[][] SPAWN = {
+    {}, // r100
+    {}, // r101
+    {}, // r102
+    {}, // r103
+    {}, // r104
+    {}, // r105
+    {}, // r106
+    {}, // r107
+    {}, // r108
+    {}, // r109
+    {}, // r10a
+    {}, // r10b
+    {}, // r10c
+    {}, // r10d
+    {}, // r10e
+    {}, // r10f
+    {}, // r111
+    {}, // r112
+    {}, // r113
+    {0x50, 0x51}, // r117
+    {0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f}, // r118
+    {}, // r119
+    {}, // r11a
+    {}, // r11b
+    {}, // r11c
+    {}, // r11d
+    {}, // r11e
+    {}, // r11f
+    {}, // r120
+    {}, // r200
+    {}, // r201
+    {}, // r202
+    {}, // r203
+    {}, // r204
+    {}, // r205
+    {}, // r206
+    {}, // r207
+    {}, // r208
+    {}, // r209
+    {}, // r20a
+    {}, // r20b
+    {}, // r20c
+    {}, // r20d
+    {}, // r20e
+    {}, // r20f
+    {}, // r210
+    {}, // r211
+    {}, // r212
+    {}, // r213
+    {}, // r214
+    {}, // r215
+    {}, // r216
+    {}, // r217
+    {}, // r218
+    {}, // r219
+    {}, // r21a
+    {}, // r21b
+    {}, // r21d
+    {}, // r220
+    {}, // r221
+    {}, // r222
+    {}, // r223
+    {}, // r224
+    {}, // r225
+    {}, // r226
+    {}, // r227
+    {}, // r228
+    {}, // r229
+    {}, // r22a
+    {}, // r22b
+    {}, // r22c
+    {}, // r300
+    {}, // r301
+    {}, // r303
+    {}, // r304
+    {}, // r305
+    {}, // r306
+    {}, // r307
+    {}, // r308
+    {}, // r309
+    {}, // r30a
+    {}, // r30b
+    {}, // r30c
+    {}, // r30d
+    {}, // r30e
+    {}, // r30f
+    {}, // r310
+    {}, // r311
+    {}, // r312
+    {}, // r315
+    {}, // r316
+    {}, // r317
+    {}, // r318
+    {}, // r31a
+    {}, // r31b
+    {}, // r31c
+    {}, // r31d
+    {}, // r320
+    {}, // r321
+    {}, // r325
+    {}, // r326
+    {}, // r327
+    {}, // r328
+    {}, // r329
+    {}, // r330
+    {}, // r331
+    {}, // r332
+    {}, // r333
+  };
+
+  // Modules the room preloads itself with EmReadSearch/SearchEmModule. Ashley's 3/5 now has
+  // a dedicated slot and is not one of the four enemy modules.
   static final int[][] FORCED = {
     {0x12}, // r100
     {0x15, 0x26}, // r101
@@ -362,17 +475,17 @@ final class EnemyRooms {
     {}, // r111
     {}, // r112
     {}, // r113
-    {0x03}, // r117
+    {}, // r117
     {}, // r118
     {}, // r119
     {}, // r11a
     {}, // r11b
-    {0x03, 0x04, 0x13}, // r11c
+    {0x04, 0x13}, // r11c
     {}, // r11d
     {0x2b}, // r11e
     {}, // r11f
     {}, // r120
-    {0x03, 0x12, 0x3b}, // r200
+    {0x12, 0x3b}, // r200
     {0x1b}, // r201
     {0x11}, // r202
     {0x11}, // r203
@@ -462,6 +575,15 @@ final class EnemyRooms {
     for (int i = 0; i < ROOM.length; i++) {
       if (ROOM[i] != room) continue;
       for (int n : DRIVEN[i]) if (n == entry) return true;
+      return false;
+    }
+    return false;
+  }
+
+  static boolean spawn(int room, int entry) {
+    for (int i = 0; i < ROOM.length; i++) {
+      if (ROOM[i] != room) continue;
+      for (int n : SPAWN[i]) if (n == entry) return true;
       return false;
     }
     return false;

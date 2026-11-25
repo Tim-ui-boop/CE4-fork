@@ -41,6 +41,12 @@ NUMBER = re.compile(r"^\s*(0[xX][0-9a-fA-F]+|\d+)\s*$")
 INT = re.compile(r"\b(0[xX][0-9a-fA-F]+|\d+)\b")
 # Modules a room preloads itself (r106 loads four before any enemy spawns, src/st1/r106.cpp:97-100).
 FORCED = re.compile(r"\b(?:EmReadSearch|SearchEmModule)\s*\(\s*(0[xX][0-9a-fA-F]+|\d+)")
+# Rows the script only spawns with setEm/EmSetFromList2, never reads the identity of. Verified by
+# hand in the room scripts. They may join the ordinary offline deal; the runtime .inc is unchanged.
+SPAWN = {
+    0x117: {0x50, 0x51},          # church interior, after Ashley is found
+    0x118: set(range(0x79, 0x80)),  # church in the storm, after Ashley is found
+}
 
 
 def strip_comments(text):
@@ -191,16 +197,26 @@ def java_source(rows):
         lines.append("    %d, // r%03x" % (kind_of(why), room))
     lines += ["  };", "", "  static final int[][] DRIVEN = {"]
     for room, _why, protected, _forced in rows:
-        nums = ", ".join("0x%02x" % v for v in sorted(protected))
+        nums = ", ".join("0x%02x" % v for v in sorted(protected - SPAWN.get(room, set())))
         lines.append("    {%s}, // r%03x" % (nums, room))
     lines += [
         "  };",
         "",
-        "  // Modules the room preloads itself with EmReadSearch/SearchEmModule.",
+        "  // Rows the room script only spawns, never reads the identity of; the dealer may change them.",
+        "  static final int[][] SPAWN = {",
+    ]
+    for room, _why, _protected, _forced in rows:
+        nums = ", ".join("0x%02x" % v for v in sorted(SPAWN.get(room, set())))
+        lines.append("    {%s}, // r%03x" % (nums, room))
+    lines += [
+        "  };",
+        "",
+        "  // Modules the room preloads itself with EmReadSearch/SearchEmModule. Ashley's 3/5 now has",
+        "  // a dedicated slot and is not one of the four enemy modules.",
         "  static final int[][] FORCED = {",
     ]
     for room, _why, _protected, forced in rows:
-        nums = ", ".join("0x%02x" % v for v in sorted(forced))
+        nums = ", ".join("0x%02x" % v for v in sorted(forced - {3, 5}))
         lines.append("    {%s}, // r%03x" % (nums, room))
     lines += [
         "  };",
@@ -214,6 +230,15 @@ def java_source(rows):
         "    for (int i = 0; i < ROOM.length; i++) {",
         "      if (ROOM[i] != room) continue;",
         "      for (int n : DRIVEN[i]) if (n == entry) return true;",
+        "      return false;",
+        "    }",
+        "    return false;",
+        "  }",
+        "",
+        "  static boolean spawn(int room, int entry) {",
+        "    for (int i = 0; i < ROOM.length; i++) {",
+        "      if (ROOM[i] != room) continue;",
+        "      for (int n : SPAWN[i]) if (n == entry) return true;",
         "      return false;",
         "    }",
         "    return false;",

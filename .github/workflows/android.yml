@@ -105,10 +105,10 @@ jobs:
         shell: bash
         run: |
           chmod +x gradlew
-          # versionCode from the commit count, with a floor above the manually bumped build already
-          # installed on the owner's phone (4312). Android refuses an update that is not higher.
+          # versionCode from the commit count, above the build already installed on the owner's
+          # phone (5314). Android refuses an update that is not higher.
           COUNT=$(git rev-list --count HEAD)
-          VERSION_CODE=$((3000 + COUNT))
+          VERSION_CODE=$((4000 + COUNT))
           echo "versionCode $VERSION_CODE (commit count $COUNT)"
           ./gradlew --no-daemon :app:assembleCoreDebug -Pre4.versionCode="$VERSION_CODE"
 
