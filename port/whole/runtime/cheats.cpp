@@ -427,6 +427,20 @@ void fillMagazine()
 
 void repairPartnerLife();
 
+// 1.2.0: re-assert the movement speed every frame. PlayerInit() clears PlKaiou, and a debug menu
+// can switch DBG_KAIOUKEN itself, so the level is written from the atomic on every game frame.
+void applySpeed()
+{
+    int level = gSpeedLevel.load(std::memory_order_acquire);
+    if (level <= 0) {
+        if (pG && DbgFlagChk(pG, DBG_KAIOUKEN)) DbgFlagOff(pG, DBG_KAIOUKEN);
+        PlKaiou = 0;
+        return;
+    }
+    DbgFlagOn(pG, DBG_KAIOUKEN);
+    PlKaiou = (u8) level;  // 1..3 -> the move routine runs 2..4 times
+}
+
 void apply(int wanted)
 {
     struct {
@@ -467,6 +481,7 @@ void apply(int wanted)
         }
     }
     gApplied = wanted;
+    applySpeed();  // also re-asserted on every frame through hook() -> apply()
     if ((wanted & kExtras) && !extrasUnlocked()) {
         unlockExtras("kept by the app");
     }
