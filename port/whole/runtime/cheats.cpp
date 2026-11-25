@@ -117,6 +117,8 @@ const int kAllBits = kAll | kSteadyAim;
 std::atomic<int> gWanted(-1);  // the app's switches, -1 before RE4_CHEATS was read
 int gApplied;                  // what the game frames have set so far
 std::atomic<int> gQueued(0);   // a button pressed while the game ran (the hook does it)
+// 1.2.0: Leon's movement speed, action 11..14 (Off / 2x / 3x / 4x), re-applied every frame
+std::atomic<int> gSpeedLevel(0);
 // the cheat "Leon's jacket" (1.0, patch 0235; re4_core_set_leon_jacket), -1 before RE4_LEON_JACKET was read; the
 // state the last PlSetCostume ran with (-1 none yet)
 std::atomic<int> gJacket(-1);
@@ -170,6 +172,11 @@ const char* actionName(int what)
         return "extra games";
     case 10:
         return "refill ammo";
+    }
+    if (what >= 11 && what <= 14) {
+        static const char* const names[] = {"Leon speed off", "Leon speed 2x", "Leon speed 3x",
+                                            "Leon speed 4x"};
+        return names[what - 11];
     }
     return "?";
 }
@@ -1309,6 +1316,12 @@ int re4_story_ganado;
 
 int re4CheatPerform(int what)
 {
+    // Movement speed is allowed anywhere: the level is applied by the frame hook, not here.
+    if (what >= 11 && what <= 14) {
+        gSpeedLevel.store(what - 11, std::memory_order_release);
+        re4_log("cheat: %s", actionName(what));
+        return 1;
+    }
     // the extra games: the system flags only, at any time (the title, Ada's and HUNK's games too)
     if (what == 4) {
         if (extrasUnlocked()) {
