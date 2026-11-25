@@ -486,6 +486,13 @@
     <!-- 0.98.4: cheat sections, invisibility, depth of field levels, player view -->
     <string name="ingame_cheat_invisible">Invisibility</string>
     <string name="ingame_cheat_steady">Steady aim</string>
+    <!-- 1.2.0: Leon's movement speed, Off/2x/3x/4x (English only by the player's wish) -->
+    <string name="ingame_cheat_speed">Leon speed</string>
+    <string name="ingame_speed_off">Off</string>
+    <string name="ingame_speed_2x">2x</string>
+    <string name="ingame_speed_3x">3x</string>
+    <string name="ingame_speed_4x">4x</string>
+    <string name="ingame_cheat_speed_help">Leon speed: normal movement only, up to four times as fast. Cutscenes, damage, doors and enemies stay as they are. At 4x Leon can clip past thin triggers and his feet may slide.</string>
     <string name="ingame_cheat_section_player">Player</string>
     <string name="ingame_cheat_section_weapons">Weapons</string>
     <string name="ingame_cheat_section_game">General &amp; inventory</string>
