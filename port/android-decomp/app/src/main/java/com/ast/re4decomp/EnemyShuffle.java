@@ -287,6 +287,14 @@ final class EnemyShuffle {
     return id == 0x12 || id == 0x13 || id == 0x1B || id == 0x1C || id == 0x1D;
   }
 
+  /** Which basic family an id belongs to, or -1 for an elite/boss. */
+  private static int basicFamily(int id) {
+    if (id == 0x12 || id == 0x13 || id == 0x17) return 0;
+    if (id == 0x1B || id == 0x1C) return 1;
+    if (id == 0x1D) return 2;
+    return -1;
+  }
+
   /** True when the pool can actually write this id; other ids can only be kept or reused. */
   private static boolean poolId(int id) {
     for (Member m : POOL) for (int x : m.ids) if (x == id) return true;
@@ -453,6 +461,7 @@ final class EnemyShuffle {
         List<Member> bases = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
           if ((options & POOL[i].bit) == 0) continue;
+          if (i == basicFamily(id)) continue;  // a villager must become a different family
           int candidate = POOL[i].ids[Math.floorMod(hash(seed, room, no, 902), POOL[i].ids.length)];
           if (fits(kinds, candidate) && !(heavyUsed && HEAVY_IDS.contains(candidate))) {
             bases.add(POOL[i]);

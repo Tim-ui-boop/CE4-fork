@@ -102,6 +102,13 @@ bool sidecarPath(const char* name, char* out, size_t outSize)
  * room moved or whose id is out of range means a damaged file, not a deal. */
 bool recordsSane(const unsigned char* p, int bytes)
 {
+    /* Four enemy module slots exist (EmReadModule[4]); a fifth kind silently fails to spawn and
+     * can leave the room empty. A dealt list must fit the same budget as the disc's. Active records
+     * are the set the dealer budgets and the game spawns at room start. Keep the working set small:
+     * this check runs on the game's DVD thread, whose stack is not generous. */
+    unsigned short rooms[256];
+    int nrooms = 0;
+    unsigned long long seen[2];
     for (int i = 0; i < bytes / kEntryBytes; i++) {
         const unsigned char* e = p + i * kEntryBytes;
         const unsigned id = e[1];
@@ -115,6 +122,29 @@ bool recordsSane(const unsigned char* p, int bytes)
         }
         if (room == 0 || (room >> 8) > 4) {
             return false;  // stage 1..3 of the story, 4 of the extra games
+        }
+        bool known = false;
+        for (int r = 0; r < nrooms; r++) {
+            if (rooms[r] == room) { known = true; break; }
+        }
+        if (!known) rooms[nrooms++] = (unsigned short) room;
+    }
+    for (int r = 0; r < nrooms; r++) {
+        memset(seen, 0, sizeof(seen));
+        unsigned kinds = 0;
+        for (int i = 0; i < bytes / kEntryBytes; i++) {
+            const unsigned char* e = p + i * kEntryBytes;
+            if (e[1] == 0 || (e[0] & 1) == 0) continue;
+            if (((unsigned) e[0x18] << 8 | e[0x19]) != rooms[r]) continue;
+            unsigned id = e[1];
+            unsigned long long bit = 1ULL << (id & 63);
+            unsigned word = id >> 6;
+            if ((seen[word] & bit) == 0) {
+                seen[word] |= bit;
+                if (++kinds > 4) {
+                    return false;  // read the disc instead of blanking this room
+                }
+            }
         }
     }
     return true;
