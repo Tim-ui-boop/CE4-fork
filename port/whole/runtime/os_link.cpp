@@ -65,18 +65,17 @@ struct ModuleHeader {
 static_assert(sizeof(ModuleInfo) == 0x20, "OSModuleInfo layout on ILP32");
 static_assert(sizeof(ModuleHeader) == 0x4C, "OSModuleHeader layout on ILP32");
 
-// __OSModuleInfoList (OS globals), the list the debugger and the game's
-// exception screen walk.
-struct ModuleQueue {
-    ModuleInfo* head;
-    ModuleInfo* tail;
-};
-
-ModuleQueue* moduleList()
-{
-    re4_mem1_init();
-    return (ModuleQueue*) (unsigned long) (RE4_MEM1_BASE + 0x30C8);
-}
+// The port's own record of the headers OSLink listed. The GameCube keeps its
+// list in game memory (MEM1+0x30C8) whose nodes are REL headers living INSIDE
+// game archives -- archives the game frees and hands back to its heap. r118
+// (report 20261127, builds 6315/6317): pl11's cutscene archive was released,
+// em17's 3.9 MB body was allocated over it, and OSLink's walk of the list read
+// the freed header's next pointer as archive bytes (0x58fe02fe) and died. The
+// port therefore never chains through game memory: membership is an
+// address-only scan of this table and the GameCube list stays empty.
+ModuleInfo* sListed[256];
+unsigned sListedCount;
+unsigned sListedNext;
 
 u32 swap32(u32 v)
 {
@@ -111,12 +110,35 @@ bool isRelink(ModuleHeader* h, const char* name)
 
 bool inList(ModuleInfo* info)
 {
-    for (ModuleInfo* m = moduleList()->head; m; m = m->next) {
-        if (m == info) {
+    for (unsigned i = 0; i < sListedCount; i++) {
+        if (sListed[i] == info) {
             return true;
         }
     }
     return false;
+}
+
+void listInsert(ModuleInfo* info)
+{
+    if (inList(info)) {
+        return;
+    }
+    if (sListedCount < (unsigned) (sizeof(sListed) / sizeof(sListed[0]))) {
+        sListed[sListedCount++] = info;
+        return;
+    }
+    sListed[sListedNext] = info;
+    sListedNext = (sListedNext + 1) % (unsigned) (sizeof(sListed) / sizeof(sListed[0]));
+}
+
+void listRemove(ModuleInfo* info)
+{
+    for (unsigned i = 0; i < sListedCount; i++) {
+        if (sListed[i] == info) {
+            sListed[i] = sListed[--sListedCount];
+            return;
+        }
+    }
 }
 
 }  // namespace
@@ -159,11 +181,8 @@ int OSLink(ModuleInfo* info, void* bss)
     }
     bool fresh = !isRelink(h, name);
     if (fresh) {
-        for (ModuleInfo* m = moduleList()->head; m; m = m->next) {
-            if (m != info && re4_module_name(m->id) == name) {
-                re4_log("OSLink: module %s is linked twice; both copies share one library", name);
-            }
-        }
+        // (The old "linked twice" diagnostic walk over the module list is gone:
+        // it dereferenced list nodes whose memory the game may have reused.)
         if (re4_module_is_loaded(name)) {
             re4_module_unload(name);  // back to the module's initial data
         }
@@ -178,17 +197,7 @@ int OSLink(ModuleInfo* info, void* bss)
     if (bss && h->bssSize && fresh) {
         memset(bss, 0, h->bssSize);
     }
-    if (!inList(info)) {
-        ModuleQueue* q = moduleList();
-        info->next = 0;
-        info->prev = q->tail;
-        if (q->tail) {
-            q->tail->next = info;
-        } else {
-            q->head = info;
-        }
-        q->tail = info;
-    }
+    listInsert(info);
     re4_log("OSLink: module %s (id %u)%s", name, h->info.id, fresh ? "" : ", relinked");
     return 1;
 }
@@ -206,17 +215,7 @@ int OSUnlink(ModuleInfo* info)
             finalize();
         }
     }
-    ModuleQueue* q = moduleList();
-    if (info->next) {
-        info->next->prev = info->prev;
-    } else {
-        q->tail = info->prev;
-    }
-    if (info->prev) {
-        info->prev->next = info->next;
-    } else {
-        q->head = info->next;
-    }
+    listRemove(info);
     info->next = info->prev = 0;
     return 1;
 }
