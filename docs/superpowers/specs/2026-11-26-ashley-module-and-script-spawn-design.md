@@ -22,6 +22,13 @@ rows as eligible for the ordinary deal.
 All companion module requests already go through `src/game/read.cpp`.
 
 - Add `MODULE_DAT AshleyReadModule` beside `EmReadModule[4]`; declare it in `include/read.h`.
+  (Correction, 27 Nov 2026: the companion's archive is allocated in the room heap, and
+  gameRoomMemInit() recreates that heap at every door — MemReplaceHeap(3, 4) with heap 3 already
+  gone rebuilds heap 4 over its full range. The slot therefore must NOT survive doors: the door
+  path calls ReleaseAshleyModule() next to EmReadInit() (game.cpp), and the next SubCharInit
+  simply reads the module again. Keeping the pointer across a door served recycled memory and
+  crashed r118 — cSubAshley::modelSet read em17's body over the dead archive. The r117/r11c event
+  swaps happen inside one room and are unaffected.)
 - Add a dedicated loader that uses the passed slot instead of `pullEmModule()`; leave `readEm()`
   itself untouched.
 - In `EmReadSearch`/`SearchEmModule`, route ids `3`/`5` (after `checkAshleyId`) to the dedicated

@@ -1257,6 +1257,12 @@ void gameDoordemo()
     Dvd.ReadCancelAll();
     Aram.DmaCancelAll();
     EmReadInit();
+    // Ashley's companion lives in its own slot (patch 0256), which EmReadInit does not clear.
+    // Its archive is allocated in the room heap, and gameRoomMemInit() recreates that heap at
+    // every door (MemReplaceHeap(3, 4)): keeping the pointer would serve memory the next room's
+    // loads recycle (r118 crash, report 20261127). Release it here, while its heap is still the
+    // current one; the next SubCharInit simply reads it again, as the four enemy slots do.
+    ReleaseAshleyModule();
     ClearOt();
     {
         int req = SndDoorSeLoad();
