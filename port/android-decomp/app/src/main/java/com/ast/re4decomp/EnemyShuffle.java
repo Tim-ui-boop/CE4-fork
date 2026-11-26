@@ -437,6 +437,7 @@ final class EnemyShuffle {
       if (u16(out, at + ROOM) != room) continue;
       int id = u8(out, at + ID);
       if (id == 0) continue;
+      if (id == 0x18) continue;  // the trader: never randomized, never re-geared
       if (EnemyRooms.driven(room, no)) {
         appearanceOnly(out, allowed, seed, options, room, no);
         continue;

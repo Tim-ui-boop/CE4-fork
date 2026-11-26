@@ -164,17 +164,9 @@ void cSubChar::move()
     } else {
         (this->*NpcFuncTbl[r_no_0])();
     }
-    if (DbgFlagChk(pG, DBG_KAIOUKEN)) {
-        int i;
-
-        for (i = 0; i < PlKaiou + 1; i++) {
-            if (r_no_0 == 4) {
-                m_pFunc();
-            } else {
-                (this->*NpcFuncTbl[r_no_0])();
-            }
-        }
-    }
+    // No Kaiouken repeat here: the movement-speed cheat must stay Leon-only. Repeating this
+    // routine ran the partner's whole state machine twice or more per frame and broke Ashley's
+    // ladder climbs (report 20261127); player.cpp keeps its routine-guarded repeat for Leon only.
     if (m_PlActTime) {
         m_PlActTime--;
     }

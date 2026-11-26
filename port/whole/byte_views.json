@@ -511,14 +511,14 @@
  },
  {
   "file": "src/game/pl_npc.cpp",
-  "line": 3203,
+  "line": 3192,
   "text": "(u32*) &pAnotherRoute",
   "use": "deref",
   "type": "u32",
   "element": null,
   "object": "struct EmiEntry *",
   "sites": [
-   "src/game/pl_npc.cpp:3203"
+   "src/game/pl_npc.cpp:3192"
   ],
   "action": "keep",
   "reason": "pointer zeroed through u32: same size, neutral"
