@@ -1,0 +1,53 @@
+--- a/src/game/sce_com.cpp
++++ b/src/game/sce_com.cpp
+@@ -49,6 +49,8 @@
+ extern "C" {
+ void* __builtin_new(unsigned int size);
+ void __builtin_delete(void* p);
++/* Set by enemy_sidecar.cpp while a valid dealt enemy list is being served. */
++int re4_randomizer_enemy_active(void);
+ }
+ 
+ 
+@@ -394,6 +396,23 @@
+     return 1;
+ }
+ 
++/* Phase 2: while a dealt list is active, the ordinary Ganado count also sees the boss ids the
++ * dealer may place on counted rows. Only the exact (0x10,0x20) request used by the scripts is
++ * aliased; never change em->id, which drives AI, sound and module casts. */
++static inline bool re4CountAliasId(int id)
++{
++    return id == 0x2B || id == 0x2C || id == 0x36 || id == 0x39 || id == 0x3C;
++}
++
++static inline bool re4CountMatches(int em_id, int em_id_end, int id)
++{
++    if (id >= em_id && id <= em_id_end) {
++        return true;
++    }
++    return re4_randomizer_enemy_active() && em_id == 0x10 && em_id_end == 0x20 &&
++           re4CountAliasId(id);
++}
++
+ // Number of living, active enemies with id in lo..hi (hi -1 = just lo).
+ int SceCountEmAlive(int em_id, int em_id_end)
+ {
+@@ -405,7 +424,7 @@
+         if (em_id_end == -1) {
+             em_id_end = em_id;
+         }
+-        if (em->id >= em_id && em->id <= em_id_end) {
++        if (re4CountMatches(em_id, em_id_end, em->id)) {
+             if (SceCheckEmAlive(em) == 1) {
+                 cnt++;
+             }
+@@ -424,7 +443,7 @@
+         if (em_id_end == -1) {
+             em_id_end = em_id;
+         }
+-        if (em->id >= em_id && em->id <= em_id_end) {
++        if (re4CountMatches(em_id, em_id_end, em->id)) {
+             if (em->isAlive()) {
+                 EM_LIST* l = GetListPtrFromEm(em);
+                 if (l) {

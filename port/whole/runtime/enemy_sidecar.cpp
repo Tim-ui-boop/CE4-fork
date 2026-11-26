@@ -35,6 +35,15 @@
 
 extern "C" const char* re4_data_dir(void);
 
+/* True only while a valid dealt enemy list has been served. Room scripts ask the game to count
+ * Ganados by id; Phase 2's gated alias checks this before treating bosses as Ganados. */
+static int randomizerEnemyActive;
+
+extern "C" int re4_randomizer_enemy_active(void)
+{
+    return randomizerEnemyActive;
+}
+
 namespace {
 
 const int kListBytes = 0x2000;  // a full 256 entries of 32 bytes (EM_LIST, include/global.h:211)
@@ -169,16 +178,19 @@ extern "C" int re4_enemy_sidecar_read(const char* name, void* dst, int length)
 
     if (dst == 0 || (length != kStoryListBytes && length != kListBytes) ||
         !sidecarPath(name, path, sizeof(path))) {
+        randomizerEnemyActive = 0;
         return 0;
     }
     f = fopen(path, "rb");
     if (f == 0) {
+        randomizerEnemyActive = 0;
         return 0;
     }
     got = fread(head, 1, sizeof(head), f);
     fclose(f);
     if (got < (size_t) kMinListBytes || got > (size_t) kListBytes || got % kEntryBytes != 0 ||
         !recordsSane(head, (int) got)) {
+        randomizerEnemyActive = 0;
         if (told++ < 8) {
             re4_log("randomizer: %s: the dealt enemy list is damaged (%u bytes), reading the disc",
                     name, (unsigned) got);
@@ -190,6 +202,7 @@ extern "C" int re4_enemy_sidecar_read(const char* name, void* dst, int length)
         memset(head + got, 0, (size_t) length - got);
     }
     memcpy(dst, head, (size_t) length);
+    randomizerEnemyActive = 1;
     if (told++ < 8) {
         re4_log("randomizer: %s: the launcher's dealt enemy list (%d bytes)", name, length);
     }

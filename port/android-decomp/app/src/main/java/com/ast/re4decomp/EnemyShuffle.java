@@ -454,7 +454,9 @@ final class EnemyShuffle {
         Member m = POOL[i];
         if (m.basic || (options & m.bit) == 0 || ratio[i] <= 0) continue;
         if (m.massive && massiveUsed) continue;
-        if (counted && !m.counted()) continue;
+        // Rooms whose scripts only use SceCountEmAlive/DestroyEm(0x10,0x20) can take boss ids:
+        // the gated engine alias makes those counts see them. Other counted rooms stay restricted.
+        if (counted && !m.counted() && !EnemyRooms.alias(room)) continue;
         if (hash(seed, room, no, i) % ratio[i] != 0) continue;
         int candidate = m.ids[Math.floorMod(hash(seed, room, no, 902), m.ids.length)];
         if (!fits(kinds, candidate) || (heavyUsed && HEAVY_IDS.contains(candidate))) continue;

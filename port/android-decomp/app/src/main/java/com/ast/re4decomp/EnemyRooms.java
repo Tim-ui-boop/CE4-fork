@@ -230,6 +230,119 @@ final class EnemyRooms {
     0, // r333
   };
 
+  // Rooms whose only count calls are SceCountEmAlive/DestroyEm(0x10,0x20), the exact range
+  // the gated engine patch aliases. Single-id counts (0x1D, 0x36, 0x2B, ...) are never aliased.
+  static final boolean[] ALIAS = {
+    false, // r100
+    true, // r101
+    false, // r102
+    false, // r103
+    true, // r104
+    false, // r105
+    false, // r106
+    true, // r107
+    true, // r108
+    false, // r109
+    false, // r10a
+    false, // r10b
+    false, // r10c
+    false, // r10d
+    false, // r10e
+    false, // r10f
+    false, // r111
+    false, // r112
+    false, // r113
+    false, // r117
+    false, // r118
+    false, // r119
+    false, // r11a
+    false, // r11b
+    true, // r11c
+    true, // r11d
+    false, // r11e
+    false, // r11f
+    false, // r120
+    true, // r200
+    false, // r201
+    true, // r202
+    false, // r203
+    true, // r204
+    false, // r205
+    true, // r206
+    false, // r207
+    true, // r208
+    true, // r209
+    false, // r20a
+    false, // r20b
+    false, // r20c
+    true, // r20d
+    false, // r20e
+    false, // r20f
+    false, // r210
+    false, // r211
+    false, // r212
+    false, // r213
+    true, // r214
+    false, // r215
+    false, // r216
+    true, // r217
+    false, // r218
+    false, // r219
+    true, // r21a
+    true, // r21b
+    false, // r21d
+    false, // r220
+    false, // r221
+    true, // r222
+    false, // r223
+    false, // r224
+    false, // r225
+    true, // r226
+    false, // r227
+    false, // r228
+    false, // r229
+    false, // r22a
+    false, // r22b
+    false, // r22c
+    true, // r300
+    true, // r301
+    false, // r303
+    false, // r304
+    false, // r305
+    false, // r306
+    false, // r307
+    false, // r308
+    false, // r309
+    false, // r30a
+    true, // r30b
+    false, // r30c
+    false, // r30d
+    true, // r30e
+    true, // r30f
+    false, // r310
+    true, // r311
+    false, // r312
+    false, // r315
+    true, // r316
+    false, // r317
+    false, // r318
+    false, // r31a
+    false, // r31b
+    false, // r31c
+    false, // r31d
+    true, // r320
+    false, // r321
+    false, // r325
+    false, // r326
+    false, // r327
+    false, // r328
+    false, // r329
+    false, // r330
+    false, // r331
+    false, // r332
+    false, // r333
+  };
+
   static final int[][] DRIVEN = {
     {0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x12, 0x13, 0x1d, 0x25, 0x26, 0x27, 0x7a}, // r100
     {0x22, 0x23, 0x24, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3c, 0x3d, 0x3e, 0x3f, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46}, // r101
@@ -586,6 +699,11 @@ final class EnemyRooms {
       for (int n : SPAWN[i]) if (n == entry) return true;
       return false;
     }
+    return false;
+  }
+
+  static boolean alias(int room) {
+    for (int i = 0; i < ROOM.length; i++) if (ROOM[i] == room) return ALIAS[i];
     return false;
   }
 

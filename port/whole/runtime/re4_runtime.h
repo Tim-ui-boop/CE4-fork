@@ -17,6 +17,8 @@ void re4_log_file(const char* path);
 /* Generated stubs (stubs.cpp) report their first call through this. */
 void re4_stub_hit(const char* const* names, unsigned char* seen, int index);
 int re4_stub_count(void);
+/* True while the launcher's dealt enemy lists are active (enemy_sidecar.cpp). */
+int re4_randomizer_enemy_active(void);
 
 typedef struct Re4ModuleEntry {
     unsigned id;
