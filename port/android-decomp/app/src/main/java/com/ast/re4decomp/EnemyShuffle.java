@@ -514,11 +514,13 @@ final class EnemyShuffle {
       putU8(out, at + SET, 0);
       allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
       kinds.add(chosen);
-      // Sound-bank muting is disabled (26 Nov 2026, r118 crash on build 6315). Every pool kind is a
-      // kind the retail disc itself uses somewhere, so a muted module is always one vanilla rooms
-      // can load too, and no-sound.txt is global per module: it cannot express "only in dealt
-      // rooms". Muting was never proven to fix anything; until a per-room design exists, every
-      // module keeps its disc sound bank.
+      // Every dealt enemy keeps silent: its DRS sound-bank record is rewritten to the empty slot
+      // on read (runtime/dvd.cpp), because dealt banks fault in the synth when their voices play
+      // (r111, build 6320: crash in iss_new_voice_work right after the dealt kinds spawned —
+      // em36's bank is the r101-era known faulter). Muting was suspected in the r118 crash of
+      // builds 6315-6318 and removed; that suspicion proved wrong (the real bugs were the module
+      // list walk and the companion slot across doors), so the proven r100/r101 behaviour is back.
+      silent.add(moduleName(chosen));
       if (HEAVY_IDS.contains(chosen)) heavyUsed = true;
       if (pick.massive) massiveUsed = true;
       for (int i = 0; i < POOL.length; i++) if (POOL[i] == pick) tally[i]++;
