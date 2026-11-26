@@ -393,7 +393,7 @@
  },
  {
   "file": "src/game/game.cpp",
-  "line": 1537,
+  "line": 1543,
   "text": "(void*) pG->prim_cnt",
   "operand": "pG->prim_cnt",
   "type": "s32",
@@ -401,7 +401,7 @@
  },
  {
   "file": "src/game/game.cpp",
-  "line": 1544,
+  "line": 1550,
   "text": "(void*) pG->prim_cnt",
   "operand": "pG->prim_cnt",
   "type": "s32",
