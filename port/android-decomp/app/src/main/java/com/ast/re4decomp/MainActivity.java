@@ -329,14 +329,14 @@ public final class MainActivity extends Activity implements ImportManager.Listen
           if (pool.length() > 0) pool.append(", ");
           pool.append(EnemyShuffle.POOL_NAMES[i]).append(" (1-in-").append(ratios[i]).append(')');
         }
-        String note = enabled == 0
+        String poolNote = enabled == 0
             ? "The pool is EMPTY: every enemy toggle is off or its ratio is Off, so the game stays "
               + "as on the disc. Turn on the enemies you want, then deal again. "
             : "Pool (" + enabled + "): " + pool + ". ";
         android.util.Log.i("EnemyShuffle", "deal summary: options=" + opts + " enabled=" + enabled
             + " ratios=" + java.util.Arrays.toString(ratios));
         runOnUiThread(() -> randStatus.setText(r.ok
-            ? getString(R.string.launch_rand_done, note + r.message) : r.message));
+            ? getString(R.string.launch_rand_done, poolNote + r.message) : r.message));
       }, "enemy-deal").start();
     }, null);
     halfButton(body, getString(R.string.launch_rand_off), () -> {
