@@ -426,8 +426,11 @@ final class EnemyShuffle {
       int at = no * ENTRY;
       if (u16(out, at + ROOM) != room) continue;
       int id = u8(out, at + ID);
+      // Reserve a slot only for rows that keep their id: script rows, dynamite, event motions,
+      // the trader and the story rows. A row whose vanilla id is merely not in the pool (cows,
+      // birds, dogs, crows) is swapped like any other, and its NEW id is budgeted by fits().
       if (id != 0 && ((u32(out, at + FLAG) & FLAG_BOMB) != 0 || u8(out, at + SET) == 0x25
-          || EnemyRooms.driven(room, no) || !poolId(id))) {
+          || EnemyRooms.driven(room, no) || EnemyRooms.keep(room, no) || id == 0x18)) {
         kinds.add(id);
       }
     }
@@ -438,6 +441,7 @@ final class EnemyShuffle {
       int id = u8(out, at + ID);
       if (id == 0) continue;
       if (id == 0x18) continue;  // the trader: never randomized, never re-geared
+      if (EnemyRooms.keep(room, no)) continue;  // story rows (the rescued dog): exact disc bytes
       if (EnemyRooms.driven(room, no)) {
         appearanceOnly(out, allowed, seed, options, room, no);
         continue;
@@ -482,8 +486,12 @@ final class EnemyShuffle {
       }
       if (pick == null) {
         // No member fits the four slots: reuse a module the room already loads. A room with no
-        // reserved module and no eligible pick stays exactly as on the disc.
-        if (kinds.isEmpty()) continue;
+        // reserved module and no eligible pick stays exactly as on the disc — and the row's own
+        // module occupies a slot, or later picks would overrun the four the hardware has.
+        if (kinds.isEmpty()) {
+          kinds.add(id);
+          continue;
+        }
         int reuse = kinds.iterator().next();
         int[] rt = TYPES.get(reuse);
         if (rt == null || (heavyUsed && HEAVY_IDS.contains(reuse))) {

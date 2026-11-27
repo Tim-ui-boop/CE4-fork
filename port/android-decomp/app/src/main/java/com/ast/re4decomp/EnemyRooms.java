@@ -120,7 +120,7 @@ final class EnemyRooms {
   };
 
   static final byte[] KIND = {
-    1, // r100
+    0, // r100
     2, // r101
     0, // r102
     0, // r103
@@ -344,7 +344,7 @@ final class EnemyRooms {
   };
 
   static final int[][] DRIVEN = {
-    {0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x12, 0x13, 0x1d, 0x25, 0x26, 0x27, 0x7a}, // r100
+    {0x06, 0x07, 0x08}, // r100
     {0x22, 0x23, 0x24, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3c, 0x3d, 0x3e, 0x3f, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46}, // r101
     {0x4c}, // r102
     {}, // r103
@@ -456,7 +456,7 @@ final class EnemyRooms {
 
   // Rows the room script only spawns, never reads the identity of; the dealer may change them.
   static final int[][] SPAWN = {
-    {}, // r100
+    {0x03, 0x04, 0x05, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x12, 0x13, 0x1d, 0x25, 0x26, 0x27, 0x7a}, // r100
     {}, // r101
     {}, // r102
     {}, // r103
@@ -477,6 +477,119 @@ final class EnemyRooms {
     {}, // r113
     {0x50, 0x51}, // r117
     {0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f}, // r118
+    {}, // r119
+    {}, // r11a
+    {}, // r11b
+    {}, // r11c
+    {}, // r11d
+    {}, // r11e
+    {}, // r11f
+    {}, // r120
+    {}, // r200
+    {}, // r201
+    {}, // r202
+    {}, // r203
+    {}, // r204
+    {}, // r205
+    {}, // r206
+    {}, // r207
+    {}, // r208
+    {}, // r209
+    {}, // r20a
+    {}, // r20b
+    {}, // r20c
+    {}, // r20d
+    {}, // r20e
+    {}, // r20f
+    {}, // r210
+    {}, // r211
+    {}, // r212
+    {}, // r213
+    {}, // r214
+    {}, // r215
+    {}, // r216
+    {}, // r217
+    {}, // r218
+    {}, // r219
+    {}, // r21a
+    {}, // r21b
+    {}, // r21d
+    {}, // r220
+    {}, // r221
+    {}, // r222
+    {}, // r223
+    {}, // r224
+    {}, // r225
+    {}, // r226
+    {}, // r227
+    {}, // r228
+    {}, // r229
+    {}, // r22a
+    {}, // r22b
+    {}, // r22c
+    {}, // r300
+    {}, // r301
+    {}, // r303
+    {}, // r304
+    {}, // r305
+    {}, // r306
+    {}, // r307
+    {}, // r308
+    {}, // r309
+    {}, // r30a
+    {}, // r30b
+    {}, // r30c
+    {}, // r30d
+    {}, // r30e
+    {}, // r30f
+    {}, // r310
+    {}, // r311
+    {}, // r312
+    {}, // r315
+    {}, // r316
+    {}, // r317
+    {}, // r318
+    {}, // r31a
+    {}, // r31b
+    {}, // r31c
+    {}, // r31d
+    {}, // r320
+    {}, // r321
+    {}, // r325
+    {}, // r326
+    {}, // r327
+    {}, // r328
+    {}, // r329
+    {}, // r330
+    {}, // r331
+    {}, // r332
+    {}, // r333
+  };
+
+  // Rows that keep their exact disc bytes for story reasons (the rescued dog); the dealer
+  // never touches them and their module keeps a room-budget slot.
+  static final int[][] KEEPROWS = {
+    {0x09}, // r100
+    {}, // r101
+    {}, // r102
+    {0x56}, // r103
+    {}, // r104
+    {}, // r105
+    {}, // r106
+    {}, // r107
+    {}, // r108
+    {}, // r109
+    {}, // r10a
+    {}, // r10b
+    {}, // r10c
+    {}, // r10d
+    {}, // r10e
+    {}, // r10f
+    {}, // r111
+    {}, // r112
+    {}, // r113
+    {}, // r117
+    {}, // r118
     {}, // r119
     {}, // r11a
     {}, // r11b
@@ -697,6 +810,15 @@ final class EnemyRooms {
     for (int i = 0; i < ROOM.length; i++) {
       if (ROOM[i] != room) continue;
       for (int n : SPAWN[i]) if (n == entry) return true;
+      return false;
+    }
+    return false;
+  }
+
+  static boolean keep(int room, int entry) {
+    for (int i = 0; i < ROOM.length; i++) {
+      if (ROOM[i] != room) continue;
+      for (int n : KEEPROWS[i]) if (n == entry) return true;
       return false;
     }
     return false;

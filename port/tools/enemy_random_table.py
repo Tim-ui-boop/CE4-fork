@@ -35,7 +35,18 @@ DIRECT = r"Em_list|Em_flg|EM_FLG_ROW|EM_DEAD_BIT"
 BOSS = r"lifeMeterBoss|GamePointBossReset|PlRegistBoss"
 # Rooms kept as they are although no boss is there (stage 2 prototype; the owner decides)
 KEEP = {
-    0x100: "the first encounter (em10 knows r100 and its entry 0 by name)",
+}
+# Rooms the owner hand-opened although their scripts count or index Em_list directly. The DRIVEN
+# rows still keep their disc bytes; only the ordinary rows join the deal.
+OPEN_HAND = {
+    0x100: "the owner asked for the opening room; the script spawns were verified in r100.cpp",
+}
+# Rows that must keep their exact disc bytes for story reasons (the dog Leon rescues: row 0x56 in
+# the farm, row 0x09 in the village's after-state fight). Hand-verified; never dealt, and their
+# module keeps a slot in the room budget.
+KEEP_ROWS = {
+    0x100: {0x09},
+    0x103: {0x56},
 }
 NUMBER = re.compile(r"^\s*(0[xX][0-9a-fA-F]+|\d+)\s*$")
 INT = re.compile(r"\b(0[xX][0-9a-fA-F]+|\d+)\b")
@@ -47,6 +58,11 @@ COUNT_CALL = re.compile(r"\b(?:SceCountEmAlive|SceDestroyEm)\s*\(([^)]*)\)")
 SPAWN = {
     0x117: {0x50, 0x51},          # church interior, after Ashley is found
     0x118: set(range(0x79, 0x80)),  # church in the storm, after Ashley is found
+    # r100's script-spawned rows (src/st1/r100.cpp): the horde (W->ems 3,4,5,0x12,0x13,0x26,0x27),
+    # the house Ganado (0x25) and the after-state rows of r100_trap_set. Rows 6,7,8 (setEvtMotion
+    # hard-casts them to cEmGanado) and row 9 (the story dog) stay DRIVEN/KEEP instead.
+    0x100: {0x03, 0x04, 0x05, 0x12, 0x13, 0x25, 0x26, 0x27,
+            0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x1D, 0x7A},
 }
 
 
@@ -119,6 +135,8 @@ def kind_of(why):
     """0 open, 1 untouched, 2 places only."""
     if "a boss" in why or any(w.startswith("kept:") for w in why):
         return 1
+    if any(w.startswith("open by hand:") for w in why):
+        return 0
     return 2 if why else 0
 
 
@@ -145,6 +163,8 @@ def scan(path, room):
     for v in tables.values():
         every |= v
     why = []
+    if room in OPEN_HAND:
+        why.append("open by hand: " + OPEN_HAND[room])
     if re.search(COUNTS, text):
         why.append("counts or sweeps enemies")
     if re.search(DIRECT, text):
@@ -218,7 +238,8 @@ def java_source(rows):
         lines.append("    %s, // r%03x" % ("true" if alias else "false", room))
     lines += ["  };", "", "  static final int[][] DRIVEN = {"]
     for room, _why, protected, _forced, _alias in rows:
-        nums = ", ".join("0x%02x" % v for v in sorted(protected - SPAWN.get(room, set())))
+        nums = ", ".join("0x%02x" % v for v in sorted(protected - SPAWN.get(room, set())
+                                                  - KEEP_ROWS.get(room, set())))
         lines.append("    {%s}, // r%03x" % (nums, room))
     lines += [
         "  };",
@@ -228,6 +249,16 @@ def java_source(rows):
     ]
     for room, _why, _protected, _forced, _alias in rows:
         nums = ", ".join("0x%02x" % v for v in sorted(SPAWN.get(room, set())))
+        lines.append("    {%s}, // r%03x" % (nums, room))
+    lines += [
+        "  };",
+        "",
+        "  // Rows that keep their exact disc bytes for story reasons (the rescued dog); the dealer",
+        "  // never touches them and their module keeps a room-budget slot.",
+        "  static final int[][] KEEPROWS = {",
+    ]
+    for room, _why, _protected, _forced, _alias in rows:
+        nums = ", ".join("0x%02x" % v for v in sorted(KEEP_ROWS.get(room, set())))
         lines.append("    {%s}, // r%03x" % (nums, room))
     lines += [
         "  };",
@@ -260,6 +291,15 @@ def java_source(rows):
         "    for (int i = 0; i < ROOM.length; i++) {",
         "      if (ROOM[i] != room) continue;",
         "      for (int n : SPAWN[i]) if (n == entry) return true;",
+        "      return false;",
+        "    }",
+        "    return false;",
+        "  }",
+        "",
+        "  static boolean keep(int room, int entry) {",
+        "    for (int i = 0; i < ROOM.length; i++) {",
+        "      if (ROOM[i] != room) continue;",
+        "      for (int n : KEEPROWS[i]) if (n == entry) return true;",
         "      return false;",
         "    }",
         "    return false;",
