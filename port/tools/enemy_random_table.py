@@ -47,7 +47,13 @@ OPEN_HAND = {
 KEEP_ROWS = {
     0x100: {0x09},
     0x103: {0x56},
+    # The Luis cabin siege: the script spawns rows 0xC8..0xD1 one by one and counts kills on them
+    # through cEmGanado virtuals. Changing their type/set makes the attackers stop entering, which
+    # hangs the 40-kill gate. Keep them byte-exact (PC tool's SAFE_CABIN is about the same risk).
+    0x11c: {0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD0, 0xD1},
 }
+# Per-row call-site names found by scan(), emitted as EnemyRooms.USE for the debug report.
+USE_SITES = {}
 NUMBER = re.compile(r"^\s*(0[xX][0-9a-fA-F]+|\d+)\s*$")
 INT = re.compile(r"\b(0[xX][0-9a-fA-F]+|\d+)\b")
 # Modules a room preloads itself (r106 loads four before any enemy spawns, src/st1/r106.cpp:97-100).
@@ -179,6 +185,7 @@ def scan(path, room):
     if room in KEEP:
         why.append("kept: " + KEEP[room])
     protected = set()
+    use = USE_SITES.setdefault(room, {})
     variable = False
     for name in DRIVEN:
         for m in re.finditer(r"\b%s\s*\(" % name, text):
@@ -188,6 +195,7 @@ def scan(path, room):
                 v = int(n.group(1), 0)
                 if 0 <= v < 256:
                     protected.add(v)
+                    use.setdefault(v, set()).add(name)
             elif name == "setPtr" and argument_count(text, m.end() - 1) == 2:
                 pass  # setPtr(cEm*, errOn) takes a live enemy, not a list entry
             else:
@@ -202,6 +210,7 @@ def scan(path, room):
             v = int(n.group(1), 0)
             if 0 <= v < 256:
                 protected.add(v)
+                use.setdefault(v, set()).add("Em_list")
         elif not re.match(r"^\s*i\s*$", m.group(1)) or "r327" not in path:
             # (r327's loop over every entry only clears the be_flag of the 0x1D ones: lifecycle)
             protected |= numbers_of(m.group(1), tables, every)
@@ -277,6 +286,28 @@ def java_source(rows):
         lines.append("    {%s}, // r%03x" % (nums, room))
     lines += [
         "  };",
+        "",
+        "  // Which script call touches each list row, found by the generator's source scan.",
+        "  static final String[][] USE = {",
+    ]
+    for room, _why, _protected, _forced, _alias in rows:
+        entries = ["0x%02x %s" % (v, " ".join(sorted(names))) for v, names in sorted(USE_SITES.get(room, {}).items())]
+        lines.append("    {%s}, // r%03x" % (", ".join('"%s"' % e for e in entries), room))
+    lines += [
+        "  };",
+        "",
+        "  static String use(int room, int entry) {",
+        "    for (int i = 0; i < ROOM.length; i++) {",
+        "      if (ROOM[i] != room) continue;",
+        "      for (String s : USE[i]) {",
+        "        int sp = s.indexOf(' ');",
+        "        if (sp > 0 && Integer.decode(s.substring(0, sp).trim()) == entry)",
+        "          return s.substring(sp + 1);",
+        "      }",
+        "      return \"\";",
+        "    }",
+        "    return \"\";",
+        "  }",
         "",
         "  static int kind(int room) {",
         "    for (int i = 0; i < ROOM.length; i++) if (ROOM[i] == room) return KIND[i];",

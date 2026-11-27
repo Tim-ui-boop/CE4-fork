@@ -179,6 +179,13 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     seedField.setSingleLine(true);
     seedField.setText(String.valueOf(getSharedPreferences(RAND_PREFS, MODE_PRIVATE)
         .getLong(RAND_SEED, 1L)));
+    seedField.addTextChangedListener(new android.text.TextWatcher() {
+      public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+      public void onTextChanged(CharSequence s, int a, int b, int c) {}
+      public void afterTextChanged(android.text.Editable s) {
+        EnemyShuffle.logSetting(imports.root, "SEED text=" + s);
+      }
+    });
     LinearLayout.LayoutParams fieldLp = new LinearLayout.LayoutParams(
         0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
     fieldLp.leftMargin = dp(12);
@@ -191,6 +198,8 @@ public final class MainActivity extends Activity implements ImportManager.Listen
     android.content.SharedPreferences ratioPrefs = getSharedPreferences(RATIO_PREFS, MODE_PRIVATE);
     final int[] ratios = EnemyShuffle.DEFAULT_RATIOS.clone();
     for (int i = 0; i < ratios.length; i++) ratios[i] = ratioPrefs.getInt("r" + i, ratios[i]);
+    EnemyShuffle.logSetting(imports.root, "OPEN options=0x" + Integer.toHexString(options[0])
+        + " ratios=" + java.util.Arrays.toString(ratios));
     LinearLayout grid = new LinearLayout(this);
     grid.setOrientation(LinearLayout.VERTICAL);
     for (int i = 0; i < EnemyShuffle.POOL_NAMES.length; i++) {
@@ -204,6 +213,8 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       box.setOnCheckedChangeListener((v, on) -> {
         options[0] = on ? options[0] | flag : options[0] & ~flag;
         getSharedPreferences(RAND_PREFS, MODE_PRIVATE).edit().putInt(RAND_OPTIONS, options[0]).apply();
+        EnemyShuffle.logSetting(imports.root, "POOL " + EnemyShuffle.POOL_NAMES[idx] + " -> "
+            + (on ? "on" : "off") + " options=0x" + Integer.toHexString(options[0]));
       });
       row.addView(box, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
       Button ratioButton = new Button(this);
@@ -220,6 +231,8 @@ public final class MainActivity extends Activity implements ImportManager.Listen
         ratios[idx] = EnemyShuffle.RATIO_STEPS[(at + 1) % EnemyShuffle.RATIO_STEPS.length];
         showRatio.run();
         ratioPrefs.edit().putInt("r" + idx, ratios[idx]).apply();
+        EnemyShuffle.logSetting(imports.root, "RATIO " + EnemyShuffle.POOL_NAMES[idx] + " -> "
+            + (ratios[idx] == 0 ? "off" : "1-in-" + ratios[idx]));
       });
       row.addView(ratioButton, new LinearLayout.LayoutParams(dp(92), ViewGroup.LayoutParams.WRAP_CONTENT));
       grid.addView(row);
@@ -242,6 +255,8 @@ public final class MainActivity extends Activity implements ImportManager.Listen
         box.setOnCheckedChangeListener((v, on) -> {
           options[0] = on ? options[0] | flag : options[0] & ~flag;
           getSharedPreferences(RAND_PREFS, MODE_PRIVATE).edit().putInt(RAND_OPTIONS, options[0]).apply();
+          EnemyShuffle.logSetting(imports.root, "MOD " + getString(modLabels[k]) + " -> "
+              + (on ? "on" : "off") + " options=0x" + Integer.toHexString(options[0]));
         });
         row.addView(box, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
       }
@@ -278,6 +293,8 @@ public final class MainActivity extends Activity implements ImportManager.Listen
         randStatus.setText(R.string.launch_rand_no_disc);
         return;
       }
+      EnemyShuffle.logSetting(imports.root, "PREVIEW seed=" + seed + " options=0x"
+          + Integer.toHexString(options[0]) + " ratios=" + java.util.Arrays.toString(ratios));
       String text = EnemyShuffle.preview(new File(data, "disc1/files"), seed, options[0], ratios);
       android.widget.ScrollView sv = new android.widget.ScrollView(this);
       TextView tv = new TextView(this);
@@ -340,6 +357,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       }, "enemy-deal").start();
     }, null);
     halfButton(body, getString(R.string.launch_rand_off), () -> {
+      EnemyShuffle.logSetting(imports.root, "TURN_OFF");
       randStatus.setText(EnemyShuffle.clear(imports.root));
     }, null);
   }

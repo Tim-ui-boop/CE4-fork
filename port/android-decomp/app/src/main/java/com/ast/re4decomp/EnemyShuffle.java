@@ -47,6 +47,8 @@ final class EnemyShuffle {
   /** The nine switches that are not pool members. */
   static final int[] MODIFIER_BITS = {VARIETY, HELMET, SHIELD, PLAGA, DYNAMITE, MIXED,
       SAFE_CABIN, SHARED_SET, RESET_SET};
+  static final String[] MODIFIER_NAMES = {"variety", "helmets", "shields", "plagas",
+      "dynamite", "mixed", "safe-cabin", "shared-set", "reset-set"};
   static final int DEFAULT_OPTIONS = VILLAGE | CASTLE | ISLAND | SAW | JJ | GARRADOR
       | REGEN | VARIETY | SAFE_CABIN | VERDUGO;
 
@@ -167,6 +169,7 @@ final class EnemyShuffle {
   private static final class Plan {
     final List<ListPlan> lists = new ArrayList<>();
     final Set<String> silent = new LinkedHashSet<>();
+    final StringBuilder detail = new StringBuilder();
     String report;
     String error;
   }
@@ -201,6 +204,49 @@ final class EnemyShuffle {
   private static File outDir(File dataRoot) { return new File(dataRoot, "randomizer/enemies"); }
   private static File marker(File dataRoot) { return new File(outDir(dataRoot), "active"); }
   private static File logFile(File dataRoot) { return new File(outDir(dataRoot), "enemies.txt"); }
+  private static File debugFile(File dataRoot) {
+    return new File(outDir(dataRoot), "room-debug.txt");
+  }
+  /** Settings tinkering lives outside the enemies folder so "Turn off" does not erase the trace. */
+  private static File settingsLog(File dataRoot) {
+    return new File(new File(dataRoot, "randomizer"), "settings-debug.txt");
+  }
+
+  static void logSetting(File dataRoot, String what) {
+    if (dataRoot == null) return;
+    try {
+      File f = settingsLog(dataRoot);
+      f.getParentFile().mkdirs();
+      try (RandomAccessFile r = new RandomAccessFile(f, "rw")) {
+        r.seek(r.length());
+        r.write((System.currentTimeMillis() + " " + what + "\n").getBytes(StandardCharsets.UTF_8));
+      }
+    } catch (IOException ex) {
+      Log.w(TAG, "could not write settings-debug.txt: " + ex.getMessage());
+    }
+  }
+
+  private static String hexList(int[] ids) {
+    StringBuilder b = new StringBuilder("{");
+    for (int i = 0; i < ids.length; i++) {
+      if (i > 0) b.append(',');
+      b.append("0x").append(Integer.toHexString(ids[i]));
+    }
+    return b.append('}').toString();
+  }
+
+  private static String roomRows(int room, boolean spawn) {
+    StringBuilder b = new StringBuilder("{");
+    boolean first = true;
+    for (int no = 0; no < ENTRIES; no++) {
+      boolean hit = spawn ? EnemyRooms.spawn(room, no) : EnemyRooms.keep(room, no);
+      if (!hit) continue;
+      if (!first) b.append(',');
+      first = false;
+      b.append("0x").append(Integer.toHexString(no));
+    }
+    return b.append('}').toString();
+  }
 
   static boolean active(File dataRoot) { return marker(dataRoot).isFile(); }
 
@@ -266,6 +312,9 @@ final class EnemyShuffle {
       }
       deleteTree(stage);
       writeAll(logFile(dataRoot), p.report.getBytes(StandardCharsets.UTF_8));
+      writeAll(debugFile(dataRoot), p.detail.toString().getBytes(StandardCharsets.UTF_8));
+      logSetting(dataRoot, "DEAL seed=" + seed + " options=0x" + Integer.toHexString(options)
+          + " ratios=" + Arrays.toString(ratios));
       writeAll(new File(dir, "no-sound.txt"), String.join("\n", p.silent)
           .getBytes(StandardCharsets.UTF_8));
       new File(dir, "r100-no-sound").delete();
@@ -363,6 +412,23 @@ final class EnemyShuffle {
     }
     StringBuilder report = new StringBuilder();
     report.append("Enemy pool, seed ").append(seed).append(", options ").append(options).append('\n');
+    p.detail.append("=== RANDOMIZER SETTINGS ===\n")
+        .append("seed=").append(seed)
+        .append(" options=0x").append(Integer.toHexString(options))
+        .append(" ratioSteps=").append(Arrays.toString(RATIO_STEPS)).append('\n');
+    for (int i = 0; i < POOL.length; i++) {
+      p.detail.append("POOL ").append(i).append(' ').append(POOL_NAMES[i])
+          .append(" enabled=").append((options & POOL[i].bit) != 0)
+          .append(" ratio=").append(ratio[i])
+          .append(" ids=").append(Arrays.toString(POOL[i].ids))
+          .append(" types=").append(Arrays.toString(POOL[i].types)).append('\n');
+    }
+    for (int i = 0; i < MODIFIER_BITS.length; i++) {
+      p.detail.append("MOD ").append(MODIFIER_NAMES[i])
+          .append(" bit=0x").append(Integer.toHexString(MODIFIER_BITS[i]))
+          .append(" enabled=").append((options & MODIFIER_BITS[i]) != 0).append('\n');
+    }
+    p.detail.append("=== PER-ROOM DETAIL ===\n");
 
     for (String name : LISTS) {
       byte[] src = read(new File(discFiles, name));
@@ -381,11 +447,19 @@ final class EnemyShuffle {
       ListPlan lp = new ListPlan();
       lp.name = name; lp.out = out; lp.allowed = allowed;
       report.append("List ").append(name).append('\n');
+      p.detail.append("LIST ").append(name).append('\n');
       Set<Integer> dealt = new LinkedHashSet<>();
       for (int room : rooms) {
         int kind = EnemyRooms.kind(room);
         if (kind == EnemyRooms.UNTOUCHED || kind < 0) continue;
-        dealRoom(out, allowed, seed, options, ratio, room, p.silent, report,
+        p.detail.append("ROOM r").append(Integer.toHexString(room))
+            .append(" kind=").append(kind == EnemyRooms.OPEN ? "OPEN"
+                : kind == EnemyRooms.PLACES_ONLY ? "PLACES_ONLY" : "UNTOUCHED")
+            .append(" alias=").append(EnemyRooms.alias(room))
+            .append(" forced=").append(hexList(EnemyRooms.forced(room)))
+            .append(" spawnRows=").append(roomRows(room, true))
+            .append(" keepRows=").append(roomRows(room, false)).append('\n');
+        dealRoom(out, src, allowed, seed, options, ratio, room, p.silent, p.detail, report,
             kind == EnemyRooms.PLACES_ONLY);
         dealt.add(room);
       }
@@ -394,7 +468,11 @@ final class EnemyShuffle {
         // A room can already be at its four-module limit because of script-owned rows. Restore
         // ONLY those rooms; restoring every room in the list made a single over-budget room wipe
         // the farm (and every other good room) back to vanilla.
-        for (int room : over) restoreRoom(out, src, room);
+        for (int room : over) {
+          restoreRoom(out, src, room);
+          p.detail.append("RESTORE r").append(Integer.toHexString(room))
+              .append(" over four module kinds: every row back to disc\n");
+        }
         report.append("Kept rooms with a full module budget: ").append(over.size()).append('\n');
       }
       String why = verify(src, out, allowed);
@@ -409,9 +487,25 @@ final class EnemyShuffle {
     return p;
   }
 
+  private static void logRow(StringBuilder detail, byte[] src, byte[] out, int at, int room,
+      int no, String reason) {
+    String vanilla = "-";
+    if (at + ENTRY <= src.length) {
+      vanilla = String.format(Locale.ROOT, "id=0x%02x type=0x%02x set=0x%02x hp=%d",
+          u8(src, at + ID), u8(src, at + TYPE), u8(src, at + SET), u16(src, at + HP));
+    }
+    String dealt = String.format(Locale.ROOT, "id=0x%02x type=0x%02x set=0x%02x hp=%d",
+        u8(out, at + ID), u8(out, at + TYPE), u8(out, at + SET), u16(out, at + HP));
+    detail.append("  row 0x").append(Integer.toHexString(no))
+        .append(" vanilla[").append(vanilla).append("] dealt[").append(dealt).append(']')
+        .append(" use=").append(EnemyRooms.use(room, no))
+        .append(" reason=").append(reason).append('\n');
+  }
+
   /** Deals every ordinary record in one room; script rows and the hand-made officer are skipped. */
-  private static void dealRoom(byte[] out, int[] allowed, long seed, int options, int[] ratio,
-      int room, Set<String> silent, StringBuilder report, boolean placesOnly) {
+  private static void dealRoom(byte[] out, byte[] src, int[] allowed, long seed, int options,
+      int[] ratio, int room, Set<String> silent, StringBuilder detail, StringBuilder report,
+      boolean placesOnly) {
     Set<Integer> kinds = new LinkedHashSet<>();
     for (int id : EnemyRooms.forced(room)) kinds.add(id);  // modules the room preloads itself
     // Script-spawn rows no longer reserve their vanilla id here. Doing so filled all four module
@@ -462,19 +556,28 @@ final class EnemyShuffle {
       }
     }
     int n = 0;
+    detail.append("  moduleKindsBefore=").append(kinds)
+        .append(" basicFamily=").append(roomBasic < 0 ? "none" : POOL_NAMES[roomBasic])
+        .append(" counted=").append(placesOnly).append('\n');
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
       if (u16(out, at + ROOM) != room) continue;
       int id = u8(out, at + ID);
-      if (id == 0) continue;
-      if (id == 0x18) continue;  // the trader: never randomized, never re-geared
-      if (EnemyRooms.keep(room, no)) continue;  // story rows (the rescued dog): exact disc bytes
+      if (id == 0) { logRow(detail, src, out, at, room, no, "EMPTY"); continue; }
+      if (id == 0x18) {  // the trader: never randomized, never re-geared
+        logRow(detail, src, out, at, room, no, "TRADER"); continue;
+      }
+      if (EnemyRooms.keep(room, no)) {  // story rows: exact disc bytes
+        logRow(detail, src, out, at, room, no, "KEEP_STORY"); continue;
+      }
       if (EnemyRooms.driven(room, no)) {
         appearanceOnly(out, allowed, seed, options, room, no);
-        continue;
+        logRow(detail, src, out, at, room, no, "DRIVEN_APPEARANCE_ONLY"); continue;
       }
       int flag = u32(out, at + FLAG), set = u8(out, at + SET);
-      if ((flag & FLAG_BOMB) != 0 || set == 0x25) continue;  // dynamite and named event motions
+      if ((flag & FLAG_BOMB) != 0 || set == 0x25) {  // dynamite and named event motions
+        logRow(detail, src, out, at, room, no, "BOMB_OR_NAMED_MOTION"); continue;
+      }
       boolean counted;
       if (room == 0x101) counted = n != 11 && n != 37;   // two dormant rows: bell count unchanged
       else if (room == 0x104) counted = n != 0;          // one boss row for the waves
@@ -535,9 +638,11 @@ final class EnemyShuffle {
         // pick cannot overrun the four the hardware supports.
         if (kinds.isEmpty()) {
           kinds.add(id);
+          logRow(detail, src, out, at, room, no, "NO_FIT_EMPTY_KINDS");
           continue;
         }
         kinds.add(id);
+        logRow(detail, src, out, at, room, no, "NO_FIT_KEPT_VANILLA");
         continue;
       }
 
@@ -557,6 +662,8 @@ final class EnemyShuffle {
       putU16(out, at + HP, pick.hp);
       putU8(out, at + SET, 0);
       allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
+      logRow(detail, src, out, at, room, no, "DEALT_" + pick.name
+          + (scriptGanado ? "_SCRIPT_GANADO" : "") + (counted ? "_COUNTED" : ""));
       if (!pick.basic && !kinds.contains(chosen)) eliteModuleUsed = true;
       kinds.add(chosen);
       // Every dealt enemy keeps silent: its DRS sound-bank record is rewritten to the empty slot
@@ -576,6 +683,11 @@ final class EnemyShuffle {
       report.append(POOL[i].name).append(' ').append(tally[i]).append(", ");
     }
     report.append('\n');
+    detail.append("  SUMMARY r").append(Integer.toHexString(room))
+        .append(" rows=").append(n)
+        .append(" moduleKindsAfter=").append(kinds)
+        .append(" heavyUsed=").append(heavyUsed)
+        .append(" massiveUsed=").append(massiveUsed).append('\n');
   }
 
   private static boolean fits(Set<Integer> kinds, int id) {
