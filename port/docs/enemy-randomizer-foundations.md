@@ -271,6 +271,16 @@ had no base once those slots filled, and every unmatched row was rewritten to th
 module (the vanilla villager). That made all seeds look the same and only em15 loaded. The offline
 suite now deals with real default ratios and VILLAGE off and refuses a farm dominated by villagers.
 
+**Script-spawn rows and the four-module budget.** The dealer used to reserve each script-spawn
+row's *vanilla* id before dealing. In r100 that filled all four module slots with `0x12` (villagers),
+`0x2a` (traps) and `0x21` (dog), so no pick could fit and the farm — and the crows, cows, chickens
+and traps in other rooms — stayed on their disc ids. Those reservations are gone: a dealt row's NEW
+id is budgeted by `fits()` like any other. Rows the script spawns **and casts to `cEmGanado`**
+(still a Ganado-family id) skip the elite/boss roll and keep a basic family, so the script's
+`ckFindPL` / `setNoSuspend` / `setEvtMotion` calls remain valid; animals and traps may become any id.
+When a room genuinely needs more than four modules after the deal, only that room is restored to
+the disc — the old code restored *every* dealt room in the list, wiping good rooms along with it.
+
 Two new toggles — Bella Sisters and Verdugo — join the grid. The launcher also has a
 **Preview seed rolls** button: it runs the exact same planning step in memory and shows the report
 in a dialog, without writing the sidecar or touching app data. The written `enemies.txt` and the

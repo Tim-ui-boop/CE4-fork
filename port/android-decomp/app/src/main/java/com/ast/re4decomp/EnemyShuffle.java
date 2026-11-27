@@ -287,6 +287,12 @@ final class EnemyShuffle {
     return id == 0x12 || id == 0x13 || id == 0x1B || id == 0x1C || id == 0x1D;
   }
 
+  /** Ids the room script casts to cEmGanado and drives through Ganado virtuals. */
+  private static boolean ganadoId(int id) {
+    return id == 0x12 || id == 0x13 || id == 0x15 || id == 0x16 || id == 0x17
+        || id == 0x1B || id == 0x1C || id == 0x1D;
+  }
+
   /** Which basic family an id belongs to, or -1 for an elite/boss. */
   private static int basicFamily(int id) {
     if (id == 0x12 || id == 0x13 || id == 0x17) return 0;
@@ -383,15 +389,15 @@ final class EnemyShuffle {
             kind == EnemyRooms.PLACES_ONLY);
         dealt.add(room);
       }
-      String why = kinds(out, dealt);
-      if (why != null) {
-        // A room can already be at its four-module limit because of script-owned rows. Drop the
-        // whole room back to the disc rather than refusing every seed in the import.
-        for (int room : dealt) restoreRoom(out, src, room);
-        report.append("Kept rooms with a full module budget: ").append(dealt.size()).append('\n');
-        why = null;
+      Set<Integer> over = overBudgetRooms(out, dealt);
+      if (!over.isEmpty()) {
+        // A room can already be at its four-module limit because of script-owned rows. Restore
+        // ONLY those rooms; restoring every room in the list made a single over-budget room wipe
+        // the farm (and every other good room) back to vanilla.
+        for (int room : over) restoreRoom(out, src, room);
+        report.append("Kept rooms with a full module budget: ").append(over.size()).append('\n');
       }
-      if (why == null) why = verify(src, out, allowed);
+      String why = verify(src, out, allowed);
       if (why != null) {
         p.error = why + " in " + name + "\nPlan: " + report.toString().replace('\n', '|');
         return p;
@@ -408,12 +414,10 @@ final class EnemyShuffle {
       int room, Set<String> silent, StringBuilder report, boolean placesOnly) {
     Set<Integer> kinds = new LinkedHashSet<>();
     for (int id : EnemyRooms.forced(room)) kinds.add(id);  // modules the room preloads itself
-    for (int no = 0; no < ENTRIES; no++) {
-      if (EnemyRooms.spawn(room, no) && u16(out, no * ENTRY + ROOM) == room) {
-        int id = u8(out, no * ENTRY + ID);
-        if (id != 0) kinds.add(id);  // a dormant row the script really spawns still needs a slot
-      }
-    }
+    // Script-spawn rows no longer reserve their vanilla id here. Doing so filled all four module
+    // slots before any pick (r100 kept 12 villagers and its crows/traps/cows kept their ids), so
+    // animals and script rows were never randomized. Their NEW id is budgeted by fits() below.
+    // Rows that genuinely keep their id are still reserved in the loop below.
     if (room == 0x100) kinds.add(0x12);                    // the officer-killer is built by r100.cpp
     if (room == 0x101) { kinds.add(0x15); kinds.add(0x26); } // r101 preloads these for events
     if (room == 0x103) kinds.add(0x12);                    // r103's corpse models
@@ -455,7 +459,11 @@ final class EnemyShuffle {
       n++;
 
       List<Member> hits = new ArrayList<>();
-      for (int i = 0; i < POOL.length; i++) {
+      // A row the room script spawns and casts to cEmGanado must stay a Ganado family: the script
+      // calls ckFindPL/setNoSuspend/setEvtMotion on it. Skip the elite/boss roll for those rows;
+      // the fallback below keeps them within a basic family. Animals and traps can be any id.
+      boolean scriptGanado = EnemyRooms.spawn(room, no) && ganadoId(id);
+      for (int i = 0; i < POOL.length && !scriptGanado; i++) {
         Member m = POOL[i];
         if (m.basic || (options & m.bit) == 0 || ratio[i] <= 0) continue;
         if (m.massive && massiveUsed) continue;
@@ -481,6 +489,7 @@ final class EnemyShuffle {
         for (int i = 0; i < POOL.length; i++) {
           Member m = POOL[i];
           if ((options & m.bit) == 0 || ratio[i] <= 0) continue;
+          if (scriptGanado && !m.basic) continue;  // keep script-driven Ganados in a Ganado family
           if (m.massive && massiveUsed) continue;
           if (counted && !m.counted() && !EnemyRooms.alias(room)) continue;
           if (m.basic && i == basicFamily(id)) continue;  // basic row must change family
@@ -552,7 +561,9 @@ final class EnemyShuffle {
     }
   }
 
-  private static String kinds(byte[] out, Set<Integer> rooms) {
+  /** Rooms whose dealt plan would need more than the game's four enemy modules. */
+  private static Set<Integer> overBudgetRooms(byte[] out, Set<Integer> rooms) {
+    Set<Integer> bad = new LinkedHashSet<>();
     for (int room : rooms) {
       Set<Integer> k = new LinkedHashSet<>();
       for (int no = 0; no < ENTRIES; no++) {
@@ -568,15 +579,12 @@ final class EnemyShuffle {
         k.add(id);
       }
       for (int id : EnemyRooms.forced(room)) k.add(id);
-        if (room == 0x100) k.add(0x12);
+      if (room == 0x100) k.add(0x12);
       if (room == 0x101) { k.add(0x15); k.add(0x26); }
       if (room == 0x103) k.add(0x12);
-      if (k.size() > 4) {
-        return "the deal would need " + k.size() + " enemy modules in room "
-            + Integer.toHexString(room) + " " + k + " (the game has four)";
-      }
+      if (k.size() > 4) bad.add(room);
     }
-    return null;
+    return bad;
   }
 
   private static String verify(byte[] src, byte[] out, int[] allowed) {
