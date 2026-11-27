@@ -1,0 +1,10 @@
+--- a/src/game/read.cpp
++++ b/src/game/read.cpp
+@@ -279,6 +279,7 @@
+     DpfFlagOff(pG, DPF_MESSAGE);
+     m = pullEmModule();
+     if (m == NULL) {
++        pG->Disp_flg = flags;  // no free slot: leaving 0xFFFFFFFF hides the whole room
+         return NULL;
+     }
+     if (readEmData(m, id, data_addr, malloc_size) == 0) {

@@ -289,6 +289,11 @@ the basic family. r101's bell waves (rows `0x22`–`0x3a`, except the risky `0x3
 rows) moved from DRIVEN to SPAWN so they get dealt to a basic Ganado family; their `set` is reset to
 0 because the old presets live in em15's event archive.
 
+**Blank-room fix (patch 0258).** `readEm()` sets `Disp_flg` to all-ones while loading a module;
+its no-free-slot failure path used to return without restoring the flag, hiding the whole drawn
+world while audio and the menu kept working. The patch restores the saved flags on that path.
+See `enemy-room-architecture-research.md` for the full room/enemy reference.
+
 Two new toggles — Bella Sisters and Verdugo — join the grid. The launcher also has a
 **Preview seed rolls** button: it runs the exact same planning step in memory and shows the report
 in a dialog, without writing the sidecar or touching app data. The written `enemies.txt` and the
