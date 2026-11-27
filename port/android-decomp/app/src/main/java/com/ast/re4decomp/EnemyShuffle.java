@@ -421,6 +421,29 @@ final class EnemyShuffle {
     if (room == 0x100) kinds.add(0x12);                    // the officer-killer is built by r100.cpp
     if (room == 0x101) { kinds.add(0x15); kinds.add(0x26); } // r101 preloads these for events
     if (room == 0x103) kinds.add(0x12);                    // r103's corpse models
+    // One family and one id per member for the whole room. Picking a different id for every row
+    // spent several of the four module slots on the same enemy type (a room could end up with
+    // zealots AND soldiers, or five different Dr Salvador ids). Converging on one id per member
+    // and one basic family leaves a slot free for an elite or boss.
+    List<Integer> basicIdx = new ArrayList<>();
+    for (int i = 0; i < 3; i++) {
+      if ((options & POOL[i].bit) != 0 && ratio[i] > 0) basicIdx.add(i);
+    }
+    int roomBasic = basicIdx.isEmpty() ? -1
+        : basicIdx.get(Math.floorMod(hash(seed, room, 0, 990), basicIdx.size()));
+    int[] roomId = new int[POOL.length];
+    for (int i = 0; i < POOL.length; i++) {
+      int[] ids = POOL[i].ids;
+      roomId[i] = ids[Math.floorMod(hash(seed, room, i, 991), ids.length)];
+    }
+    // A room with script-driven Ganados needs one free slot for their basic family. Let elites
+    // claim at most one NEW module there; otherwise two elites fill both free slots and every
+    // late script spawn has to stay vanilla (r101's bell waves).
+    boolean hasScriptGanado = false;
+    for (int no = 0; no < ENTRIES; no++) {
+      if (EnemyRooms.spawn(room, no) && ganadoId(u8(out, no * ENTRY + ID))) hasScriptGanado = true;
+    }
+    boolean eliteModuleUsed = false;
     int[] tally = new int[POOL.length];
     boolean massiveUsed = false;
     boolean heavyUsed = false;
@@ -471,7 +494,8 @@ final class EnemyShuffle {
         // the gated engine alias makes those counts see them. Other counted rooms stay restricted.
         if (counted && !m.counted() && !EnemyRooms.alias(room)) continue;
         if (hash(seed, room, no, i) % ratio[i] != 0) continue;
-        int candidate = m.ids[Math.floorMod(hash(seed, room, no, 902), m.ids.length)];
+        int candidate = roomId[i];
+        if (hasScriptGanado && eliteModuleUsed && !kinds.contains(candidate)) continue;
         if (!fits(kinds, candidate) || (heavyUsed && HEAVY_IDS.contains(candidate))) continue;
         hits.add(m);
       }
@@ -489,11 +513,13 @@ final class EnemyShuffle {
         for (int i = 0; i < POOL.length; i++) {
           Member m = POOL[i];
           if ((options & m.bit) == 0 || ratio[i] <= 0) continue;
+          if (hasScriptGanado && !m.basic && eliteModuleUsed && !kinds.contains(roomId[i])) continue;
           if (scriptGanado && !m.basic) continue;  // keep script-driven Ganados in a Ganado family
+          if (m.basic && roomBasic >= 0 && i != roomBasic) continue;  // one basic family per room
           if (m.massive && massiveUsed) continue;
           if (counted && !m.counted() && !EnemyRooms.alias(room)) continue;
           if (m.basic && i == basicFamily(id)) continue;  // basic row must change family
-          int candidate = m.ids[Math.floorMod(hash(seed, room, no, 902), m.ids.length)];
+          int candidate = roomId[i];
           if (!fits(kinds, candidate) || (!active && !kinds.contains(candidate))
               || (heavyUsed && HEAVY_IDS.contains(candidate))) continue;
           bases.add(m);
@@ -515,7 +541,9 @@ final class EnemyShuffle {
         continue;
       }
 
-      int chosen = pick.ids[Math.floorMod(hash(seed, room, no, 902), pick.ids.length)];
+      int pickAt = 0;
+      for (int i = 0; i < POOL.length; i++) if (POOL[i] == pick) { pickAt = i; break; }
+      int chosen = roomId[pickAt];
       int type = pick.types[Math.floorMod(hash(seed, room, no, 903), pick.types.length)];
       int extra = 0;
       if ((options & HELMET) != 0 && hash(seed, room, no, 904) % 10 == 0) extra |= FLAG_HELMET;
@@ -529,6 +557,7 @@ final class EnemyShuffle {
       putU16(out, at + HP, pick.hp);
       putU8(out, at + SET, 0);
       allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
+      if (!pick.basic && !kinds.contains(chosen)) eliteModuleUsed = true;
       kinds.add(chosen);
       // Every dealt enemy keeps silent: its DRS sound-bank record is rewritten to the empty slot
       // on read (runtime/dvd.cpp), because dealt banks fault in the synth when their voices play

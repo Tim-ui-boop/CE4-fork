@@ -281,6 +281,14 @@ id is budgeted by `fits()` like any other. Rows the script spawns **and casts to
 When a room genuinely needs more than four modules after the deal, only that room is restored to
 the disc — the old code restored *every* dealt room in the list, wiping good rooms along with it.
 
+**One family, one id per room.** A pool member with several ids (Dr. Salvador has five) used to pick
+a different id for every row, and a room could end up with both zealots and soldiers. The dealer now
+chooses one id per member and one basic family per room, so the remaining slot can hold an elite or
+boss. Rooms with script-driven Ganados let elites claim at most one new module, leaving a slot for
+the basic family. r101's bell waves (rows `0x22`–`0x3a`, except the risky `0x3c`–`0x46` event-motion
+rows) moved from DRIVEN to SPAWN so they get dealt to a basic Ganado family; their `set` is reset to
+0 because the old presets live in em15's event archive.
+
 Two new toggles — Bella Sisters and Verdugo — join the grid. The launcher also has a
 **Preview seed rolls** button: it runs the exact same planning step in memory and shows the report
 in a dialog, without writing the sidecar or touching app data. The written `enemies.txt` and the
