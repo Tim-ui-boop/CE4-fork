@@ -262,6 +262,15 @@ The report says `boss none` when the four-module limit leaves no room. Each entr
 reserved for a future per-member 1-in-N mode, like the PC tool; the selection function is the only
 place that would need to change.
 
+**When no pool member wins the 1-in-N roll for a row**, the fallback picks any enabled member as a
+base (not just the three basic families), with the same module/budget and heavy-model guards as a
+normal pick. A dormant record the room never spawns may only reuse a module already loaded. If no
+member fits at all, the row keeps its exact vanilla bytes — it is never repointed to another id.
+This matters with VILLAGE off: the old fallback only looked at village/castle/island, so a farm row
+had no base once those slots filled, and every unmatched row was rewritten to the first reserved
+module (the vanilla villager). That made all seeds look the same and only em15 loaded. The offline
+suite now deals with real default ratios and VILLAGE off and refuses a farm dominated by villagers.
+
 Two new toggles — Bella Sisters and Verdugo — join the grid. The launcher also has a
 **Preview seed rolls** button: it runs the exact same planning step in memory and shows the report
 in a dialog, without writing the sidecar or touching app data. The written `enemies.txt` and the

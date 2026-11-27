@@ -472,39 +472,37 @@ final class EnemyShuffle {
         pick = hits.get(Math.floorMod(hash(seed, room, no, 900), hits.size()));
       } else {
         List<Member> bases = new ArrayList<>();
-        for (int i = 0; i < 3; i++) {
-          if ((options & POOL[i].bit) == 0) continue;
-          if (i == basicFamily(id)) continue;  // a villager must become a different family
-          int candidate = POOL[i].ids[Math.floorMod(hash(seed, room, no, 902), POOL[i].ids.length)];
-          if (fits(kinds, candidate) && !(heavyUsed && HEAVY_IDS.contains(candidate))) {
-            bases.add(POOL[i]);
-          }
+        // Any enabled member can supply the base family, not just the three basic families: with
+        // the village toggle off a farm row hit only elites/bosses and the old loop left no base,
+        // so every row collapsed to the first reserved module (a vanilla villager). A dormant row
+        // that the game never spawns may only reuse a module already loaded in the room.
+        boolean active = placesOnly || (u8(out, at + BE_FLAG) & 1) != 0
+            || EnemyRooms.spawn(room, no);
+        for (int i = 0; i < POOL.length; i++) {
+          Member m = POOL[i];
+          if ((options & m.bit) == 0 || ratio[i] <= 0) continue;
+          if (m.massive && massiveUsed) continue;
+          if (counted && !m.counted() && !EnemyRooms.alias(room)) continue;
+          if (m.basic && i == basicFamily(id)) continue;  // basic row must change family
+          int candidate = m.ids[Math.floorMod(hash(seed, room, no, 902), m.ids.length)];
+          if (!fits(kinds, candidate) || (!active && !kinds.contains(candidate))
+              || (heavyUsed && HEAVY_IDS.contains(candidate))) continue;
+          bases.add(m);
         }
         if (!bases.isEmpty()) {
           pick = bases.get(Math.floorMod(hash(seed, room, no, 901), bases.size()));
         }
       }
       if (pick == null) {
-        // No member fits the four slots: reuse a module the room already loads. A room with no
-        // reserved module and no eligible pick stays exactly as on the disc — and the row's own
-        // module occupies a slot, or later picks would overrun the four the hardware has.
+        // No member fits the four slots: keep this row exactly as on the disc. Repointing it to a
+        // reserved module made a whole room show one enemy kind (often the vanilla villager) and
+        // is what made the farm look untouched. The row's own module occupies a slot so a later
+        // pick cannot overrun the four the hardware supports.
         if (kinds.isEmpty()) {
           kinds.add(id);
           continue;
         }
-        int reuse = kinds.iterator().next();
-        int[] rt = TYPES.get(reuse);
-        if (rt == null || (heavyUsed && HEAVY_IDS.contains(reuse))) {
-          kinds.add(id);  // no model table, or the parts budget is full: leave the row
-          continue;
-        }
-        putU8(out, at + ID, reuse);
-        putU8(out, at + TYPE, rt[0]);
-        putU32(out, at + FLAG,
-            (flag & ~WEAPON_MASK) | keptWeapons(id, flag, basicId(reuse), seed, room, no, options));
-        putU16(out, at + HP, 1000);
-        putU8(out, at + SET, 0);
-        allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
+        kinds.add(id);
         continue;
       }
 
