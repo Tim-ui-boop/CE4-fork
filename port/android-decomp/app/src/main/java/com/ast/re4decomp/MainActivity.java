@@ -247,6 +247,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
       LinearLayout row = new LinearLayout(this);
       row.setOrientation(LinearLayout.HORIZONTAL);
       for (int k = i; k < Math.min(i + 2, mods.length); k++) {
+        final int label = k;
         final int flag = mods[k];
         CheckBox box = new CheckBox(this);
         box.setText(modLabels[k]);
@@ -255,7 +256,7 @@ public final class MainActivity extends Activity implements ImportManager.Listen
         box.setOnCheckedChangeListener((v, on) -> {
           options[0] = on ? options[0] | flag : options[0] & ~flag;
           getSharedPreferences(RAND_PREFS, MODE_PRIVATE).edit().putInt(RAND_OPTIONS, options[0]).apply();
-          EnemyShuffle.logSetting(imports.root, "MOD " + getString(modLabels[k]) + " -> "
+          EnemyShuffle.logSetting(imports.root, "MOD " + getString(modLabels[label]) + " -> "
               + (on ? "on" : "off") + " options=0x" + Integer.toHexString(options[0]));
         });
         row.addView(box, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
