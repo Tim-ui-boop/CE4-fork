@@ -207,9 +207,11 @@ Done (Phase 2 and the November 28 generalisation):
 6. **Merchant figures protected.** The shop outside the Mendez boss room (r10f rows `0x3D`/`0x49`)
    is not id `0x18` but a villager with TYPE `0x06`. The dealer now treats any
    `id 0x13/0x14/0x1E + TYPE 0x06` as a merchant and leaves it byte-exact.
-7. **89 audited SPAWN promotions** in r104, r105, r10a, r10c, r205, r209 and r226 give script-spawned
-   rows real family/elite/boss deals. Identity-reading rows stay DRIVEN; r206/r207/r208 were
-   rejected because their scripts call Ganado-only virtuals. Verified by `check_new_spawns.py`.
+7. **125 audited SPAWN promotions** — 89 rows in r104, r105, r10a, r10c, r205, r209 and r226, plus
+   36 island rows in r300, r303, r304, r305, r306, r30b, r30d, r30e, r316 and r321 — give
+   script-spawned rows real family/elite/boss deals. Identity-reading rows stay DRIVEN; r206/r207/
+   r208 and most island rooms were rejected because their scripts call Ganado-only virtuals or read
+   list identities. Verified by `check_new_spawns.py`.
 
 Still open (intentionally not changed here):
 

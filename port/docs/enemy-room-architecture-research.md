@@ -94,10 +94,12 @@ The table generator detects classes 2, 4, 5, 6 and 7 by scanning for those call 
 | `KEEPROWS` | story rows (r100 `0x09`, r103 `0x56`, the dog, r11c `0xC8`) | exact disc bytes |
 | `FORCED` | modules preloaded by the room script | reserved up front in the budget |
 
-After the 28 Nov script audits, SPAWN rows also exist in r104, r105, r10a, r10c, r205, r209 and
-r226 (89 rows). Rows whose script reads identity — `setGoto`/`ckGoto`/`ckFindPL`/`ckResetEnable`,
+After the 28 Nov script audits, SPAWN rows also exist in r104, r105, r10a, r10c, r205, r209, r226
+and ten island rooms (r300, r303, r304, r305, r306, r30b, r30d, r30e, r316, r321) — 125 rows in
+total. Rows whose script reads identity — `setGoto`/`ckGoto`/`ckFindPL`/`ckResetEnable`,
 count gates on vanilla ids, or named motions — stay DRIVEN. Rejected promotions include r206,
-r207 and r208; their scripts dispatch on the enemy id through Ganado-only virtuals.
+r207, r208, r301, r307, r308, r309, r30c, r310, r311, r320, r327 and the boss rooms; their
+scripts dispatch on the enemy id through Ganado-only virtuals or read list identities.
 
 ## 6. id vs type vs set vs flag
 
