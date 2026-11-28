@@ -95,6 +95,28 @@ Both were found by *running* the code on the actual disc, not by reading it:
 
 Both fixes are in the Java dealer and the C++ loader, and both are covered by tests.
 
+### 4b. Why a dealt set was still ignored after that (fixed 23.11.2026)
+
+The deal was right the whole time — `rehearse.py` holds every invariant on real disc lists. The
+lists were dealt, verified, written, and then never loaded. Two more problems, again only visible
+by following the bytes from the launcher to `readFile`:
+
+3. **The hook waited for a read that never happens.** `readEmList` calls
+   `DvdReadN(name, pG->Em_list, 0, 0, 0, …)` — the size is **0**, so `cDvdQueue::readInit` sets
+   `length = fileGetLength()` and `readMain` reads the file's own length. The eight story lists are
+   **0x1FE0** (255 entries; the disc's file table says so), so they arrive at `readFile` as 0x1FE0
+   and never as 0x2000. Both the `dvd.cpp` hook and the sidecar demanded exactly 0x2000. Neither
+   could ever fire for a story list. Both now accept 0x1FE0 and 0x2000, and the copy is exactly
+   `length` bytes so the destination is written as far as the game expects and no further.
+4. **The launcher and the core disagreed by one folder.** `EnemyShuffle` wrote and checked
+   `AppStorage.base(this)/randomizer/enemies`, but the core is started with `imports.root`
+   (`CoreBridge.start(imports.root)`, = `<data>/game`) and that is what `re4_data_dir()` returns.
+   The marker and the lists sat one directory above where the loader looked, so the status line
+   said "off" and the sidecar found nothing. The launcher now uses `imports.root` throughout.
+
+Point 3 is why the feature looked completely dead: with no match in `readFile` the game simply read
+the disc, exactly as if no seed had been dealt. The deal's own report was always honest.
+
 ## 5. What was verified
 
 | check | result |
@@ -103,7 +125,8 @@ Both fixes are in the Java dealer and the C++ loader, and both are covered by te
 | `enemy_types.cpp`, `enemy_random.cpp` (game flags, 32-bit) | **clean**, 0 errors |
 | `dvd.cpp` before vs after the hook | **identical** pre-existing header error, none added |
 | `EnemyShuffle.java` `javac -Xlint:all` | **0 warnings, 0 errors** |
-| sidecar decision logic vs real + damaged lists | **22/22 pass** |
+| sidecar decision logic vs real + damaged lists | **26/26 pass** |
+| the length gate (0x1FE0, 0x2000 served; 0x400, 0x1000, 0x20000 refused) | **covered by the same test** |
 | the real Java deal on the real disc lists | **6 seed/option combinations pass** |
 | every written byte vs its source | **only id/type/flag differ** |
 | same seed → identical files | **deterministic** |
@@ -143,7 +166,13 @@ from the disc image into the imported-disc layout, runs the deal, and checks eve
 Background: `enemy-types-user-guide.md` (the toggles and ratios),
 `enemy-type-randomizer-research.md` (the measurements), `pc-randomizer-decompile-findings.md`.
 
-**Start with `enemy-randomizer-foundations.md`** — the consolidated reference that merges the
-two on-phone room tests (r100 and r101), the four-module and sound budgets, the `set`/motion rule
-for scripted enemies, and the work still needed for a general deal. The test buttons themselves
-live on the `enemy-randomizer` branch; master carries this document as the design foundation.
+**Start with `enemy-randomizer-foundations.md`** — the single consolidated reference that merges
+both on-phone room tests, the module/sound budgets, the `set`/motion rule and the open work.
+
+The detailed playtest logs remain: `r100-enemy-test-findings.md` records the sidecar
+path fix, the two independent budgets (four modules and the ARAM sound area), the DRS
+"no sound bank" solution, and what still has to be proven before a general deal ships.
+
+Then read `r101-enemy-test-findings.md`: the castle-enemy test adds the `set`/motion rule (a
+behaviour preset only works in the module that owns its animations), the synth-level sound
+failure that is separate from ARAM space, and the generalised DRS sound skip.

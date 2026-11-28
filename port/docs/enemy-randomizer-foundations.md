@@ -190,17 +190,52 @@ python3 .harness/analysis/check_enemy_java.py
 
 The r101 rehearsal reads the real DRS part tables with `tools/drs.py` and checks the ARAM sum.
 
-## 10. What is still open
+## 10. What is done, and what is still open
 
-1. Re-test the normal **Deal enemies** button now that the sidecar path bug is fixed — it has
-   never been observed working on a phone.
-2. A **per-room planner** before writing a deal: distinct module ids ≤ 4, safe `set` values per
-   module, and a sound decision (space *and* synth risk) for each introduced kind.
-3. Generalise the "silent enemies" choice and report it to the player.
-4. Handle scripted enemies per room: the r100 officer-killer is hand-built in `r100.cpp`; other
-   rooms have their own casts, counts and chapter handovers.
+Done (Phase 2 and the November 28 generalisation):
+
+1. **Special-field protection.** `EnemyShuffle.appearanceOnly()` keeps a row's `TYPE` whenever
+   the disc value is outside `variantTypes(id)` — a story-specific model such as Luis's cabin
+   actor (id `0x13`, type `0x06`). The rule is room-agnostic and covers every DRIVEN row in the
+   campaign, not just the cabin. Verified by `check_special_fields.py` across five seeds.
+2. **Luis cabin siege.** Only Luis's own row `0xC8` stays byte-exact; the nine attackers
+   `0xC9..0xD1` have ordinary types and are back in DRIVEN, so they get safe look changes again.
+3. **Count alias** patch 0257, Ashley's private module 0256, and the blank-world fix 0258.
+4. **Debug logs**: `room-debug.txt` records every row decision, including `SPECIAL_TYPE_KEPT`;
+   `settings-debug.txt` records every setting change.
+5. Stale `deal()` tools retired; use `run_all_lists.py` and `check_special_fields.py`.
+6. **Merchant figures protected.** The shop outside the Mendez boss room (r10f rows `0x3D`/`0x49`)
+   is not id `0x18` but a villager with TYPE `0x06`. The dealer now treats any
+   `id 0x13/0x14/0x1E + TYPE 0x06` as a merchant and leaves it byte-exact.
+7. **125 audited SPAWN promotions** — 89 rows in r104, r105, r10a, r10c, r205, r209 and r226, plus
+   36 island rows in r300, r303, r304, r305, r306, r30b, r30d, r30e, r316 and r321 — give
+   script-spawned rows real family/elite/boss deals. Identity-reading rows stay DRIVEN; r206/r207/
+   r208 and most island rooms were rejected because their scripts call Ganado-only virtuals or read
+   list identities. Verified by `check_new_spawns.py`.
+8. **Parts pool 0259.** While a dealt list is active, `game.cpp` sizes ModInfoMgr/PartsMgr at 4x
+   (2x remains the debug-memory flag; vanilla is unchanged). This fixed the r100 codec cutscene
+   where `Event::GetMod : mod failed[pl0000]` left Leon invisible, and the shotgun/laser crash.
+9. **Two heavy model IDs per room**, up from one. El Gigante is still limited to **one dealt unit**
+   per room because of its in-game size, but other heavy families may join it.
+10. **Deal-and-show button.** The read-only Preview button was removed; the Deal button shows the
+    result read from the written files.
+11. **Merchant warning.** The 25 Nov shotgun/laser crash and the r100 codec stall were both
+    `cParts` exhaustion, not an exception in the randomizer.
+
+Still open (intentionally not changed here):
+
+1. Grow the SPAWN table further: each new room needs a hand audit of every `setEm`/`EmSetFromList2`
+   call for identity reads. The 28 Nov batch added seven village/castle and ten island rooms.
+2. r101 rows `0x3c-0x46` and r100 rows `6/7/8` stay vanilla; their motions live in swapped/room
+   archives and full id changes previously caused `MotionSetCore` crashes.
+3. Hand-built `EmSetEvent` actors (for example the r100 officer-killer) are constructed in code
+   and cannot be randomized by an offline sidecar.
+4. A generic engine-level Ganado dispatcher was researched and rejected: those scripts call
+   several class-specific methods with no equivalent on other enemy classes, and respawning a
+   non-Ganado from its list row is blocked by sticky flags and the four-module budget.
 5. Real island shields need a game-code change.
-6. No room beyond r100/r101 has been playtested; no campaign-wide verdict exists.
+6. The campaign-wide playtest verdict still belongs to the player; no room's feel is guaranteed
+   by an offline graph or byte check alone.
 
 ## 11. File index
 
@@ -214,3 +249,182 @@ The r101 rehearsal reads the real DRS part tables with `tools/drs.py` and checks
 | `port/docs/enemy-type-randomizer-research.md` | id/type/measurements on master |
 | `port/docs/pc-randomizer-decompile-findings.md` | PC tool rules and enemy identities |
 | `tools/drs.py` | DRS container format, including the empty sound-bank slot |
+
+## 12. The combined swap engine (`feature/enemy-swap-engine`)
+
+The two fixed test buttons are gone. One **Deal test rooms** button deals r100, r101, r103 and r104
+from a seed and 19 toggles. It replaces records **one-for-one** — a Verdugo becomes a Krauser by
+changing module em2c to em39, not by adding a fifth kind — keeps rows that `SceCountEmAlive(0x10,
+0x20)` needs inside that range, clears `set` for bosses, and writes every introduced module to
+`randomizer/enemies/no-sound.txt`. `runtime/dvd.cpp` reads that list instead of the old
+`r100-no-sound` / `r101-no-sound` markers.
+
+Defaults reproduce the two proven room tests exactly. Added toggles: Regenerator, Iron Maiden
+(the spiky Regenerator), Krauser, Mutated Krauser, El Gigante, Armadura, Try shared animations
+(experimental, keeps `set` on basic-family swaps) and Allow animation reset.
+
+**Easy revert:** `git checkout enemy-randomizer`. The untouched pre-change state is also pushed to
+GitHub as `backup/enemy-randomizer-pre-swap` at commit `5019393f`.
+
+Verification before commit: `python3 .harness/analysis/run_swap_deal.py` runs the real Java engine
+on the real disc over four seeds and five toggle sets — all offline checks pass. The NDK build in
+GitHub Actions is the final check.
+
+**Module-slot rule (learned from the first phone test):** r103 also reserves em12 for its corpse
+models, so it has room for only one other kind. A massive boss (El Gigante) is placed
+on the *least numerous* safe kind — one dog or one crow row — and capped at **one per room**;
+Krauser, Verdugo and Armadura may fill a whole group. Turning on **Mix all enemies** allows the
+wild whole-group swaps (six chickens become Armaduras). The old in-game *Random enemies* cheat must
+be **off** while an offline deal is active: on the first test it loaded four extra kinds, filled all
+slots and made three dealt enemies fail with `Em set failed, Id = 1d`.
+
+All 19 toggles are now wired except Keep Luis safe, which has no effect in these four rooms (there
+is no Luis cabin among them).
+
+## 13. Two-pool model (`feature/enemy-pools`)
+
+The priority chains are gone. There are two pools, and for each room the seed picks **one member
+from each** among the toggles that are on and whose module still fits:
+
+- **Elites:** JJ, Dr. Salvador, Bella Sisters (the female Ganado look of em16, types 11/12 — r11D
+  really has five of them), Regenerator / Iron Maiden (types 0/1 and 2/3 of em36), Armadura
+  (types 0/1 and 2/3 of em3c, now two separate toggles) and Garrador (type 10).
+- **Bosses:** Krauser (0x39, human and mutated are separate toggles), El Gigante (0x2B),
+  Super Salvador (0x20 type 22) and Verdugo (0x2C). El Gigante is **massive**: at most one per room.
+
+A pick reuses an already-loaded module where it can; otherwise it is only allowed if a slot is free.
+The report says `boss none` when the four-module limit leaves no room. Each entry has a chance value
+reserved for a future per-member 1-in-N mode, like the PC tool; the selection function is the only
+place that would need to change.
+
+**When no pool member wins the 1-in-N roll for a row**, the fallback picks any enabled member as a
+base (not just the three basic families), with the same module/budget and heavy-model guards as a
+normal pick. A dormant record the room never spawns may only reuse a module already loaded. If no
+member fits at all, the row keeps its exact vanilla bytes — it is never repointed to another id.
+This matters with VILLAGE off: the old fallback only looked at village/castle/island, so a farm row
+had no base once those slots filled, and every unmatched row was rewritten to the first reserved
+module (the vanilla villager). That made all seeds look the same and only em15 loaded. The offline
+suite now deals with real default ratios and VILLAGE off and refuses a farm dominated by villagers.
+
+**Script-spawn rows and the four-module budget.** The dealer used to reserve each script-spawn
+row's *vanilla* id before dealing. In r100 that filled all four module slots with `0x12` (villagers),
+`0x2a` (traps) and `0x21` (dog), so no pick could fit and the farm — and the crows, cows, chickens
+and traps in other rooms — stayed on their disc ids. Those reservations are gone: a dealt row's NEW
+id is budgeted by `fits()` like any other. Rows the script spawns **and casts to `cEmGanado`**
+(still a Ganado-family id) skip the elite/boss roll and keep a basic family, so the script's
+`ckFindPL` / `setNoSuspend` / `setEvtMotion` calls remain valid; animals and traps may become any id.
+When a room genuinely needs more than four modules after the deal, only that room is restored to
+the disc — the old code restored *every* dealt room in the list, wiping good rooms along with it.
+
+**One family, one id per room.** A pool member with several ids (Dr. Salvador has five) used to pick
+a different id for every row, and a room could end up with both zealots and soldiers. The dealer now
+chooses one id per member and one basic family per room, so the remaining slot can hold an elite or
+boss. Rooms with script-driven Ganados let elites claim at most one new module, leaving a slot for
+the basic family. r101's bell waves (rows `0x22`–`0x3a`, except the risky `0x3c`–`0x46` event-motion
+rows) moved from DRIVEN to SPAWN so they get dealt to a basic Ganado family; their `set` is reset to
+0 because the old presets live in em15's event archive.
+
+**Blank-room fix (patch 0258).** `readEm()` sets `Disp_flg` to all-ones while loading a module;
+its no-free-slot failure path used to return without restoring the flag, hiding the whole drawn
+world while audio and the menu kept working. The patch restores the saved flags on that path.
+See `enemy-room-architecture-research.md` for the full room/enemy reference.
+
+Two new toggles — Bella Sisters and Verdugo — join the grid. The launcher also has a
+**Preview seed rolls** button: it runs the exact same planning step in memory and shows the report
+in a dialog, without writing the sidecar or touching app data. The written `enemies.txt` and the
+preview are byte-for-byte the same text (asserted by the rehearsal).
+
+**Revert:** `git checkout feature/enemy-swap-engine` restores the previous engine; the untouched
+original is still `backup/enemy-randomizer-pre-swap`.
+
+Verification: `python3 .harness/analysis/run_swap_deal.py` — three seeds, six toggle sets, checks
+determinism, byte-level protection, one entry per pool per room, the four-module limit, the massive
+cap and preview/report equality. All offline checks pass.
+
+## 14. In-game cheats removed (`feature/no-ingame-cheats`)
+
+The old in-game **Random enemies**, **More enemies** and **Randomize enemy types** switches are gone
+from the menu, along with their native modules (`enemy_random.cpp`, `enemy_types.cpp`), their patches
+(0231, 0244, 0255) and the IPC/JNI/preference plumbing. They could run at the same time as an offline
+deal and filled the four module slots, causing missing enemies and a blank room on the first phone
+test. `More enemies` went too because its patch depended on 0231.
+
+The launcher deal is now the only enemy randomizer. On the farm r103 the six chickens and six cows
+each change kind from a pool pick, the five Ganados become island soldiers, and the single dog
+becomes a Ganado so em21 is free — em12 stays reserved for the room's corpses. In r104 the twelve
+plain Ganado rows are split between the two pool picks. Preview and report describe the same plan.
+
+**Revert:** `git checkout feature/enemy-pools` restores the pool build with the cheats; older states
+are `feature/enemy-swap-engine` and `backup/enemy-randomizer-pre-swap`.
+
+The first phone test of this build exposed two more issues, both fixed here: r100 and r101 still
+showed only the old test's island soldiers and zealots because the pool picks touched just two rows —
+now the boss takes two crow rows in r100 / the two dormant rows in r101 and the elite takes the rest.
+And when several enemies were enabled the same one could be picked in every room — pool selection is
+now ordered by seed and advanced per room, so the enabled enemies spread across the four rooms.
+
+## 15. Full pool + ratios (`feature/pool-ratios`)
+
+The fixed per-room conversions are gone. Every ordinary record in r100/r101/r103/r104 is dealt from
+one pool: three basic families (village Ganado, castle zealot, island soldier) plus seven elites and
+five bosses. A record rolls the seed for each enabled enemy; a 1-in-N ratio decides whether that
+enemy takes the record (PC defaults: Salvador 1:12, JJ 1:2, Garrador 1:8, Super Salvador 1:8).
+The launcher shows a checkbox and a **1 in N** stepper for each of the fifteen pool entries, with the
+ten remaining switches below as simple modifiers. (The next section replaces this with sixteen
+entries and nine modifiers.) Ratios are stored in their own `enemyRatios`
+preferences. Rows with dynamite or named event motions are left alone, counted rows keep ids inside
+0x10..0x20, one massive boss per room, four modules per room, and the preview uses the same plan.
+
+**Revert:** `git checkout feature/no-ingame-cheats` restores the previous build.
+
+## 16. Phone feedback on the pool build — pending work (25 Nov 2026)
+
+The player confirmed the bosses **do** appear once their ratios are raised, but remain rarer than the
+ratio alone suggests. That is expected: a boss with an out-of-range id only fits rows the counting
+scripts do not need, and it also competes for the four module slots. No code change is needed for
+that observation; the earlier suspicion that the toggles were broken was withdrawn.
+
+Three items are still open and were explicitly confirmed by the player:
+
+1. **Variants must be separate toggles.** Armadura white/grey (`0x3C` types 0/1) and black (types 2/3)
+   should be independent pool entries so both can appear in one run. Krauser human (`0x39` types 0/1)
+   and mutated (type 2) should be split the same way. The global **Mutated** modifier is then
+   redundant and should be removed.
+2. **Remove Mendez.** The `0x34` model is not the boss model, so the entry does nothing and should be
+   deleted from the pool, the launcher, the strings and this document.
+3. **Basic Ganados have lost their weapons.** The pool writer clears `WEAPON_MASK` and the basic
+   families carry no weapon flag, so sickles, dynamite and island stun rods no longer appear. The
+   fix must preserve the disc's weapon bits for basic families (and let Dynamite add bombs), checked
+   against the flag names in `src/t_emlist/t_emlist.cpp`.
+
+All three were implemented on `feature/enemy-pool-fixes`; see §17 below.
+
+## 17. Variant toggles, no Mendez, weapons kept (`feature/enemy-pool-fixes`)
+
+The three items from §16 are now code:
+
+1. **Variants are their own pool entries.** Armadura white/grey (`0x3C` types 0/1) and Armadura
+   black (types 2/3) are two checkboxes with two ratios, so both can be dealt in one run; the same
+   for Krauser human (`0x39` types 0/1) and Krauser mutated (type 2). The global **Mutated**
+   modifier is gone and the modifier grid now has nine switches. The new bits are `1 << 25` and
+   `1 << 26` so old saved settings cannot silently switch a new variant on. The new members were
+   appended to the pool; deleting Mendez shifts the saved ratio for Verdugo by one slot, so the
+   Verdugo and new-variant steppers may need re-setting once.
+2. **Mendez is gone** from the pool, launcher, strings and documentation. `0x34` was never a model
+   the game could show, so the entry did nothing. El Gigante is now the only massive boss, capped
+   at one per room.
+3. **Basic Ganados keep their disc weapons.** The writer used to clear every weapon bit, which made
+   sickles, dynamite rows and island stun rods vanish. Rows still dealt to an ordinary family now
+   keep that family's weapon bits from the disc; rows dealt to a special enemy keep only that
+   enemy's own weapon flag. The **Dynamite** switch now adds a bomb flag to a seeded one in six of
+   the ordinary records (the disc's own dynamite rows are script rows and are never rewritten).
+   Flag names were checked against `src/t_emlist/t_emlist.cpp`: bit 17 `Weapon Bomb`, bit 27
+   `Weapon Sickle` / `Weapon StunRod`, bit 28 `Weapon ChainSaw`.
+
+Verification: `python3 .harness/analysis/check_enemy_java.py` (javac clean) and
+`python3 .harness/analysis/run_swap_deal.py 1 42 777` (all checks pass, including new assertions
+that each variant only writes its own types, both forms can appear together, Mendez is absent,
+sickle flags survive on ordinary rows and Dynamite adds bombs). GitHub Actions run
+**45572518365** on `ci/enemy-pool-fixes` is green (commit `6c93f0fd`, artifact
+`CubeEvil4-core-debug-apk`, 24.6 MB). The APK on a phone stays at commit `b9427e5e` until the
+player installs a new one.
