@@ -190,17 +190,35 @@ python3 .harness/analysis/check_enemy_java.py
 
 The r101 rehearsal reads the real DRS part tables with `tools/drs.py` and checks the ARAM sum.
 
-## 10. What is still open
+## 10. What is done, and what is still open
 
-1. Re-test the normal **Deal enemies** button now that the sidecar path bug is fixed — it has
-   never been observed working on a phone.
-2. A **per-room planner** before writing a deal: distinct module ids ≤ 4, safe `set` values per
-   module, and a sound decision (space *and* synth risk) for each introduced kind.
-3. Generalise the "silent enemies" choice and report it to the player.
-4. Handle scripted enemies per room: the r100 officer-killer is hand-built in `r100.cpp`; other
-   rooms have their own casts, counts and chapter handovers.
+Done (Phase 2 and the November 28 generalisation):
+
+1. **Special-field protection.** `EnemyShuffle.appearanceOnly()` keeps a row's `TYPE` whenever
+   the disc value is outside `variantTypes(id)` — a story-specific model such as Luis's cabin
+   actor (id `0x13`, type `0x06`). The rule is room-agnostic and covers every DRIVEN row in the
+   campaign, not just the cabin. Verified by `check_special_fields.py` across five seeds.
+2. **Luis cabin siege.** Only Luis's own row `0xC8` stays byte-exact; the nine attackers
+   `0xC9..0xD1` have ordinary types and are back in DRIVEN, so they get safe look changes again.
+3. **Count alias** patch 0257, Ashley's private module 0256, and the blank-world fix 0258.
+4. **Debug logs**: `room-debug.txt` records every row decision, including `SPECIAL_TYPE_KEPT`;
+   `settings-debug.txt` records every setting change.
+5. Stale `deal()` tools retired; use `run_all_lists.py` and `check_special_fields.py`.
+
+Still open (intentionally not changed here):
+
+1. Grow the hand-curated SPAWN table past r100/r101/r117/r118: each new room needs a hand audit
+   of every `setEm`/`EmSetFromList2` call for identity reads.
+2. r101 rows `0x3c-0x46` and r100 rows `6/7/8` stay vanilla; their motions live in swapped/room
+   archives and full id changes previously caused `MotionSetCore` crashes.
+3. Hand-built `EmSetEvent` actors (for example the r100 officer-killer) are constructed in code
+   and cannot be randomized by an offline sidecar.
+4. A generic engine-level Ganado dispatcher was researched and rejected: those scripts call
+   several class-specific methods with no equivalent on other enemy classes, and respawning a
+   non-Ganado from its list row is blocked by sticky flags and the four-module budget.
 5. Real island shields need a game-code change.
-6. No room beyond r100/r101 has been playtested; no campaign-wide verdict exists.
+6. The campaign-wide playtest verdict still belongs to the player; no room's feel is guaranteed
+   by an offline graph or byte check alone.
 
 ## 11. File index
 

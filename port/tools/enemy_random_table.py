@@ -47,10 +47,11 @@ OPEN_HAND = {
 KEEP_ROWS = {
     0x100: {0x09},
     0x103: {0x56},
-    # The Luis cabin siege: the script spawns rows 0xC8..0xD1 one by one and counts kills on them
-    # through cEmGanado virtuals. Changing their type/set makes the attackers stop entering, which
-    # hangs the 40-kill gate. Keep them byte-exact (PC tool's SAFE_CABIN is about the same risk).
-    0x11c: {0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD0, 0xD1},
+    # Luis's own actor in the cabin siege: id 0x13, special TYPE 0x06 (outside the villager
+    # variants {0,1,3,4}). The 40-kill gate drives it through Ganado-only work fields, so keep
+    # this one row byte-exact. The nine attackers 0xC9..0xD1 have ordinary types and are safe
+    # for appearance-only changes under EnemyShuffle's special-type guard.
+    0x11c: {0xC8},
 }
 # Per-row call-site names found by scan(), emitted as EnemyRooms.USE for the debug report.
 USE_SITES = {}

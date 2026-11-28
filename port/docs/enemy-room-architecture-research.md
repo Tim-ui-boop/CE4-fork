@@ -91,7 +91,7 @@ The table generator detects classes 2, 4, 5, 6 and 7 by scanning for those call 
 | `KIND=OPEN` (46 rooms) | neither | full swaps allowed |
 | `DRIVEN` | script spawns **or reads the identity of** the row | `appearanceOnly()`: id, hp, set, position, room and weapon bits untouched; only type/extras may change |
 | `SPAWN` | script only spawns the row, never reads its identity | may be dealt; Ganado-family ids stay in a basic family; 4-module budget still applies |
-| `KEEPROWS` | story rows (r100 `0x09`, r103 `0x56`, the dog) | exact disc bytes |
+| `KEEPROWS` | story rows (r100 `0x09`, r103 `0x56`, the dog, r11c `0xC8`) | exact disc bytes |
 | `FORCED` | modules preloaded by the room script | reserved up front in the budget |
 
 Today only r100, r101, r117 and r118 have SPAWN rows; every other script-touched row is DRIVEN.
@@ -100,7 +100,9 @@ Today only r100, r101, r117 and r118 have SPAWN rows; every other script-touched
 
 - `id` chooses the enemy module and AI class. Scripts cast some rows to `cEmGanado`, so those must
   keep a Ganado-family id.
-- `type` is a model variant **inside** that module; scripts never read it.
+- `type` is a model variant **inside** that module; scripts never read it. A few story rows use a
+  special value outside the module's variant set (Luis's cabin actor is `0x13`/`0x06`); those must
+  not be rewritten, and `appearanceOnly()` now keeps their TYPE and logs `SPECIAL_TYPE_KEPT`.
 - `set` is a named behaviour/motion preset whose animation data lives in the *module's own
   archive*. r101's `set` 0x05-0x0E motions live in em15; moving such a row to em1b caused
   `MotionSetCore` → `HermiteInterpolation` null-pointer crashes. Rule: reset `set` to 0 when
@@ -122,11 +124,15 @@ Still open (from `docs/superpowers/plans/2026-11-26-phase2-count-alias.md` and t
    plausible, but the four-module budget may refuse it).
 3. Allow in-family id swaps for r100 rows `6/7/8` while keeping the `cEmGanado` cast valid.
 4. Hand-built actors (`EmSetEvent`) cannot be randomized by an offline list at all.
-5. Housekeeping: `port/tools/enemy_types/run_deal.py:36` and `rehearse.py` still call the old
-   `deal()` API; the foundations doc has no Phase 2 section and its "what is open" section is stale.
+5. Housekeeping: the old `deal()`-based tools were retired in favour of `run_all_lists.py` and
+   `check_special_fields.py`; the foundations doc now has a done/open split.
+6. Done since that plan: the general special-TYPE guard, the r11c row split (only `0xC8` is
+   byte-exact, `0xC9..0xD1` are DRIVEN again), the r11d wave-row guard, and `room-debug.txt`
+   reasons for every row decision.
 
 Rows that will *never* change by design: the two rescued dogs, merchants (id `0x18`), the ten
-untouched rooms, and every row in a room restored for exceeding four modules.
+untouched rooms, r11c `0xC8`, and every row in a room restored for exceeding four modules.
+A DRIVEN row whose disc TYPE is outside `variantTypes(id)` keeps that TYPE in every room.
 
 ## 8. Count alias detail
 

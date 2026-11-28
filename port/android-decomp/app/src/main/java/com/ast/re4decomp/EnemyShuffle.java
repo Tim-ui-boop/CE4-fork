@@ -370,13 +370,19 @@ final class EnemyShuffle {
 
   /**
    * A row the script owns keeps its id, hp, set, position and room. Only the look and non-weapon
-   * extras may change; room scripts never read the type or flag fields.
+   * extras may change. A TYPE outside the pool's variants is story-specific and is kept too.
    */
-  private static void appearanceOnly(byte[] out, int[] allowed, long seed, int options,
+  private static String appearanceOnly(byte[] out, int[] allowed, long seed, int options,
       int room, int no) {
     int at = no * ENTRY;
-    int[] types = variantTypes(u8(out, at + ID));
-    if ((options & VARIETY) != 0 && types.length > 0 && TYPES.containsKey(u8(out, at + ID))) {
+    int id = u8(out, at + ID);
+    int discType = u8(out, at + TYPE);
+    int[] types = variantTypes(id);
+    // A type outside the pool's variants is a story-specific model (Luis's cabin actor is id
+    // 0x13 type 0x06). Room scripts rely on those fields, so never rewrite that TYPE.
+    boolean special = true;
+    for (int t : types) if (t == discType) { special = false; break; }
+    if (!special && (options & VARIETY) != 0 && TYPES.containsKey(id)) {
       putU8(out, at + TYPE, types[Math.floorMod(hash(seed, room, no, 903), types.length)]);
       allow(allowed, no, A_TYPE);
     }
@@ -388,6 +394,7 @@ final class EnemyShuffle {
       putU32(out, at + FLAG, flag | extra);  // every vanilla weapon bit stays exactly as it was
       allow(allowed, no, A_FLAG);
     }
+    return special ? "SPECIAL_TYPE_KEPT" : "DRIVEN_APPEARANCE_ONLY";
   }
 
   /**
@@ -571,8 +578,8 @@ final class EnemyShuffle {
         logRow(detail, src, out, at, room, no, "KEEP_STORY"); continue;
       }
       if (EnemyRooms.driven(room, no)) {
-        appearanceOnly(out, allowed, seed, options, room, no);
-        logRow(detail, src, out, at, room, no, "DRIVEN_APPEARANCE_ONLY"); continue;
+        String reason = appearanceOnly(out, allowed, seed, options, room, no);
+        logRow(detail, src, out, at, room, no, reason); continue;
       }
       int flag = u32(out, at + FLAG), set = u8(out, at + SET);
       if ((flag & FLAG_BOMB) != 0 || set == 0x25) {  // dynamite and named event motions
