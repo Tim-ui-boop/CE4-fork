@@ -94,7 +94,10 @@ The table generator detects classes 2, 4, 5, 6 and 7 by scanning for those call 
 | `KEEPROWS` | story rows (r100 `0x09`, r103 `0x56`, the dog, r11c `0xC8`) | exact disc bytes |
 | `FORCED` | modules preloaded by the room script | reserved up front in the budget |
 
-Today only r100, r101, r117 and r118 have SPAWN rows; every other script-touched row is DRIVEN.
+After the 28 Nov script audits, SPAWN rows also exist in r104, r105, r10a, r10c, r205, r209 and
+r226 (89 rows). Rows whose script reads identity — `setGoto`/`ckGoto`/`ckFindPL`/`ckResetEnable`,
+count gates on vanilla ids, or named motions — stay DRIVEN. Rejected promotions include r206,
+r207 and r208; their scripts dispatch on the enemy id through Ganado-only virtuals.
 
 ## 6. id vs type vs set vs flag
 
@@ -130,7 +133,9 @@ Still open (from `docs/superpowers/plans/2026-11-26-phase2-count-alias.md` and t
    byte-exact, `0xC9..0xD1` are DRIVEN again), the r11d wave-row guard, and `room-debug.txt`
    reasons for every row decision.
 
-Rows that will *never* change by design: the two rescued dogs, merchants (id `0x18`), the ten
+Rows that will *never* change by design: the two rescued dogs, merchants (id `0x18` and the
+id `0x13/0x14/0x1E` TYPE `0x06` trader-clothed figures, including r10f `0x3D`/`0x49` outside the
+Mendez boss room), the ten
 untouched rooms, r11c `0xC8`, and every row in a room restored for exceeding four modules.
 A DRIVEN row whose disc TYPE is outside `variantTypes(id)` keeps that TYPE in every room.
 

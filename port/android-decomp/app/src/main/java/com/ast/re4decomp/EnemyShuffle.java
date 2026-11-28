@@ -369,6 +369,15 @@ final class EnemyShuffle {
   }
 
   /**
+   * Merchants are either the em18 Trader id or a villager wearing the trader's clothes:
+   * id 0x13/0x14/0x1E with TYPE 0x06. The merchant outside the Mendez boss room (r10f rows
+   * 0x3D/0x49) is one of the latter, so an id-only check misses it.
+   */
+  private static boolean merchant(int id, int type) {
+    return id == 0x18 || (type == 0x06 && (id == 0x13 || id == 0x14 || id == 0x1E));
+  }
+
+  /**
    * A row the script owns keeps its id, hp, set, position and room. Only the look and non-weapon
    * extras may change. A TYPE outside the pool's variants is story-specific and is kept too.
    */
@@ -558,7 +567,8 @@ final class EnemyShuffle {
       // the trader and the story rows. A row whose vanilla id is merely not in the pool (cows,
       // birds, dogs, crows) is swapped like any other, and its NEW id is budgeted by fits().
       if (id != 0 && ((u32(out, at + FLAG) & FLAG_BOMB) != 0 || u8(out, at + SET) == 0x25
-          || EnemyRooms.driven(room, no) || EnemyRooms.keep(room, no) || id == 0x18)) {
+          || EnemyRooms.driven(room, no) || EnemyRooms.keep(room, no)
+          || merchant(id, u8(out, at + TYPE)))) {
         kinds.add(id);
       }
     }
@@ -571,7 +581,7 @@ final class EnemyShuffle {
       if (u16(out, at + ROOM) != room) continue;
       int id = u8(out, at + ID);
       if (id == 0) { logRow(detail, src, out, at, room, no, "EMPTY"); continue; }
-      if (id == 0x18) {  // the trader: never randomized, never re-geared
+      if (merchant(id, u8(out, at + TYPE))) {  // trader and trader-clothed merchants: never touched
         logRow(detail, src, out, at, room, no, "TRADER"); continue;
       }
       if (EnemyRooms.keep(room, no)) {  // story rows: exact disc bytes
