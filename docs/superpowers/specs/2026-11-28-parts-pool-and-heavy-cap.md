@@ -23,23 +23,28 @@ Scope: build-time patch in `port/whole/patches/`, dealer in `EnemyShuffle.java`,
 ## Design
 
 1. **Build-time patch 0259** (`port/whole/patches/0259-randomizer-parts-pool.patch`): in
-   `src/game/game.cpp`, declare `extern "C" int re4_randomizer_enemy_active(void);` and change the
-   `ModInfoMgr` and `PartsMgr` pool sizing to double when the debug-memory flag **or** a dealt enemy
-   list is active. Do not double `EmMgr`/`ObjMgr`. Applies to every room, but only while the
-   randomizer marker is active; vanilla sessions remain byte-identical.
+   `src/game/game.cpp`, declare `extern "C" int re4_randomizer_enemy_active(void);` and size the
+   `ModInfoMgr` and `PartsMgr` pools at **4x** when a dealt enemy list is active, and 2x under the
+   debug-memory flag. Do not change `EmMgr`/`ObjMgr`. Applies to every room, but only while the
+   randomizer marker is active; vanilla sessions remain byte-identical. The first build used 2x
+   for both; the player's next core log still showed `Parts allocate was failed` and
+   `mod failed[pl0000]` in r100, so the randomizer multiplier was raised to 4x.
 2. **Bounded relaxation of the parts cap**: replace the boolean `heavyUsed` in `EnemyShuffle.java`
    with a count of distinct heavy IDs. Allow **at most two** heavy IDs per room (currently one).
-   Keep every other rule unchanged: one El Gigante (`massiveUsed`), the four-module budget
-   (`fits`, `overBudgetRooms`), one new elite module in script-Ganado rooms (`eliteModuleUsed`),
-   one basic family/one id per member, counted/alias rules, and all story/merchant protections.
-   A second heavy ID that is already in `kinds` spends no new module slot and is always allowed
-   within the new bound.
+   El Gigante is limited to **one dealt unit per room** because of its in-game size, not because
+   other heavy families are forbidden: `heavyFits()` allows another heavy ID alongside it, but
+   refuses a second `0x2B` unit (including when a script row already holds one). Keep every other
+   rule unchanged: the four-module budget (`fits`, `overBudgetRooms`), one new elite module in
+   script-Ganado rooms (`eliteModuleUsed`), one basic family/one id per member, counted/alias
+   rules, and all story/merchant protections. A heavy ID already in `kinds` spends no new module
+   slot and is always allowed within the new bound.
 3. **Offline checks**:
    - `check_parts_patch.py`: patch 0259 applies; prepared `game.cpp` shows the doubled sizing and
      the `re4_randomizer_enemy_active()` declaration; no duplicate doubling under the debug flag.
-   - Update `.harness/analysis/run_all_lists.py`: heavy-ID assertion becomes `<= 2` instead of
-     `<= 1`; add an assertion that El Gigante stays `<= 1` per room and active module kinds stay
-     `<= 4`. Keep the one-heavy assertion for a deal made with the relaxation disabled.
+   - Update `.harness/analysis/run_all_lists.py`: heavy-ID assertion becomes `<= 2`; the El
+     Gigante assertion counts **newly dealt** `0x2B` units (`<= 1`), since two `0x2B` script rows
+     already exist on the disc in r11e/r224; active module kinds stay `<= 4`. Vanilla script rooms
+     are not changed.
    - Extend `check_count_deal.py` or add a targeted check proving a room can receive two heavy IDs
      together while the module and massive caps still hold.
 

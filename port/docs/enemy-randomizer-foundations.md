@@ -212,11 +212,20 @@ Done (Phase 2 and the November 28 generalisation):
    script-spawned rows real family/elite/boss deals. Identity-reading rows stay DRIVEN; r206/r207/
    r208 and most island rooms were rejected because their scripts call Ganado-only virtuals or read
    list identities. Verified by `check_new_spawns.py`.
+8. **Parts pool 0259.** While a dealt list is active, `game.cpp` sizes ModInfoMgr/PartsMgr at 4x
+   (2x remains the debug-memory flag; vanilla is unchanged). This fixed the r100 codec cutscene
+   where `Event::GetMod : mod failed[pl0000]` left Leon invisible, and the shotgun/laser crash.
+9. **Two heavy model IDs per room**, up from one. El Gigante is still limited to **one dealt unit**
+   per room because of its in-game size, but other heavy families may join it.
+10. **Deal-and-show button.** The read-only Preview button was removed; the Deal button shows the
+    result read from the written files.
+11. **Merchant warning.** The 25 Nov shotgun/laser crash and the r100 codec stall were both
+    `cParts` exhaustion, not an exception in the randomizer.
 
 Still open (intentionally not changed here):
 
-1. Grow the hand-curated SPAWN table past r100/r101/r117/r118: each new room needs a hand audit
-   of every `setEm`/`EmSetFromList2` call for identity reads.
+1. Grow the SPAWN table further: each new room needs a hand audit of every `setEm`/`EmSetFromList2`
+   call for identity reads. The 28 Nov batch added seven village/castle and ten island rooms.
 2. r101 rows `0x3c-0x46` and r100 rows `6/7/8` stay vanilla; their motions live in swapped/room
    archives and full id changes previously caused `MotionSetCore` crashes.
 3. Hand-built `EmSetEvent` actors (for example the r100 officer-killer) are constructed in code
