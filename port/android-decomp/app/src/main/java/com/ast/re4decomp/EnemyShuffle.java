@@ -711,12 +711,12 @@ final class EnemyShuffle {
         .append(" massiveUsed=").append(massiveUsed).append('\n');
   }
 
-  /** El Gigante is exclusive; other heavy families may share a room up to MAX_HEAVY ids. */
+  /** One El Gigante UNIT per room (it is physically huge); other heavy families may join it. */
   private static boolean heavyFits(Set<Integer> kinds, int heavyKinds, int candidate) {
-    if (!HEAVY_IDS.contains(candidate) || kinds.contains(candidate)) return true;
-    if (heavyKinds >= MAX_HEAVY) return false;
-    if (candidate == 0x2B && heavyKinds > 0) return false;
-    return !kinds.contains(0x2B);
+    if (!HEAVY_IDS.contains(candidate)) return true;
+    if (candidate == 0x2B) return !kinds.contains(0x2B) && heavyKinds < MAX_HEAVY;
+    if (kinds.contains(candidate)) return true;  // reusing the same id spends no new kind
+    return heavyKinds < MAX_HEAVY;
   }
 
   private static boolean fits(Set<Integer> kinds, int id) {
