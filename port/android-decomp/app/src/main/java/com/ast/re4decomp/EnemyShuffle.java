@@ -150,6 +150,9 @@ final class EnemyShuffle {
   /** Models whose joint counts exhaust a room's parts pool when several are loaded together. */
   private static final Set<Integer> HEAVY_IDS =
       new LinkedHashSet<>(Arrays.asList(0x2B, 0x36, 0x39, 0x3C));
+  // Patch 0259 doubles the parts pool while a dealt list is active, so two distinct heavy model
+  // families may share a room. El Gigante stays capped separately by massiveUsed.
+  private static final int MAX_HEAVY = 2;
 
   private static final String[] LISTS = {
       "etc/emleon00.esl", "etc/emleon01.esl", "etc/emleon02.esl", "etc/emleon03.esl",
@@ -556,8 +559,8 @@ final class EnemyShuffle {
     boolean eliteModuleUsed = false;
     int[] tally = new int[POOL.length];
     boolean massiveUsed = false;
-    boolean heavyUsed = false;
-    for (int id : kinds) if (HEAVY_IDS.contains(id)) heavyUsed = true;
+    int heavyKinds = 0;
+    for (int id : kinds) if (HEAVY_IDS.contains(id)) heavyKinds++;
     // Only modules that survive the deal (hand-made actors and script rows) occupy a slot up front.
     for (int no = 0; no < ENTRIES; no++) {
       int at = no * ENTRY;
@@ -616,7 +619,7 @@ final class EnemyShuffle {
         if (hash(seed, room, no, i) % ratio[i] != 0) continue;
         int candidate = roomId[i];
         if (hasScriptGanado && eliteModuleUsed && !kinds.contains(candidate)) continue;
-        if (!fits(kinds, candidate) || (heavyUsed && HEAVY_IDS.contains(candidate))) continue;
+        if (!fits(kinds, candidate) || !heavyFits(kinds, heavyKinds, candidate)) continue;
         hits.add(m);
       }
       Member pick = null;
@@ -641,7 +644,7 @@ final class EnemyShuffle {
           if (m.basic && i == basicFamily(id)) continue;  // basic row must change family
           int candidate = roomId[i];
           if (!fits(kinds, candidate) || (!active && !kinds.contains(candidate))
-              || (heavyUsed && HEAVY_IDS.contains(candidate))) continue;
+              || !heavyFits(kinds, heavyKinds, candidate)) continue;
           bases.add(m);
         }
         if (!bases.isEmpty()) {
@@ -681,7 +684,9 @@ final class EnemyShuffle {
       allow(allowed, no, A_ID | A_TYPE | A_FLAG | A_HP | A_SET);
       logRow(detail, src, out, at, room, no, "DEALT_" + pick.name
           + (scriptGanado ? "_SCRIPT_GANADO" : "") + (counted ? "_COUNTED" : ""));
-      if (!pick.basic && !kinds.contains(chosen)) eliteModuleUsed = true;
+      boolean newKind = !kinds.contains(chosen);
+      if (!pick.basic && newKind) eliteModuleUsed = true;
+      if (newKind && HEAVY_IDS.contains(chosen)) heavyKinds++;
       kinds.add(chosen);
       // Every dealt enemy keeps silent: its DRS sound-bank record is rewritten to the empty slot
       // on read (runtime/dvd.cpp), because dealt banks fault in the synth when their voices play
@@ -690,7 +695,6 @@ final class EnemyShuffle {
       // builds 6315-6318 and removed; that suspicion proved wrong (the real bugs were the module
       // list walk and the companion slot across doors), so the proven r100/r101 behaviour is back.
       silent.add(moduleName(chosen));
-      if (HEAVY_IDS.contains(chosen)) heavyUsed = true;
       if (pick.massive) massiveUsed = true;
       for (int i = 0; i < POOL.length; i++) if (POOL[i] == pick) tally[i]++;
     }
@@ -703,8 +707,16 @@ final class EnemyShuffle {
     detail.append("  SUMMARY r").append(Integer.toHexString(room))
         .append(" rows=").append(n)
         .append(" moduleKindsAfter=").append(kinds)
-        .append(" heavyUsed=").append(heavyUsed)
+        .append(" heavyKinds=").append(heavyKinds)
         .append(" massiveUsed=").append(massiveUsed).append('\n');
+  }
+
+  /** El Gigante is exclusive; other heavy families may share a room up to MAX_HEAVY ids. */
+  private static boolean heavyFits(Set<Integer> kinds, int heavyKinds, int candidate) {
+    if (!HEAVY_IDS.contains(candidate) || kinds.contains(candidate)) return true;
+    if (heavyKinds >= MAX_HEAVY) return false;
+    if (candidate == 0x2B && heavyKinds > 0) return false;
+    return !kinds.contains(0x2B);
   }
 
   private static boolean fits(Set<Integer> kinds, int id) {

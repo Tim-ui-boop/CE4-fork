@@ -1,0 +1,22 @@
+--- a/src/game/game.cpp
++++ b/src/game/game.cpp
+@@ -292,3 +292,3 @@
+-extern "C" int re4_disc_retail_eu(void), re4_disc_retail_jp(void); /* port: runtime/dvd.cpp */
++extern "C" int re4_disc_retail_eu(void), re4_disc_retail_jp(void), re4_randomizer_enemy_active(void); /* port: runtime/dvd.cpp, enemy_sidecar.cpp; patch 0259 */
+ extern "C" int re4_disc_retail(void); /* port (patch 0187) */
+ 
+@@ -408,12 +408,12 @@
+     ModInfoMgr.roomInit();
+     n = ConsGetRoomValue(CONS_R_NMODELINFO) + SmdGetObjNum();
+-    if (DbgFlagChk(pG, DBG_APP_USE_DBMEM)) {
++    if (DbgFlagChk(pG, DBG_APP_USE_DBMEM) || re4_randomizer_enemy_active()) {
+         n *= 2;
+     }
+     ModInfoMgr.arrayAlloc(n);
+     PartsMgr.roomInit();
+     n = ConsGetRoomValue(CONS_R_NPARTS) + SmdGetObjNum();
+-    if (DbgFlagChk(pG, DBG_APP_USE_DBMEM)) {
++    if (DbgFlagChk(pG, DBG_APP_USE_DBMEM) || re4_randomizer_enemy_active()) {
+         n *= 2;
+     }
+     PartsMgr.arrayAlloc(n);
