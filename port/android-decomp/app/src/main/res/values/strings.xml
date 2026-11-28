@@ -125,10 +125,10 @@
     <string name="launch_rand_reset_set">Allow animation reset</string>
     <string name="launch_rand_bella">Bella Sisters</string>
     <string name="launch_rand_verdugo">Verdugo</string>
-    <string name="launch_rand_preview">Preview seed rolls</string>
     <string name="launch_rand_ratio">1 in %1$d</string>
     <string name="launch_rand_ratio_off">off</string>
-    <string name="launch_rand_deal">Deal test rooms</string>
+    <string name="launch_rand_deal">Deal enemies and show result</string>
+    <string name="launch_rand_deal_result">Actual enemy deal</string>
     <string name="launch_rand_off">Turn off</string>
     <string name="launch_rand_test_r100">Test r100 randomizer</string>
     <string name="launch_rand_test_r101">Test r101 randomizer</string>

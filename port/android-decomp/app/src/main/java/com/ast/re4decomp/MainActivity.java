@@ -276,37 +276,6 @@ public final class MainActivity extends Activity implements ImportManager.Listen
         ? getString(R.string.launch_rand_active) : getString(R.string.launch_rand_inactive));
     refresh.run();
 
-    // A read-only hint: shows the seed's rolls without writing the sidecar or touching app data.
-    halfButton(body, getString(R.string.launch_rand_preview), () -> {
-      long seed;
-      try {
-        seed = Long.parseLong(seedField.getText().toString().trim());
-      } catch (NumberFormatException ex) {
-        randStatus.setText(R.string.launch_rand_bad_seed);
-        return;
-      }
-      if (seed <= 0) {
-        randStatus.setText(R.string.launch_rand_bad_seed);
-        return;
-      }
-      File data = imports.root;
-      if (data == null || !new File(data, "disc1/files").isDirectory()) {
-        randStatus.setText(R.string.launch_rand_no_disc);
-        return;
-      }
-      EnemyShuffle.logSetting(imports.root, "PREVIEW seed=" + seed + " options=0x"
-          + Integer.toHexString(options[0]) + " ratios=" + java.util.Arrays.toString(ratios));
-      String text = EnemyShuffle.preview(new File(data, "disc1/files"), seed, options[0], ratios);
-      android.widget.ScrollView sv = new android.widget.ScrollView(this);
-      TextView tv = new TextView(this);
-      tv.setText(text);
-      tv.setTextSize(13);
-      tv.setPadding(dp(12), dp(8), dp(12), dp(8));
-      sv.addView(tv);
-      new AlertDialog.Builder(this).setTitle(R.string.launch_rand_preview)
-          .setView(sv).setPositiveButton(android.R.string.ok, null).show();
-    }, null);
-
     halfButton(body, getString(R.string.launch_rand_deal), () -> {
       long seed;
       try {
@@ -353,8 +322,35 @@ public final class MainActivity extends Activity implements ImportManager.Listen
             : "Pool (" + enabled + "): " + pool + ". ";
         android.util.Log.i("EnemyShuffle", "deal summary: options=" + opts + " enabled=" + enabled
             + " ratios=" + java.util.Arrays.toString(ratios));
-        runOnUiThread(() -> randStatus.setText(r.ok
-            ? getString(R.string.launch_rand_done, poolNote + r.message) : r.message));
+        // Show the result written by this deal, not a prediction made before it. enemies.txt is
+        // written next to the sidecars by dealRooms() after the final budget checks.
+        String details = r.message;
+        if (r.ok) {
+          File result = new File(data, "randomizer/enemies/enemies.txt");
+          StringBuilder text = new StringBuilder();
+          try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(result))) {
+            String line;
+            while ((line = br.readLine()) != null) text.append(line).append('\n');
+          } catch (java.io.IOException ex) {
+            text.setLength(0);
+          }
+          if (text.length() > 0) details = text.toString();
+        }
+        final String resultText = poolNote + details;
+        runOnUiThread(() -> {
+          randStatus.setText(r.ok ? getString(R.string.launch_rand_done, resultText) : resultText);
+          if (r.ok) {
+            android.widget.ScrollView sv = new android.widget.ScrollView(MainActivity.this);
+            TextView tv = new TextView(MainActivity.this);
+            tv.setText(resultText);
+            tv.setTextSize(13);
+            tv.setPadding(dp(12), dp(8), dp(12), dp(8));
+            sv.addView(tv);
+            new AlertDialog.Builder(MainActivity.this)
+                .setTitle(R.string.launch_rand_deal_result)
+                .setView(sv).setPositiveButton(android.R.string.ok, null).show();
+          }
+        });
       }, "enemy-deal").start();
     }, null);
     halfButton(body, getString(R.string.launch_rand_off), () -> {
